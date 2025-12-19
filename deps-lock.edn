@@ -1,0 +1,237 @@
+{:generated "2025-12-09T19:18:20.901034252Z",
+ :paths ["src" "resources"],
+ :aliases [:frontend :test :cljs-test :uberjar],
+ :mvn/repos
+ {"central" {:url "https://repo1.maven.org/maven2/"},
+  "clojars" {:url "https://repo.clojars.org/"}},
+ :deps
+ {aopalliance/aopalliance {:mvn/version "1.0", :deps/manifest :mvn},
+  args4j/args4j {:mvn/version "2.33", :deps/manifest :mvn},
+  cider/piggieback {:mvn/version "0.5.3", :deps/manifest :mvn},
+  cljs-http/cljs-http {:mvn/version "0.1.47", :deps/manifest :mvn},
+  com.bhauman/cljs-test-display
+  {:mvn/version "0.1.1", :deps/manifest :mvn},
+  com.cognitect/http-client
+  {:mvn/version "0.1.106", :deps/manifest :mvn},
+  com.cognitect/transit-clj
+  {:mvn/version "1.0.329", :deps/manifest :mvn},
+  com.cognitect/transit-cljs
+  {:mvn/version "0.8.280", :deps/manifest :mvn},
+  com.cognitect/transit-java
+  {:mvn/version "1.0.362", :deps/manifest :mvn},
+  com.cognitect/transit-js
+  {:mvn/version "0.8.874", :deps/manifest :mvn},
+  com.cognitect.aws/api {:mvn/version "0.8.515", :deps/manifest :mvn},
+  com.cognitect.aws/endpoints
+  {:mvn/version "1.1.12.42", :deps/manifest :mvn},
+  com.cognitect.aws/s3
+  {:mvn/version "811.2.934.0", :deps/manifest :mvn},
+  com.fasterxml.jackson.core/jackson-core
+  {:mvn/version "2.8.7", :deps/manifest :mvn},
+  com.github.seancorfield/depstar
+  {:mvn/version "2.1.303", :deps/manifest :mvn},
+  com.google.code.findbugs/jsr305
+  {:mvn/version "3.0.2", :deps/manifest :mvn},
+  com.google.code.gson/gson
+  {:mvn/version "2.9.1", :deps/manifest :mvn},
+  com.google.errorprone/error_prone_annotations
+  {:mvn/version "2.18.0", :deps/manifest :mvn},
+  com.google.guava/failureaccess
+  {:mvn/version "1.0.1", :deps/manifest :mvn},
+  com.google.guava/guava
+  {:mvn/version "32.1.2-jre", :deps/manifest :mvn},
+  com.google.guava/listenablefuture
+  {:mvn/version "9999.0-empty-to-avoid-conflict-with-guava",
+   :deps/manifest :mvn},
+  com.google.inject/guice$no_aop
+  {:mvn/version "4.2.2", :deps/manifest :mvn},
+  com.google.j2objc/j2objc-annotations
+  {:mvn/version "2.8", :deps/manifest :mvn},
+  com.google.javascript/closure-compiler-unshaded
+  {:mvn/version "v20240317", :deps/manifest :mvn},
+  com.google.protobuf/protobuf-java
+  {:mvn/version "3.21.12", :deps/manifest :mvn},
+  com.google.re2j/re2j {:mvn/version "1.3", :deps/manifest :mvn},
+  com.googlecode.json-simple/json-simple
+  {:mvn/version "1.1.1", :deps/manifest :mvn},
+  commons-codec/commons-codec
+  {:mvn/version "1.15", :deps/manifest :mvn},
+  commons-fileupload/commons-fileupload
+  {:mvn/version "1.4", :deps/manifest :mvn},
+  commons-io/commons-io {:mvn/version "2.11.0", :deps/manifest :mvn},
+  crypto-equality/crypto-equality
+  {:mvn/version "1.0.1", :deps/manifest :mvn},
+  crypto-random/crypto-random
+  {:mvn/version "1.2.1", :deps/manifest :mvn},
+  expound/expound {:mvn/version "0.9.0", :deps/manifest :mvn},
+  fipp/fipp {:mvn/version "0.6.26", :deps/manifest :mvn},
+  hiccup/hiccup {:mvn/version "1.0.5", :deps/manifest :mvn},
+  ingesolvoll/doo {:mvn/version "0.2.0", :deps/manifest :mvn},
+  io.github.cognitect-labs/test-runner
+  {:git/url "https://github.com/cognitect-labs/test-runner.git",
+   :git/tag "v0.5.1",
+   :git/sha "dfb30dd6605cb6c0efc275e1df1736f6e90d4d73",
+   :deps/manifest :deps},
+  io.methvin/directory-watcher
+  {:mvn/version "0.17.1", :deps/manifest :mvn},
+  io.undertow/undertow-core
+  {:mvn/version "2.3.10.Final", :deps/manifest :mvn},
+  javax.annotation/javax.annotation-api
+  {:mvn/version "1.3.2", :deps/manifest :mvn},
+  javax.annotation/jsr250-api
+  {:mvn/version "1.0", :deps/manifest :mvn},
+  javax.enterprise/cdi-api {:mvn/version "1.0", :deps/manifest :mvn},
+  javax.inject/javax.inject {:mvn/version "1", :deps/manifest :mvn},
+  javax.xml.bind/jaxb-api {:mvn/version "2.3.0", :deps/manifest :mvn},
+  karma-reporter/karma-reporter
+  {:mvn/version "3.1.0", :deps/manifest :mvn},
+  meta-merge/meta-merge {:mvn/version "1.0.0", :deps/manifest :mvn},
+  metosin/reitit-core {:mvn/version "0.9.2", :deps/manifest :mvn},
+  metosin/reitit-frontend {:mvn/version "0.9.2", :deps/manifest :mvn},
+  net.java.dev.jna/jna {:mvn/version "5.12.1", :deps/manifest :mvn},
+  noencore/noencore {:mvn/version "0.3.7", :deps/manifest :mvn},
+  nrepl/nrepl {:mvn/version "1.3.0", :deps/manifest :mvn},
+  olical/cljs-test-runner {:mvn/version "3.8.0", :deps/manifest :mvn},
+  org.apache.ant/ant {:mvn/version "1.10.11", :deps/manifest :mvn},
+  org.apache.ant/ant-launcher
+  {:mvn/version "1.10.11", :deps/manifest :mvn},
+  org.apache.commons/commons-lang3
+  {:mvn/version "3.8.1", :deps/manifest :mvn},
+  org.apache.httpcomponents/httpclient
+  {:mvn/version "4.5.13", :deps/manifest :mvn},
+  org.apache.httpcomponents/httpcore
+  {:mvn/version "4.4.14", :deps/manifest :mvn},
+  org.apache.logging.log4j/log4j-api
+  {:mvn/version "2.14.1", :deps/manifest :mvn},
+  org.apache.logging.log4j/log4j-core
+  {:mvn/version "2.14.1", :deps/manifest :mvn},
+  org.apache.maven/maven-artifact
+  {:mvn/version "3.8.2", :deps/manifest :mvn},
+  org.apache.maven/maven-builder-support
+  {:mvn/version "3.8.2", :deps/manifest :mvn},
+  org.apache.maven/maven-core
+  {:mvn/version "3.8.2", :deps/manifest :mvn},
+  org.apache.maven/maven-model
+  {:mvn/version "3.8.2", :deps/manifest :mvn},
+  org.apache.maven/maven-model-builder
+  {:mvn/version "3.8.2", :deps/manifest :mvn},
+  org.apache.maven/maven-plugin-api
+  {:mvn/version "3.8.2", :deps/manifest :mvn},
+  org.apache.maven/maven-repository-metadata
+  {:mvn/version "3.8.2", :deps/manifest :mvn},
+  org.apache.maven/maven-resolver-provider
+  {:mvn/version "3.8.2", :deps/manifest :mvn},
+  org.apache.maven/maven-settings
+  {:mvn/version "3.8.2", :deps/manifest :mvn},
+  org.apache.maven/maven-settings-builder
+  {:mvn/version "3.8.2", :deps/manifest :mvn},
+  org.apache.maven.resolver/maven-resolver-api
+  {:mvn/version "1.7.1", :deps/manifest :mvn},
+  org.apache.maven.resolver/maven-resolver-connector-basic
+  {:mvn/version "1.7.1", :deps/manifest :mvn},
+  org.apache.maven.resolver/maven-resolver-impl
+  {:mvn/version "1.7.1", :deps/manifest :mvn},
+  org.apache.maven.resolver/maven-resolver-named-locks
+  {:mvn/version "1.7.1", :deps/manifest :mvn},
+  org.apache.maven.resolver/maven-resolver-spi
+  {:mvn/version "1.7.1", :deps/manifest :mvn},
+  org.apache.maven.resolver/maven-resolver-transport-file
+  {:mvn/version "1.7.1", :deps/manifest :mvn},
+  org.apache.maven.resolver/maven-resolver-transport-http
+  {:mvn/version "1.7.1", :deps/manifest :mvn},
+  org.apache.maven.resolver/maven-resolver-util
+  {:mvn/version "1.7.1", :deps/manifest :mvn},
+  org.apache.maven.shared/maven-shared-utils
+  {:mvn/version "3.3.4", :deps/manifest :mvn},
+  org.checkerframework/checker-qual
+  {:mvn/version "3.33.0", :deps/manifest :mvn},
+  org.clojure/clojure {:mvn/version "1.11.1", :deps/manifest :mvn},
+  org.clojure/clojurescript
+  {:mvn/version "1.11.60", :deps/manifest :mvn},
+  org.clojure/core.async {:mvn/version "1.5.648", :deps/manifest :mvn},
+  org.clojure/core.cache {:mvn/version "1.0.225", :deps/manifest :mvn},
+  org.clojure/core.memoize
+  {:mvn/version "1.0.253", :deps/manifest :mvn},
+  org.clojure/core.rrb-vector
+  {:mvn/version "0.1.2", :deps/manifest :mvn},
+  org.clojure/core.specs.alpha
+  {:mvn/version "0.2.62", :deps/manifest :mvn},
+  org.clojure/data.codec {:mvn/version "0.1.0", :deps/manifest :mvn},
+  org.clojure/data.json {:mvn/version "2.4.0", :deps/manifest :mvn},
+  org.clojure/data.priority-map
+  {:mvn/version "1.1.0", :deps/manifest :mvn},
+  org.clojure/data.xml
+  {:mvn/version "0.2.0-alpha6", :deps/manifest :mvn},
+  org.clojure/google-closure-library
+  {:mvn/version "0.0-20230227-c7c0a541", :deps/manifest :mvn},
+  org.clojure/google-closure-library-third-party
+  {:mvn/version "0.0-20230227-c7c0a541", :deps/manifest :mvn},
+  org.clojure/java.classpath
+  {:mvn/version "1.0.0", :deps/manifest :mvn},
+  org.clojure/spec.alpha {:mvn/version "0.3.218", :deps/manifest :mvn},
+  org.clojure/test.check {:mvn/version "1.1.1", :deps/manifest :mvn},
+  org.clojure/tools.analyzer
+  {:mvn/version "1.1.0", :deps/manifest :mvn},
+  org.clojure/tools.analyzer.jvm
+  {:mvn/version "1.2.2", :deps/manifest :mvn},
+  org.clojure/tools.cli {:mvn/version "1.0.206", :deps/manifest :mvn},
+  org.clojure/tools.deps.alpha
+  {:mvn/version "0.12.1036", :deps/manifest :mvn},
+  org.clojure/tools.gitlibs
+  {:mvn/version "2.3.167", :deps/manifest :mvn},
+  org.clojure/tools.logging
+  {:mvn/version "1.1.0", :deps/manifest :mvn},
+  org.clojure/tools.namespace
+  {:mvn/version "1.3.0", :deps/manifest :mvn},
+  org.clojure/tools.reader {:mvn/version "1.4.2", :deps/manifest :mvn},
+  org.codehaus.plexus/plexus-classworlds
+  {:mvn/version "2.6.0", :deps/manifest :mvn},
+  org.codehaus.plexus/plexus-component-annotations
+  {:mvn/version "2.1.0", :deps/manifest :mvn},
+  org.codehaus.plexus/plexus-interpolation
+  {:mvn/version "1.25", :deps/manifest :mvn},
+  org.codehaus.plexus/plexus-utils
+  {:mvn/version "3.2.1", :deps/manifest :mvn},
+  org.eclipse.jetty/jetty-client
+  {:mvn/version "9.4.36.v20210114", :deps/manifest :mvn},
+  org.eclipse.jetty/jetty-http
+  {:mvn/version "9.4.36.v20210114", :deps/manifest :mvn},
+  org.eclipse.jetty/jetty-io
+  {:mvn/version "9.4.36.v20210114", :deps/manifest :mvn},
+  org.eclipse.jetty/jetty-util
+  {:mvn/version "9.4.36.v20210114", :deps/manifest :mvn},
+  org.eclipse.sisu/org.eclipse.sisu.inject
+  {:mvn/version "0.3.4", :deps/manifest :mvn},
+  org.eclipse.sisu/org.eclipse.sisu.plexus
+  {:mvn/version "0.3.4", :deps/manifest :mvn},
+  org.javassist/javassist
+  {:mvn/version "3.18.1-GA", :deps/manifest :mvn},
+  org.jboss.logging/jboss-logging
+  {:mvn/version "3.4.3.Final", :deps/manifest :mvn},
+  org.jboss.threads/jboss-threads
+  {:mvn/version "3.5.0.Final", :deps/manifest :mvn},
+  org.jboss.xnio/xnio-api
+  {:mvn/version "3.8.8.Final", :deps/manifest :mvn},
+  org.jboss.xnio/xnio-nio
+  {:mvn/version "3.8.8.Final", :deps/manifest :mvn},
+  org.jspecify/jspecify {:mvn/version "0.2.0", :deps/manifest :mvn},
+  org.msgpack/msgpack {:mvn/version "0.6.12", :deps/manifest :mvn},
+  org.ow2.asm/asm {:mvn/version "9.2", :deps/manifest :mvn},
+  org.slf4j/jcl-over-slf4j
+  {:mvn/version "1.7.30", :deps/manifest :mvn},
+  org.slf4j/slf4j-api {:mvn/version "1.7.36", :deps/manifest :mvn},
+  org.slf4j/slf4j-nop {:mvn/version "1.7.32", :deps/manifest :mvn},
+  org.sonatype.plexus/plexus-sec-dispatcher
+  {:mvn/version "1.4", :deps/manifest :mvn},
+  org.wildfly.client/wildfly-client-config
+  {:mvn/version "1.0.1.Final", :deps/manifest :mvn},
+  org.wildfly.common/wildfly-common
+  {:mvn/version "1.5.4.Final", :deps/manifest :mvn},
+  reagent/reagent {:mvn/version "1.2.0", :deps/manifest :mvn},
+  ring/ring-codec {:mvn/version "1.2.0", :deps/manifest :mvn},
+  ring/ring-core {:mvn/version "1.9.6", :deps/manifest :mvn},
+  thheller/shadow-client {:mvn/version "1.4.0", :deps/manifest :mvn},
+  thheller/shadow-cljs {:mvn/version "2.28.21", :deps/manifest :mvn},
+  thheller/shadow-cljsjs {:mvn/version "0.0.22", :deps/manifest :mvn},
+  thheller/shadow-undertow {:mvn/version "0.3.4", :deps/manifest :mvn},
+  thheller/shadow-util {:mvn/version "0.7.0", :deps/manifest :mvn}}}

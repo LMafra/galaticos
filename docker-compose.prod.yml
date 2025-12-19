@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: galaticos-mongodb-prod
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_DATABASE: galaticos
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-galaticos}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:-galaticos}
+    volumes:
+      - mongodb-data-prod:/data/db
+      - ./docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - galaticos-network
+    command: ["mongod", "--wiredTigerCacheSizeGB", "1"]
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    container_name: galaticos-app-prod
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: mongodb://${MONGO_INITDB_ROOT_USERNAME:-galaticos}:${MONGO_INITDB_ROOT_PASSWORD:-galaticos}@mongodb:27017/galaticos?authSource=admin
+      DATABASE_NAME: galaticos
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      PORT: 3000
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - galaticos-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  mongodb-data-prod:
+    driver: local
+
+networks:
+  galaticos-network:
+    driver: bridge
+

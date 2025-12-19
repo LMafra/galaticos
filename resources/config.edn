@@ -1,0 +1,7 @@
+{:dev {:database-url "mongodb://localhost:27017/galaticos"
+       :database-name "galaticos"
+       :jwt-secret "dev-secret-change-in-production"}
+ :prod {:database-url "mongodb://mongodb:27017/galaticos"
+        :database-name "galaticos"
+        :jwt-secret "change-me-in-production"}}
+

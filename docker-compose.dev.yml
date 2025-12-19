@@ -1,0 +1,88 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: galaticos-mongodb-dev
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: galaticos
+    volumes:
+      - mongodb-data-dev:/data/db
+      - ./docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - galaticos-network
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: galaticos-app-dev
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: mongodb://mongodb:27017/galaticos
+      DATABASE_NAME: galaticos
+      JWT_SECRET: dev-secret-change-in-production
+      PORT: 3000
+    volumes:
+      - ./src:/app/src:ro
+      - ./src-cljs:/app/src-cljs:ro
+      - ./resources:/app/resources:ro
+      - galaticos-compiled:/app/resources/public/js/compiled
+      - ./test:/app/test:ro
+      - ./test-cljs:/app/test-cljs:ro
+      - ./deps.edn:/app/deps.edn:ro
+      - ./build.clj:/app/build.clj:ro
+      - ./shadow-cljs.edn:/app/shadow-cljs.edn:ro
+      - ./package.json:/app/package.json:ro
+      - ./package-lock.json:/app/package-lock.json:ro
+      - ./.cursor:/app/.cursor
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - galaticos-network
+
+  frontend-watch:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: galaticos-frontend-watch
+    command: ["npm", "run", "cljs:watch"]
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+    volumes:
+      - ./src:/app/src:ro
+      - ./src-cljs:/app/src-cljs:ro
+      - ./resources:/app/resources:ro
+      - galaticos-compiled:/app/resources/public/js/compiled
+      - ./shadow-cljs.edn:/app/shadow-cljs.edn:ro
+      - ./package.json:/app/package.json:ro
+      - ./package-lock.json:/app/package-lock.json:ro
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - galaticos-network
+
+volumes:
+  mongodb-data-dev:
+    driver: local
+  galaticos-compiled:
+    driver: local
+
+networks:
+  galaticos-network:
+    driver: bridge
+

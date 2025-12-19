@@ -1,0 +1,59 @@
+# Build stage
+FROM clojure:temurin-21-tools-deps AS builder
+
+WORKDIR /build
+
+# Install Node.js 18 for Shadow-CLJS
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl ca-certificates gnupg && \
+    curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
+    apt-get install -y --no-install-recommends nodejs && \
+    rm -rf /var/lib/apt/lists/*
+
+# Dependency layers (Clojure + npm)
+COPY deps.edn shadow-cljs.edn package.json package-lock.json ./
+RUN clj -P
+RUN npm ci --no-fund --no-audit
+
+# Copy sources
+COPY src ./src
+COPY src-cljs ./src-cljs
+COPY resources ./resources
+
+# Build frontend assets (advanced) and uberjar
+RUN clj -M:build:frontend prod
+RUN mkdir -p target && clj -X:uberjar
+
+# Runtime stage
+FROM eclipse-temurin:21-jre-alpine
+
+WORKDIR /app
+
+# Install wget for health checks
+RUN apk add --no-cache wget
+
+# Create non-root user
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
+# Copy uberjar from builder
+COPY --from=builder /build/target/galaticos-standalone.jar ./app.jar
+
+# Change ownership
+RUN chown -R appuser:appgroup /app
+
+# JVM tuning defaults (override with JAVA_OPTS env)
+ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:InitialRAMPercentage=25.0 -Dclojure.compiler.direct-linking=true"
+
+# Switch to non-root user
+USER appuser
+
+# Expose port
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
+
+# Run the application
+CMD ["sh", "-c", "java ${JAVA_OPTS} -jar app.jar"]
+

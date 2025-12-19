@@ -1,0 +1,22 @@
+{
+  "name": "galaticos",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "cljs:watch": "shadow-cljs watch app",
+    "cljs:dev": "shadow-cljs compile app",
+    "cljs:release": "shadow-cljs release app",
+    "cljs:clean": "rm -rf resources/public/js/compiled && shadow-cljs stop"
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "shadow-cljs": "2.28.21"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
+

@@ -1,0 +1,95 @@
+(ns galaticos.effects
+  "Route-driven side effects and guarded data fetching"
+  (:require [reagent.core :as r]
+            [galaticos.api :as api]
+            [galaticos.state :as state]))
+
+(defonce requests-in-flight (r/atom #{}))
+
+(defn- mark-in-flight! [k]
+  (swap! requests-in-flight conj k))
+
+(defn- clear-in-flight! [k]
+  (swap! requests-in-flight disj k))
+
+(defn- in-flight? [k]
+  (contains? @requests-in-flight k))
+
+(defn- guarded-fetch!
+  "Prevent duplicate fetches for a given key and track loading/error state."
+  [k loaded? fetch-fn on-success]
+  (when (and (not loaded?) (not (in-flight? k)))
+    (mark-in-flight! k)
+    (state/set-resource-error! k nil)
+    (state/set-resource-loading! k true)
+    (let [on-success* (fn [result]
+                        (on-success result)
+                        (state/set-resource-loading! k false)
+                        (clear-in-flight! k))
+          on-error* (fn [error]
+                      (state/set-resource-error! k (str "Erro ao carregar " (name k) ": " error))
+                      (state/set-resource-loading! k false)
+                      (clear-in-flight! k))]
+      (fetch-fn on-success* on-error*))
+    nil))
+
+(defn ensure-dashboard! [& [{:keys [force?]}]]
+  (let [{:keys [dashboard-loaded?]} @state/app-state
+        loaded? (and dashboard-loaded? (not force?))]
+    (guarded-fetch! :dashboard loaded?
+                    api/get-dashboard-stats
+                    state/set-dashboard-stats!)))
+
+(defn ensure-players! [& [{:keys [force?]}]]
+  (let [{:keys [players-loaded?]} @state/app-state
+        loaded? (and players-loaded? (not force?))]
+    (guarded-fetch! :players loaded?
+                    #(api/get-players {} %1 %2)
+                    state/set-players!)))
+
+(defn ensure-championships! [& [{:keys [force?]}]]
+  (let [{:keys [championships-loaded?]} @state/app-state
+        loaded? (and championships-loaded? (not force?))]
+    (guarded-fetch! :championships loaded?
+                    #(api/get-championships {} %1 %2)
+                    state/set-championships!)))
+
+(defn ensure-matches! [& [{:keys [force?]}]]
+  (let [{:keys [matches-loaded?]} @state/app-state
+        loaded? (and matches-loaded? (not force?))]
+    (guarded-fetch! :matches loaded?
+                    #(api/get-matches {} %1 %2)
+                    state/set-matches!)))
+
+(defn ensure-auth! []
+  (let [{:keys [auth-checked? auth-loading? authenticated]} @state/app-state]
+    (when (and (not (in-flight? :auth))
+               (not auth-loading?)
+               (or (not auth-checked?) (not authenticated)))
+      (state/set-auth-loading! true)
+      (mark-in-flight! :auth)
+      (api/check-auth
+       (fn [user]
+         (state/set-user! user (api/current-token))
+         (clear-in-flight! :auth))
+       (fn [_error]
+         (state/clear-auth!)
+         (api/clear-token!)
+         (clear-in-flight! :auth))))))
+
+(defn on-route!
+  "Trigger route-specific effects such as fetching data."
+  [match]
+  (when match
+    (let [route-name (get-in match [:data :name])]
+      ;; Don't check auth or fetch data for login page
+      (when (not= route-name :login)
+        (ensure-auth!)
+        (case route-name
+          :dashboard (ensure-dashboard!)
+          :players (ensure-players!)
+          :championships (ensure-championships!)
+          :matches (ensure-matches!)
+          :match-new (ensure-championships!)
+          nil)))))
+

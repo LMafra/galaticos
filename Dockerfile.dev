@@ -1,0 +1,31 @@
+FROM clojure:temurin-21-tools-deps
+
+WORKDIR /app
+
+# Install Node.js 18 for ClojureScript tooling
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl ca-certificates gnupg && \
+    curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
+    apt-get install -y --no-install-recommends nodejs && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install dependencies first (cached layer)
+COPY deps.edn shadow-cljs.edn package.json package-lock.json ./
+# Clear any cached dependency resolution failures
+RUN rm -rf .cpcache ~/.m2/repository/hiccup 2>/dev/null || true
+# Pre-download all dependencies
+RUN clj -P
+RUN npm ci --no-fund --no-audit
+
+# Copy source code
+COPY . .
+
+# Compile ClojureScript for development (seeds the mounted volume)
+RUN clj -M:build:frontend dev
+
+# Expose port
+EXPOSE 3000
+
+# Default command for development (can be overridden in docker-compose)
+CMD ["./bin/galaticos", "run"]
+

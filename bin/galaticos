@@ -1,0 +1,149 @@
+
+#!/bin/bash
+# Main entry point for Galáticos project commands
+# Usage: ./bin/galaticos [command] [options]
+
+set -e
+
+# Ensure we're running in bash (re-execute with bash if needed)
+# Do this FIRST before using any bash-specific syntax
+if [ -z "$BASH_VERSION" ]; then
+    # Get script path using portable method (works in zsh/sh)
+    # Use portable method to get script path
+    if [ -f "$0" ]; then
+        # If $0 is a file, make it absolute
+        SCRIPT_PATH="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+    else
+        # If $0 is a command in PATH, find it
+        SCRIPT_PATH="$(which "$0" 2>/dev/null || echo "$0")"
+    fi
+    exec /bin/bash "$SCRIPT_PATH" "$@"
+fi
+
+# Get the directory where this script is located (now we're guaranteed to be in bash)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_PATH="$SCRIPT_DIR/$(basename "${BASH_SOURCE[0]}")"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+SCRIPTS_DIR="$PROJECT_ROOT/scripts"
+
+# Change to project root
+cd "$PROJECT_ROOT"
+
+# Get command (default to help)
+COMMAND=${1:-help}
+
+# Function to show help
+show_help() {
+    echo "🚀 Galáticos - Sistema de Gestão de Elenco Esportivo"
+    echo ""
+    echo "Usage: ./bin/galaticos [command] [options]"
+    echo ""
+    echo "Commands:"
+    echo ""
+    echo "  Development:"
+    echo "    run              Start the application"
+    echo "    console          Start Clojure REPL"
+    echo "    test             Run tests"
+    echo "    validate         Validate application is running correctly"
+    echo "    validate:docker  Validate application running in Docker"
+    echo ""
+    echo "  Database:"
+    echo "    db:setup         Set up MongoDB indexes (creates indexes for all collections)"
+    echo "    db:seed          Seed database from Excel file (populates teams, players, championships)"
+    echo ""
+    echo "  Docker:"
+    echo "    docker:dev       Manage dev environment (start|stop|restart|logs|status|validate|clean)"
+    echo "    docker:prod      Manage prod environment (start|stop|restart|logs|status|clean)"
+    echo ""
+    echo "  Build:"
+    echo "    build            Build uberjar"
+    echo "    clean            Clean build artifacts"
+    echo ""
+    echo "  Utilities:"
+    echo "    check-deps       Check if all dependencies are installed"
+    echo "    help             Show this help message"
+    echo ""
+    echo "Examples:"
+    echo "  ./bin/galaticos run"
+    echo "  ./bin/galaticos docker:dev start"
+    echo "  ./bin/galaticos db:setup         # Create MongoDB indexes"
+    echo "  ./bin/galaticos db:seed          # Populate database from Excel"
+    echo ""
+}
+
+# Route commands
+case "$COMMAND" in
+    # Development commands
+    run)
+        exec "$SCRIPTS_DIR/dev/run.sh"
+        ;;
+    console)
+        exec "$SCRIPTS_DIR/dev/console.sh"
+        ;;
+    test)
+        exec "$SCRIPTS_DIR/dev/test.sh"
+        ;;
+    validate)
+        exec "$SCRIPTS_DIR/dev/validate.sh"
+        ;;
+    validate:docker)
+        exec "$SCRIPTS_DIR/docker/validate.sh"
+        ;;
+    
+    # Database commands
+    db:setup)
+        exec "$SCRIPTS_DIR/db/setup.sh"
+        ;;
+    db:seed)
+        exec "$SCRIPTS_DIR/db/seed.sh"
+        ;;
+    
+    # Docker commands
+    docker:dev)
+        # Use portable array slicing: shift first arg, then pass remaining args
+        shift
+        exec "$SCRIPTS_DIR/docker/dev.sh" "$@"
+        ;;
+    docker:prod)
+        # Use portable array slicing: shift first arg, then pass remaining args
+        shift
+        exec "$SCRIPTS_DIR/docker/prod.sh" "$@"
+        ;;
+    
+    # Build commands
+    build)
+        exec "$SCRIPTS_DIR/build/build.sh"
+        ;;
+    clean)
+        exec "$SCRIPTS_DIR/utils/clean.sh"
+        ;;
+    
+    # Utility commands
+    check-deps)
+        exec "$SCRIPTS_DIR/utils/check-deps.sh"
+        ;;
+    help|--help|-h)
+        show_help
+        ;;
+    
+    *)
+        echo "❌ Unknown command: $COMMAND"
+        echo ""
+        
+        # Suggest similar commands for common mistakes
+        case "$COMMAND" in
+            *mongodb*|*index*|*indexes*)
+                echo "💡 Did you mean: db:setup"
+                echo ""
+                ;;
+            *seed*|*populate*|*data*)
+                echo "💡 Did you mean: db:seed"
+                echo ""
+                ;;
+        esac
+        
+        show_help
+        exit 1
+        ;;
+esac
+
