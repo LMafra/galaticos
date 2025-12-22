@@ -9,7 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../utils/common.sh"
 
 # Configuration
-readonly COMPOSE_FILE="docker-compose.prod.yml"
+readonly COMPOSE_FILE="config/docker/docker-compose.prod.yml"
 
 # Change to project root
 cd_project_root

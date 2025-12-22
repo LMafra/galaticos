@@ -92,10 +92,10 @@ case "$COMMAND" in
     
     # Database commands
     db:setup)
-        exec "$SCRIPTS_DIR/db/setup.sh"
+        exec "$SCRIPTS_DIR/database/setup.sh"
         ;;
     db:seed)
-        exec "$SCRIPTS_DIR/db/seed.sh"
+        exec "$SCRIPTS_DIR/database/seed.sh"
         ;;
     
     # Docker commands

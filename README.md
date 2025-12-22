@@ -16,40 +16,90 @@ galaticos/
 ├── .github/                       # GitHub templates e workflows
 │   ├── ISSUE_TEMPLATE/
 │   └── workflows/
+├── bin/                           # Scripts executáveis
+│   └── galaticos                  # Ponto de entrada principal
+├── config/                        # Configurações centralizadas
+│   ├── docker/                    # Configurações Docker
+│   │   ├── Dockerfile.dev
+│   │   ├── Dockerfile.prod
+│   │   ├── docker-compose.dev.yml
+│   │   ├── docker-compose.prod.yml
+│   │   └── .dockerignore
+│   └── database/                  # Scripts de inicialização do banco
+│       └── init-indexes.js
 ├── data/                          # Dados do projeto
 │   ├── raw/                       # Arquivos de dados originais (Excel, etc.)
-│   └── processed/                 # Dados processados
+│   └── processed/                # Dados processados
 ├── docs/                          # Documentação
-│   └── mongodb-schema.md          # Documentação do schema
+│   ├── mongodb-schema.md          # Documentação do schema
+│   ├── backend-gap-report.md
+│   ├── build-gap-report.md
+│   ├── frontend-gap-report.md
+│   └── IMPLEMENTATION.md          # Documentação de implementação
 ├── resources/                     # Recursos estáticos e configurações
-│   └── config.edn                 # Configurações da aplicação
-├── scripts/                       # Scripts utilitários
+│   ├── config.edn                 # Configurações da aplicação
+│   └── templates/
+│       └── index.html
+├── scripts/                       # Scripts utilitários organizados
+│   ├── build/                     # Scripts de build
+│   ├── database/                  # Scripts de banco de dados
+│   │   ├── check-stats.sh
+│   │   ├── seed.sh
+│   │   └── setup.sh
+│   ├── dev/                       # Scripts de desenvolvimento
+│   │   ├── console.sh
+│   │   ├── run.sh
+│   │   ├── test.sh
+│   │   ├── validate.sh
+│   │   └── watch-cljs.sh
+│   ├── docker/                    # Scripts Docker
+│   │   ├── dev.sh
+│   │   ├── prod.sh
+│   │   └── validate.sh
 │   ├── mongodb/                   # Scripts MongoDB
 │   │   ├── mongodb-indexes.js     # Script de criação de índices
 │   │   └── mongodb-aggregations.js # Exemplos de agregações
-│   └── python/                    # Scripts Python
-│       └── seed_mongodb.py        # Script de seed do banco
-├── src/galaticos/                 # Código fonte Clojure
-│   ├── core.clj                   # Ponto de entrada da aplicação
-│   ├── handler.clj                # Handler principal
-│   └── db/                        # Camada de dados
-│       ├── core.clj               # Conexão MongoDB
-│       ├── championships.clj      # Operações de campeonatos
-│       ├── players.clj            # Operações de jogadores
-│       ├── matches.clj            # Operações de partidas
-│       ├── teams.clj              # Operações de times
-│       ├── admins.clj             # Operações de admins
-│       └── aggregations.clj       # Pipelines de agregação
+│   ├── python/                    # Scripts Python
+│   │   ├── read_excel.py
+│   │   └── seed_mongodb.py        # Script de seed do banco
+│   └── utils/                     # Utilitários
+│       ├── check-deps.sh
+│       ├── clean.sh
+│       └── common.sh
+├── src/                           # Código fonte Clojure
+│   └── galaticos/
+│       ├── core.clj               # Ponto de entrada da aplicação
+│       ├── handler.clj            # Handler principal
+│       ├── db/                    # Camada de dados
+│       │   ├── core.clj           # Conexão MongoDB
+│       │   ├── championships.clj  # Operações de campeonatos
+│       │   ├── players.clj        # Operações de jogadores
+│       │   ├── matches.clj        # Operações de partidas
+│       │   ├── teams.clj          # Operações de times
+│       │   ├── admins.clj         # Operações de admins
+│       │   └── aggregations.clj   # Pipelines de agregação
+│       ├── handlers/              # Handlers de requisições
+│       ├── middleware/            # Middleware (auth, CORS, etc.)
+│       ├── routes/                # Rotas HTTP
+│       └── util/                  # Utilitários
+├── src-cljs/                      # Código fonte ClojureScript
+│   └── galaticos/
+├── test/                          # Testes Clojure
+│   └── galaticos/
+├── test-cljs/                     # Testes ClojureScript
+│   └── galaticos/
 ├── .gitignore                     # Arquivos ignorados pelo Git
 ├── CONTRIBUTING.md                # Guia de contribuição
 ├── deps.edn                       # Dependências Clojure
-├── Dockerfile.dev                 # Docker para desenvolvimento
-├── Dockerfile.prod                # Docker para produção
-├── docker-compose.dev.yml         # Docker Compose para desenvolvimento
-├── docker-compose.prod.yml        # Docker Compose para produção
+├── deps-lock.edn                  # Lock file de dependências
+├── build.clj                      # Script de build do ClojureScript
+├── shadow-cljs.edn                # Configuração do Shadow-CLJS
+├── package.json                   # Dependências Node.js
+├── package-lock.json              # Lock file Node.js
+├── requirements.txt               # Dependências Python
+├── Makefile                       # Wrapper para comandos
 ├── LICENSE                        # Licença do projeto
-├── README.md                      # Este arquivo
-└── requirements.txt               # Dependências Python
+└── README.md                      # Este arquivo
 ```
 
 ## Configuração
@@ -149,22 +199,28 @@ scripts/
     run.sh               # Executa a aplicação
     console.sh           # Inicia REPL Clojure
     test.sh              # Executa testes
-  db/                    # Scripts de banco de dados
+    validate.sh          # Valida aplicação
+    watch-cljs.sh        # Watch ClojureScript
+  database/              # Scripts de banco de dados
     setup.sh             # Configura índices MongoDB
     seed.sh              # Popula banco de dados
+    check-stats.sh       # Verifica estatísticas
   docker/                # Scripts Docker
     dev.sh               # Ambiente de desenvolvimento
     prod.sh              # Ambiente de produção
+    validate.sh          # Valida aplicação em Docker
   build/                 # Scripts de build
     build.sh             # Compila uberjar
   utils/                 # Utilitários
     check-deps.sh        # Verifica dependências
     clean.sh             # Limpa artefatos
+    common.sh            # Funções comuns
   python/                # Scripts Python
+    read_excel.py        # Leitura de arquivos Excel
     seed_mongodb.py      # Script de seed
   mongodb/               # Scripts MongoDB
     mongodb-indexes.js   # Criação de índices
-    mongodb-aggregations.js
+    mongodb-aggregations.js # Exemplos de agregações
 ```
 
 ### Uso Principal: `./bin/galaticos`
@@ -283,7 +339,7 @@ Se preferir, você também pode executar os scripts diretamente:
 
 ```bash
 ./scripts/dev/run.sh
-./scripts/db/setup.sh
+./scripts/database/setup.sh
 ./scripts/docker/dev.sh start
 ```
 

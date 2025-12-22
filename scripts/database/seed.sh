@@ -1,5 +1,10 @@
 #!/bin/bash
 # Script to seed the MongoDB database with data from Excel file
+#
+# Usage:
+#   ./seed.sh              # Normal seed (idempotent - won't create duplicates)
+#   ./seed.sh --reset      # Clear all data and reseed
+#   ./seed.sh --reset --keep-admins  # Clear data but keep admin users
 
 set -euo pipefail
 
@@ -21,6 +26,13 @@ cd_project_root
 log_info "Seeding MongoDB database..."
 log_info "Database: $DB_NAME"
 log_info "MongoDB URI: $MONGO_URI"
+
+# Parse arguments and pass them to Python script
+SEED_ARGS=("$@")
+if [[ ${#SEED_ARGS[@]} -eq 0 ]]; then
+    log_info "Note: Running in idempotent mode (won't create duplicates)"
+    log_info "      Use --reset to clear existing data before seeding"
+fi
 echo ""
 
 # Check if MongoDB is running
@@ -86,7 +98,7 @@ fi
 
 # Run seed script with MONGO_URI environment variable
 log_step "Running seed script..."
-if MONGO_URI="$MONGO_URI" DB_NAME="$DB_NAME" python3 "$SEED_SCRIPT"; then
+if MONGO_URI="$MONGO_URI" DB_NAME="$DB_NAME" python3 "$SEED_SCRIPT" "${SEED_ARGS[@]}"; then
     echo ""
     log_success "Seed script completed successfully!"
     
@@ -99,15 +111,17 @@ try:
     client = MongoClient('$MONGO_URI', serverSelectionTimeoutMS=5000)
     db = client['$DB_NAME']
     
+    admins_count = db.admins.count_documents({})
     teams_count = db.teams.count_documents({})
     players_count = db.players.count_documents({})
     championships_count = db.championships.count_documents({})
     
+    print(f'  Admins: {admins_count}')
     print(f'  Teams: {teams_count}')
     print(f'  Players: {players_count}')
     print(f'  Championships: {championships_count}')
     
-    if teams_count > 0 and players_count > 0:
+    if admins_count > 0 and teams_count > 0 and players_count > 0:
         print('✓ Data verification successful')
         sys.exit(0)
     else:

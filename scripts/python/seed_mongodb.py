@@ -7,6 +7,7 @@ This script processes an Excel file containing player statistics and championshi
 data, creating teams, players, and championships in the MongoDB database.
 """
 
+import argparse
 import re
 import sys
 from datetime import datetime, timezone
@@ -16,6 +17,7 @@ from typing import Dict, List, Optional, Tuple
 try:
     import pandas as pd
     import openpyxl
+    import bcrypt
     from bson import ObjectId
     from pymongo import MongoClient
     from pymongo.errors import DuplicateKeyError, ServerSelectionTimeoutError
@@ -129,6 +131,42 @@ def create_team(db, team_name: str = "Galáticos") -> ObjectId:
     result = teams_collection.insert_one(team_doc)
     print(f"✓ Created team '{team_name}' with ID: {result.inserted_id}")
     return result.inserted_id
+
+
+def create_admin(db, username: str = "admin", password: str = "admin") -> ObjectId:
+    """Create or get admin user"""
+    admins_collection = db.admins
+    
+    # Check if admin exists
+    admin = admins_collection.find_one({"username": username})
+    if admin:
+        print(f"✓ Admin '{username}' already exists")
+        return admin["_id"]
+    
+    # Hash password using bcrypt
+    password_bytes = password.encode('utf-8')
+    salt = bcrypt.gensalt()
+    password_hash = bcrypt.hashpw(password_bytes, salt).decode('utf-8')
+    
+    # Create admin
+    now = datetime.now(timezone.utc)
+    admin_doc = {
+        "username": username,
+        "password-hash": password_hash,
+        "created-at": now
+    }
+    
+    try:
+        result = admins_collection.insert_one(admin_doc)
+        print(f"✓ Created admin '{username}' with ID: {result.inserted_id}")
+        return result.inserted_id
+    except DuplicateKeyError:
+        # Admin was created between check and insert
+        admin = admins_collection.find_one({"username": username})
+        if admin:
+            print(f"✓ Admin '{username}' already exists")
+            return admin["_id"]
+        raise
 
 
 def create_players(db, players_df: pd.DataFrame, team_id: ObjectId) -> Dict[str, ObjectId]:
@@ -377,21 +415,99 @@ def process_championship_sheet(
     return championship_id, players_processed
 
 
+def clear_database(db, keep_admins: bool = False) -> None:
+    """
+    Clear all seed data from database
+    
+    Args:
+        db: MongoDB database instance
+        keep_admins: If True, keep admin users (default: False)
+    """
+    print("\n" + "=" * 60)
+    print("Clearing database collections...")
+    print("=" * 60)
+    
+    collections_to_clear = {
+        "teams": "Teams",
+        "players": "Players",
+        "championships": "Championships",
+        "matches": "Matches"
+    }
+    
+    if not keep_admins:
+        collections_to_clear["admins"] = "Admins"
+    
+    for collection_name, display_name in collections_to_clear.items():
+        count = db[collection_name].count_documents({})
+        if count > 0:
+            result = db[collection_name].delete_many({})
+            print(f"✓ Deleted {result.deleted_count} {display_name.lower()}")
+        else:
+            print(f"✓ {display_name} collection already empty")
+    
+    print("\n✓ Database cleared successfully!")
+
+
 def main() -> None:
     """
     Main seed function
     
     Processes Excel file and seeds MongoDB database with:
+    - Admin user (if --reset is used or doesn't exist)
     - Team information
     - Player data and statistics
     - Championship data
     
+    By default, the script is idempotent - it won't create duplicates.
+    Use --reset to clear existing data before seeding.
+    
     Raises:
         SystemExit: If critical errors occur
     """
+    parser = argparse.ArgumentParser(
+        description="Seed MongoDB database with data from Excel file",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Normal seed (idempotent - won't create duplicates)
+  python seed_mongodb.py
+  
+  # Clear all data and reseed
+  python seed_mongodb.py --reset
+  
+  # Clear data but keep admin users
+  python seed_mongodb.py --reset --keep-admins
+        """
+    )
+    parser.add_argument(
+        "--reset",
+        action="store_true",
+        help="Clear all existing data before seeding (WARNING: This will delete all teams, players, championships, and matches)"
+    )
+    parser.add_argument(
+        "--keep-admins",
+        action="store_true",
+        help="When using --reset, keep existing admin users (only works with --reset)"
+    )
+    
+    args = parser.parse_args()
+    
+    if args.keep_admins and not args.reset:
+        print("✗ Error: --keep-admins can only be used with --reset", file=sys.stderr)
+        sys.exit(1)
+    
     print("=" * 60)
     print("MongoDB Seed Script for Galáticos")
     print("=" * 60)
+    
+    if args.reset:
+        print("\n⚠ WARNING: --reset flag is set. This will DELETE all existing data!")
+        if not args.keep_admins:
+            print("⚠ All teams, players, championships, matches, and admins will be deleted.")
+        else:
+            print("⚠ All teams, players, championships, and matches will be deleted.")
+            print("⚠ Admin users will be preserved.")
+        print()
     
     # Check if Excel file exists
     excel_path = Path(EXCEL_FILE)
@@ -411,6 +527,11 @@ def main() -> None:
     
     print(f"\n✓ Using database: {DB_NAME}")
     
+    # Clear database if --reset flag is set
+    if args.reset:
+        clear_database(db, keep_admins=args.keep_admins)
+        print()
+    
     # Load Excel file
     print(f"\n📖 Reading Excel file: {EXCEL_FILE}")
     wb = openpyxl.load_workbook(excel_path, data_only=True)
@@ -422,6 +543,12 @@ def main() -> None:
     print("Step 1: Creating team")
     print("=" * 60)
     team_id = create_team(db)
+    
+    # Step 1.5: Create admin user
+    print("\n" + "=" * 60)
+    print("Step 1.5: Creating admin user")
+    print("=" * 60)
+    create_admin(db, username="admin", password="admin")
     
     # Step 2: Read and create players from "Base de dados"
     print("\n" + "=" * 60)
@@ -483,6 +610,7 @@ def main() -> None:
     print("\n" + "=" * 60)
     print("Seed Summary")
     print("=" * 60)
+    print(f"✓ Admin user created/verified: 1")
     print(f"✓ Team created/updated: 1")
     print(f"✓ Players processed: {len(player_map)}")
     print(f"✓ Championships processed: {championships_created}")

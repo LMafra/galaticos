@@ -9,7 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../utils/common.sh"
 
 # Configuration
-readonly COMPOSE_FILE="docker-compose.dev.yml"
+readonly COMPOSE_FILE="config/docker/docker-compose.dev.yml"
 readonly APP_URL="http://localhost:3000"
 readonly APP_CONTAINER="galaticos-app-dev"
 readonly MONGO_CONTAINER="galaticos-mongodb-dev"
