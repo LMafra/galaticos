@@ -47,6 +47,9 @@
         (catch :default _ nil))
       ""))
 
+(when (or (nil? api-base-url) (= "" api-base-url))
+  (js/console.warn "GALATICOS_API_URL não definido; usando mesma origem para chamadas da API."))
+
 (def success-statuses #{200 201 202 203 204})
 
 (defn- extract-error [response]

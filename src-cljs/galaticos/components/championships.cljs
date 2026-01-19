@@ -25,8 +25,10 @@
                                     (:status ch)
                                     (or (:titles-count ch) 0)])
                                  championships)
-                            :on-row-click (fn [ch]
-                                            (rfe/push-state :championship-detail {:id (:_id ch)}))
+                           :on-row-click (fn [ch]
+                                           (if-let [id (:_id ch)]
+                                             (rfe/push-state :championship-detail {:id id})
+                                             (state/set-error! "ID do campeonato ausente; não foi possível abrir detalhes.")))
                             :row-data championships
                             :sortable? true]
        :else [:p "Nenhum campeonato encontrado"])]))

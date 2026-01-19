@@ -56,8 +56,10 @@ services:
       context: ../..
       dockerfile: config/docker/Dockerfile.dev
     container_name: galaticos-frontend-watch
-    command: ["npm", "run", "cljs:watch"]
+    command: ["clj", "-M:frontend", "-m", "shadow.cljs.devtools.cli", "watch", "app"]
     restart: unless-stopped
+    ports:
+      - "9630:9630" # expose shadow-cljs devtools WS for browser
     environment:
       NODE_ENV: development
     volumes:

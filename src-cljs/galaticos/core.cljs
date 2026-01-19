@@ -55,7 +55,9 @@
       match (case route-name
               :dashboard [dashboard/dashboard]
               :players [players/player-list]
+              :player-new [players/player-form {}]
               :player-detail [players/player-detail path-params]
+              :player-edit [players/player-form path-params]
               :matches [matches/match-list]
               :match-new [matches/match-form]
               :championships [championships/championship-list]

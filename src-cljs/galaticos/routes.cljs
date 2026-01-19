@@ -10,8 +10,13 @@
          :title "Dashboard"}]
    ["/players" {:name :players
                 :title "Players"}]
-   ["/players/:id" {:name :player-detail
-                     :title "Player Details"}]
+   ["/players/new" {:name :player-new
+                    :title "New Player"}]
+  ;; keep static `/players/new` first; allow broader ids (mongo ObjectId or other)
+  ["/players/:id/edit" {:name :player-edit
+                        :title "Edit Player"}]
+  ["/players/:id" {:name :player-detail
+                   :title "Player Details"}]
    ["/matches" {:name :matches
                 :title "Matches"}]
    ["/matches/new" {:name :match-new
@@ -21,13 +26,42 @@
    ["/championships/:id" {:name :championship-detail
                           :title "Championship Details"}]])
 
+(defn- send-log!
+  "Lightweight debug logger that posts to the ingest endpoint."
+  [payload]
+  ;; #region agent log
+  (-> (js/fetch "http://127.0.0.1:7242/ingest/1c0f55b4-e5fd-4147-be12-c0c768e9871a"
+                (clj->js {:method "POST"
+                          :headers {"Content-Type" "application/json"}
+                          :body (.stringify js/JSON (clj->js payload))}))
+      (.catch (fn [_] nil)))
+  ;; #endregion
+  )
+
 (def router
-  (rf/router routes))
+  (let [_ (send-log! {:sessionId "debug-session"
+                      :runId "run1"
+                      :hypothesisId "H1"
+                      :location "galaticos.routes.cljs:router"
+                      :message "Building router with routes"
+                      :data {:paths (map first routes)}
+                      :timestamp (.now js/Date)})]
+    ;; `conflicts` disabled because reitit 0.9 treats `/players/new`
+    ;; and `/players/:id{...}` as conflicting even with regex constraints.
+    ;; Static route still wins at runtime.
+    (rf/router routes {:conflicts nil})))
 
 (defn match-by-path
   "Match route by path"
   [path]
-  (rf/match-by-path router path))
+  (let [_ (send-log! {:sessionId "debug-session"
+                      :runId "run1"
+                      :hypothesisId "H2"
+                      :location "galaticos.routes.cljs:match-by-path"
+                      :message "Matching path"
+                      :data {:path path}
+                      :timestamp (.now js/Date)})]
+    (rf/match-by-path router path)))
 
 (defn href
   "Generate href for route"
