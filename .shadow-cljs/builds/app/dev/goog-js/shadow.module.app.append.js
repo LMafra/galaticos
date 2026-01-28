@@ -1,1 +1,0 @@
-["^ ","~:resource-id",["~:shadow.build.modules/append","~:app"],"~:source","\ntry { galaticos.core.init(); } catch (e) { console.error(\"An error occurred when calling (galaticos.core/init)\"); console.error(e); }","~:js","\ntry { galaticos.core.init(); } catch (e) { console.error(\"An error occurred when calling (galaticos.core/init)\"); console.error(e); }"]

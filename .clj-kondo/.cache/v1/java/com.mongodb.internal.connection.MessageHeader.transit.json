@@ -1,1 +1,0 @@
-["^ ","~:members",["^ ","MESSAGE_HEADER_LENGTH",["~#set",[["^ ","~:flags",["^2",["~:public","~:static","~:field","~:final"]]]]],"getMessageLength",["^2",[["^ ","^3",["^2",["~:method","^4"]]]]],"getRequestId",["^2",[["^ ","^3",["^2",["^9","^4"]]]]],"getResponseTo",["^2",[["^ ","^3",["^2",["^9","^4"]]]]],"getOpCode",["^2",[["^ ","^3",["^2",["^9","^4"]]]]]]]
