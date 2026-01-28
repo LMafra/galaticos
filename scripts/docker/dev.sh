@@ -41,7 +41,7 @@ cleanup() {
     if [[ "$SHOULD_STOP_ON_EXIT" == "true" ]]; then
         echo ""
         log_info "Stopping services..."
-        $DOCKER_COMPOSE_CMD -f "$COMPOSE_FILE" down --remove-orphans >/dev/null 2>&1 || true
+        $DOCKER_COMPOSE_CMD -f "$COMPOSE_FILE" down -v --remove-orphans >/dev/null 2>&1 || true
         log_success "Services stopped!"
     fi
     exit $exit_code
@@ -101,7 +101,7 @@ case "$COMMAND" in
         ;;
     stop)
         log_info "Stopping Docker development environment..."
-        $DOCKER_COMPOSE_CMD -f "$COMPOSE_FILE" down --remove-orphans || {
+        $DOCKER_COMPOSE_CMD -f "$COMPOSE_FILE" down -v --remove-orphans --rmi all || {
             log_error "Failed to stop Docker services"
             exit 1
         }

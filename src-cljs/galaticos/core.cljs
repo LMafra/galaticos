@@ -10,6 +10,7 @@
             [galaticos.components.players :as players]
             [galaticos.components.matches :as matches]
             [galaticos.components.championships :as championships]
+            [galaticos.components.teams :as teams]
             [galaticos.effects :as effects]
             [galaticos.state :as state]))
 
@@ -55,11 +56,20 @@
       match (case route-name
               :dashboard [dashboard/dashboard]
               :players [players/player-list]
+              :player-new [players/player-form {}]
               :player-detail [players/player-detail path-params]
+              :player-edit [players/player-form path-params]
               :matches [matches/match-list]
               :match-new [matches/match-form]
+              :match-edit [matches/match-form path-params]
               :championships [championships/championship-list]
+              :championship-new [championships/championship-form {}]
+              :championship-edit [championships/championship-form path-params]
               :championship-detail [championships/championship-detail path-params]
+              :teams [teams/team-list]
+              :team-new [teams/team-form {}]
+              :team-edit [teams/team-form path-params]
+              :team-detail [teams/team-detail path-params]
               [not-found-page])
       
       :else [:div {:style {:text-align "center" :padding "40px"}} "Loading..."])))

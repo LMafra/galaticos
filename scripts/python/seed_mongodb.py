@@ -140,13 +140,39 @@ def create_admin(db, username: str = "admin", password: str = "admin") -> Object
     # Check if admin exists
     admin = admins_collection.find_one({"username": username})
     if admin:
-        print(f"✓ Admin '{username}' already exists")
+        # Verify hash format is valid (starts with $2a$, $2b$, or $2y$)
+        password_hash = admin.get("password-hash", "")
+        needs_rehash = (
+            not password_hash
+            or not password_hash.startswith(("$2a$", "$2b$", "$2y$"))
+            # Force rewrite of 2b/2y to 2a for maximum compatibility with jBCrypt 0.4
+            or password_hash.startswith(("$2b$", "$2y$"))
+        )
+        if needs_rehash:
+            print(f"⚠ Admin '{username}' exists but hash is incompatible. Updating...")
+            # Recreate hash with correct format
+            password_bytes = password.encode('utf-8')
+            # Force prefix 2a for maximum compatibility with jBCrypt
+            salt = bcrypt.gensalt(prefix=b"2a")
+            new_password_hash = bcrypt.hashpw(password_bytes, salt).decode('utf-8')
+            admins_collection.update_one(
+                {"username": username},
+                {"$set": {"password-hash": new_password_hash}}
+            )
+            print(f"✓ Updated password hash for admin '{username}' (2a)")
+        else:
+            print(f"✓ Admin '{username}' already exists with compatible hash")
         return admin["_id"]
     
     # Hash password using bcrypt
     password_bytes = password.encode('utf-8')
-    salt = bcrypt.gensalt()
+    # Force prefix 2a for maximum compatibility with jBCrypt (server side)
+    salt = bcrypt.gensalt(prefix=b"2a")
     password_hash = bcrypt.hashpw(password_bytes, salt).decode('utf-8')
+    
+    # Verify hash format (should start with $2a$, $2b$, or $2y$)
+    if not password_hash.startswith(("$2a$", "$2b$", "$2y$")):
+        raise ValueError(f"Invalid bcrypt hash format: {password_hash[:10]}...")
     
     # Create admin
     now = datetime.now(timezone.utc)

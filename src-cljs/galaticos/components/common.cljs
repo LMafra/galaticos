@@ -30,87 +30,93 @@
       b-num 1
       :else (compare (str/lower-case a-str) (str/lower-case b-str)))))
 
-(defn table [headers rows & {:keys [on-row-click row-data sortable? sortable-columns]}]
+(defn table [_headers _rows & _opts]
   (let [search-query (r/atom "")
         sort-column (r/atom nil)
-        sort-direction (r/atom :asc)
-        headers-vec (vec headers)
-        rows-vec (vec rows)
-        row-data-vec (if row-data (vec row-data) (repeat nil))
-        sortable-cols (if sortable-columns
-                        (set sortable-columns)
-                        (set (range (count headers-vec))))
-        handle-header-click (fn [col-idx]
-                              (if (and (= @sort-column col-idx)
-                                       (contains? sortable-cols col-idx))
-                                (swap! sort-direction #(if (= % :asc) :desc :asc))
-                                (do
-                                  (reset! sort-column col-idx)
-                                  (reset! sort-direction :asc))))
-        ;; Pair rows with their data to maintain relationship through filtering/sorting
-        row-pairs (map vector rows-vec row-data-vec)
-        ;; Filter pairs based on row content
-        filtered-pairs (if (or (nil? @search-query) (str/blank? @search-query))
-                        row-pairs
-                        (let [query-lower (str/lower-case @search-query)]
-                          (filter (fn [[row _]]
-                                    (some (fn [cell]
-                                            (str/includes? (str/lower-case (str cell)) query-lower))
-                                          row))
-                                  row-pairs)))
-        ;; Sort pairs based on row content
-        sorted-pairs (if (and sortable?
-                             (some? @sort-column)
-                             (contains? sortable-cols @sort-column))
-                      (let [sorted (sort-by (fn [[row _]]
-                                              (nth row @sort-column))
-                                            compare-values
-                                            filtered-pairs)]
-                        (if (= @sort-direction :desc)
-                          (reverse sorted)
-                          sorted))
-                      filtered-pairs)
-        final-rows (mapv first sorted-pairs)
-        final-row-data (mapv second sorted-pairs)]
-    [:div
-     ;; Search input
-     [:div {:style {:margin-bottom "12px"}}
-      [:input {:type "text"
-               :value @search-query
-               :on-change #(reset! search-query (-> % .-target .-value))
-               :placeholder "Buscar..."
-               :style {:width "100%"
-                      :max-width "400px"
-                      :padding "8px"
-                      :border "1px solid #ccc"
-                      :border-radius "4px"
-                      :font-size "14px"}}]]
-     ;; Table
-     [:table {:style {:width "100%" :border-collapse "collapse"}}
-      [:thead
-       [:tr
-        (for [[idx header] (map-indexed vector headers-vec)]
-          (let [is-sortable (and sortable? (contains? sortable-cols idx))
-                is-sorted (= @sort-column idx)
-                sort-indicator (when is-sorted
-                                 (if (= @sort-direction :asc) " ↑" " ↓"))]
-            [:th {:key idx
-                  :on-click (when is-sortable #(handle-header-click idx))
-                  :style (merge {:border "1px solid #ddd"
-                                :padding "8px"
-                                :text-align "left"}
-                               (when is-sortable {:cursor "pointer"
-                                                 :user-select "none"
-                                                 :background-color (when is-sorted "#e8f4f8")}))}
-             (str header sort-indicator)]))]]
-      [:tbody
-       (for [[idx row] (map-indexed vector final-rows)]
-         [:tr {:key idx
-               :on-click (when on-row-click #(on-row-click (nth final-row-data idx)))
-               :style (merge {:border "1px solid #ddd"}
-                            (when on-row-click {:cursor "pointer"}))}
-          (for [[idx2 cell] (map-indexed vector row)]
-            [:td {:key idx2 :style {:border "1px solid #ddd" :padding "8px"}} (str cell)])])]]]))
+        sort-direction (r/atom :asc)]
+    (fn [headers rows & {:keys [on-row-click row-data sortable? sortable-columns]}]
+      (let [headers-vec (vec headers)
+            rows-vec (vec rows)
+            row-data-vec (if row-data (vec row-data) (repeat nil))
+            sortable-cols (if sortable-columns
+                            (set sortable-columns)
+                            (set (range (count headers-vec))))
+            handle-header-click (fn [col-idx]
+                                  (if (and (= @sort-column col-idx)
+                                           (contains? sortable-cols col-idx))
+                                    (swap! sort-direction #(if (= % :asc) :desc :asc))
+                                    (do
+                                      (reset! sort-column col-idx)
+                                      (reset! sort-direction :asc))))
+            row-pairs (map vector rows-vec row-data-vec)
+            filtered-pairs (if (or (nil? @search-query) (str/blank? @search-query))
+                             row-pairs
+                             (let [query-lower (str/lower-case @search-query)]
+                               (filter (fn [[row _]]
+                                         (some (fn [cell]
+                                                 (str/includes? (str/lower-case (str cell)) query-lower))
+                                               row))
+                                       row-pairs)))
+            sorted-pairs (if (and sortable?
+                                  (some? @sort-column)
+                                  (contains? sortable-cols @sort-column))
+                           (let [sorted (sort-by (fn [[row _]]
+                                                   (nth row @sort-column))
+                                                 compare-values
+                                                 filtered-pairs)]
+                             (if (= @sort-direction :desc)
+                               (reverse sorted)
+                               sorted))
+                           filtered-pairs)
+            final-rows (mapv first sorted-pairs)
+            final-row-data (mapv second sorted-pairs)]
+        [:div
+         [:div {:style {:margin-bottom "12px"}}
+          [:input {:type "text"
+                   :value @search-query
+                   :on-change #(reset! search-query (-> % .-target .-value))
+                   :placeholder "Buscar..."
+                   :style {:width "100%"
+                          :max-width "400px"
+                          :padding "8px"
+                          :border "1px solid #ccc"
+                          :border-radius "4px"
+                          :font-size "14px"}}]]
+         [:table {:style {:width "100%" :border-collapse "collapse"}}
+          [:thead
+           [:tr
+            (doall
+             (map-indexed
+              (fn [idx header]
+                (let [is-sortable (and sortable? (contains? sortable-cols idx))
+                      is-sorted (= @sort-column idx)
+                      sort-indicator (when is-sorted
+                                       (if (= @sort-direction :asc) " ↑" " ↓"))]
+                  ^{:key idx}
+                  [:th {:on-click (when is-sortable #(handle-header-click idx))
+                        :style (merge {:border "1px solid #ddd"
+                                       :padding "8px"
+                                       :text-align "left"}
+                                      (when is-sortable {:cursor "pointer"
+                                                         :user-select "none"
+                                                         :background-color (when is-sorted "#e8f4f8")}))}
+                   (str header sort-indicator)]))
+              headers-vec))]]
+          [:tbody
+           (doall
+            (map-indexed
+             (fn [idx row]
+               ^{:key idx}
+               [:tr {:on-click (when on-row-click #(on-row-click (nth final-row-data idx)))
+                     :style (merge {:border "1px solid #ddd"}
+                                   (when on-row-click {:cursor "pointer"}))}
+                (doall
+                 (map-indexed
+                  (fn [idx2 cell]
+                    ^{:key idx2}
+                    [:td {:style {:border "1px solid #ddd" :padding "8px"}} (str cell)])
+                  row))])
+             final-rows))]]]))))
 
 (defn button [text on-click & {:keys [class style disabled type]}]
   [:button {:on-click on-click
@@ -141,12 +147,13 @@
 (defn select-field [label value options on-change]
   [:div {:style {:margin-bottom "10px"}}
    [:label {:style {:display "block" :margin-bottom "5px"}} label]
-   [:select {:value value
-             :on-change #(on-change (-> % .-target .-value))
-             :style {:width "100%"
-                    :padding "8px"
-                    :border "1px solid #ccc"
-                    :border-radius "4px"}}
-    (for [[opt-value opt-label] options]
-      [:option {:key opt-value :value opt-value} opt-label])]])
+   (into [:select {:value value
+                   :on-change #(on-change (-> % .-target .-value))
+                   :style {:width "100%"
+                           :padding "8px"
+                           :border "1px solid #ccc"
+                           :border-radius "4px"}}]
+         (map (fn [[opt-value opt-label]]
+                [:option {:key opt-value :value opt-value} opt-label])
+              options))])
 

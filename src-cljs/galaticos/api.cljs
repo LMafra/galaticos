@@ -47,6 +47,9 @@
         (catch :default _ nil))
       ""))
 
+(when (or (nil? api-base-url) (= "" api-base-url))
+  (js/console.warn "GALATICOS_API_URL não definido; usando mesma origem para chamadas da API."))
+
 (def success-statuses #{200 201 202 203 204})
 
 (defn- extract-error [response]
@@ -205,6 +208,12 @@
 
 (defn delete-team [id on-success on-error]
   (delete-request (str "/api/teams/" id) on-success on-error))
+
+(defn add-player-to-team [team-id player-id on-success on-error]
+  (post-request (str "/api/teams/" team-id "/players/" player-id) {} on-success on-error))
+
+(defn remove-player-from-team [team-id player-id on-success on-error]
+  (delete-request (str "/api/teams/" team-id "/players/" player-id) on-success on-error))
 
 ;; Aggregations API
 (defn get-dashboard-stats [on-success on-error]

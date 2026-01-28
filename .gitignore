@@ -17,6 +17,9 @@ pom.xml.asc
 # ClojureScript
 .cljs_node_repl/
 .cljs_compiler_cache/
+.clj-kondo/
+.clojure/
+.shadow-cljs/
 out/
 public/js/compiled/
 resources/public/js/compiled/
@@ -92,3 +95,4 @@ temp/
 *.swp
 *~
 
+node_modules/

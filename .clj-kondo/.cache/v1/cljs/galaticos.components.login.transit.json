@@ -1,1 +1,0 @@
-["^ ","~$login-page",["^ ","~:row",9,"~:col",1,"~:fixed-arities",["~#set",[0]],"~:name","^0","~:ns","~$galaticos.components.login","~:top-ns","^7","~:arities",["^ ","~i0",["^ ","~:ret","~:fn"]],"~:type","^;"],"~:filename","/home/lmafra/galaticos/src-cljs/galaticos/components/login.cljs"]

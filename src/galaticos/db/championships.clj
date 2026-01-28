@@ -4,6 +4,7 @@
             [monger.query :as mq]
             [monger.operators :refer :all]
             [galaticos.db.core :refer [db]]
+            [galaticos.db.matches :as matches-db]
             [galaticos.util.response :refer [->object-id]]
             [clojure.tools.logging :as log])
   (:import [org.bson.types ObjectId]))
@@ -60,4 +61,10 @@
   "Check if championship exists"
   [id]
   (some? (find-by-id id)))
+
+(defn has-matches?
+  "Check if championship has any matches"
+  [championship-id]
+  (let [matches (matches-db/find-by-championship championship-id)]
+    (seq matches)))
 

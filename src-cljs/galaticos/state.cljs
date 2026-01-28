@@ -21,6 +21,9 @@
            :matches-loading? false
            :matches-error nil
            :teams []
+           :teams-loaded? false
+           :teams-loading? false
+           :teams-error nil
            :dashboard-stats nil
            :dashboard-loaded? false
            :dashboard-loading? false
@@ -69,7 +72,7 @@
   (swap! app-state assoc :matches matches :matches-loaded? true :matches-loading? false :matches-error nil))
 
 (defn set-teams! [teams]
-  (swap! app-state assoc :teams teams))
+  (swap! app-state assoc :teams teams :teams-loaded? true :teams-loading? false :teams-error nil))
 
 (defn set-dashboard-stats! [stats]
   (swap! app-state assoc :dashboard-stats stats :dashboard-loaded? true :dashboard-loading? false :dashboard-error nil))

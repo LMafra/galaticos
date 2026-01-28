@@ -61,6 +61,13 @@
                     #(api/get-matches {} %1 %2)
                     state/set-matches!)))
 
+(defn ensure-teams! [& [{:keys [force?]}]]
+  (let [{:keys [teams-loaded?]} @state/app-state
+        loaded? (and teams-loaded? (not force?))]
+    (guarded-fetch! :teams loaded?
+                    #(api/get-teams %1 %2)
+                    state/set-teams!)))
+
 (defn ensure-auth! []
   (let [{:keys [auth-checked? auth-loading? authenticated]} @state/app-state]
     (when (and (not (in-flight? :auth))
@@ -91,5 +98,9 @@
           :championships (ensure-championships!)
           :matches (ensure-matches!)
           :match-new (ensure-championships!)
+          :teams (ensure-teams!)
+          :team-new (ensure-teams!)
+          :team-detail (ensure-teams!)
+          :team-edit (ensure-teams!)
           nil)))))
 
