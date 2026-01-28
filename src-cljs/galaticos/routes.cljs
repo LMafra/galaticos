@@ -21,10 +21,24 @@
                 :title "Matches"}]
    ["/matches/new" {:name :match-new
                     :title "New Match"}]
+   ["/matches/:id/edit" {:name :match-edit
+                         :title "Edit Match"}]
    ["/championships" {:name :championships
                       :title "Championships"}]
+   ["/championships/new" {:name :championship-new
+                          :title "New Championship"}]
+   ["/championships/:id/edit" {:name :championship-edit
+                               :title "Edit Championship"}]
    ["/championships/:id" {:name :championship-detail
-                          :title "Championship Details"}]])
+                          :title "Championship Details"}]
+   ["/teams" {:name :teams
+              :title "Teams"}]
+   ["/teams/new" {:name :team-new
+                  :title "New Team"}]
+   ["/teams/:id/edit" {:name :team-edit
+                       :title "Edit Team"}]
+   ["/teams/:id" {:name :team-detail
+                  :title "Team Details"}]])
 
 (defn- send-log!
   "Lightweight debug logger that posts to the ingest endpoint."

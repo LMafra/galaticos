@@ -93,9 +93,11 @@
   (try
     (let [id (get-in request [:params :id])]
       (if (teams-db/exists? id)
-        (do
-          (teams-db/delete-by-id id)
-          (resp/success {:message "Team deleted"}))
+        (if (teams-db/has-players? id)
+          (resp/error "Cannot delete team: it has associated players. Please remove players from team first." 409)
+          (do
+            (teams-db/delete-by-id id)
+            (resp/success {:message "Team deleted"})))
         (resp/not-found "Team not found")))
     (catch Exception e
       (handle-exception e "Failed to delete team"))))

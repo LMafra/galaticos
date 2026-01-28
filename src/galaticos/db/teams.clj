@@ -2,6 +2,7 @@
   "Database operations for teams collection"
   (:require [monger.collection :as mc]
             [galaticos.db.core :refer [db]]
+            [galaticos.db.players :as players-db]
             [galaticos.util.response :refer [->object-id]])
   (:import [org.bson.types ObjectId]))
 
@@ -67,4 +68,10 @@
   "Check if team exists"
   [id]
   (some? (find-by-id id)))
+
+(defn has-players?
+  "Check if team has any active players"
+  [team-id]
+  (let [players (players-db/find-by-team team-id)]
+    (seq players)))
 

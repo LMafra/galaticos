@@ -93,9 +93,11 @@
   (try
     (let [id (get-in request [:params :id])]
       (if (championships-db/exists? id)
-        (do
-          (championships-db/delete-by-id id)
-          (resp/success {:message "Championship deleted"}))
+        (if (championships-db/has-matches? id)
+          (resp/error "Cannot delete championship: it has associated matches. Please delete or reassign matches first." 409)
+          (do
+            (championships-db/delete-by-id id)
+            (resp/success {:message "Championship deleted"})))
         (resp/not-found "Championship not found")))
     (catch Exception e
       (handle-exception e "Failed to delete championship"))))

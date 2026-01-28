@@ -209,6 +209,12 @@
 (defn delete-team [id on-success on-error]
   (delete-request (str "/api/teams/" id) on-success on-error))
 
+(defn add-player-to-team [team-id player-id on-success on-error]
+  (post-request (str "/api/teams/" team-id "/players/" player-id) {} on-success on-error))
+
+(defn remove-player-from-team [team-id player-id on-success on-error]
+  (delete-request (str "/api/teams/" team-id "/players/" player-id) on-success on-error))
+
 ;; Aggregations API
 (defn get-dashboard-stats [on-success on-error]
   (get-request "/api/aggregations/stats" {} on-success on-error))
