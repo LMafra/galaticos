@@ -44,5 +44,14 @@
                        :replace-deps {org.clojure/tools.deps.alpha {:mvn/version "0.14.1212"}}
                        :exec-fn build.lock/write-lock
                        :exec-args {:lockfile "deps-lock.edn"
-                                   :aliases [:frontend :test :cljs-test :uberjar]}}}}
+                                   :aliases [:frontend :test :cljs-test :uberjar]}}
+           :coverage {:extra-paths ["test"]
+                      :extra-deps {cloverage/cloverage {:mvn/version "1.2.4"}}
+                      :main-opts ["-m" "cloverage.coverage"
+                                  "--src-ns-path" "src"
+                                  "--test-ns-path" "test"
+                                  "--fail-threshold" "80"
+                                  "--output" "target/coverage"
+                                  "--codecov"
+                                  "--ns-exclude-regex" "galaticos.core"]}}}
 

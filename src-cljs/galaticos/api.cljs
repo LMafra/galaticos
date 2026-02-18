@@ -168,6 +168,9 @@
 (defn get-championship [id on-success on-error]
   (get-request (str "/api/championships/" id) {} on-success on-error))
 
+(defn get-championship-players [id on-success on-error]
+  (get-request (str "/api/championships/" id "/players") {} on-success on-error))
+
 (defn create-championship [data on-success on-error]
   (post-request "/api/championships" data on-success on-error))
 
@@ -176,6 +179,18 @@
 
 (defn delete-championship [id on-success on-error]
   (delete-request (str "/api/championships/" id) on-success on-error))
+
+(defn enroll-player-in-championship [championship-id player-id on-success on-error]
+  (post-request (str "/api/championships/" championship-id "/enroll/" player-id) {} on-success on-error))
+
+(defn unenroll-player-from-championship [championship-id player-id on-success on-error]
+  (delete-request (str "/api/championships/" championship-id "/unenroll/" player-id) on-success on-error))
+
+(defn finalize-championship [championship-id winner-player-ids on-success on-error]
+  (post-request (str "/api/championships/" championship-id "/finalize")
+                {:winner-player-ids winner-player-ids}
+                on-success
+                on-error))
 
 ;; Matches API
 (defn get-matches [params on-success on-error]

@@ -5,8 +5,10 @@
             [galaticos.api :as api]
             [galaticos.state :as state]
             [galaticos.components.common :as common]
+            [galaticos.components.charts :as charts]
             [galaticos.effects :as effects]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            ["lucide-react" :refer [Grid2X2 ListFilter ChartColumn]]))
 
 (defn- normalize-id [v]
   (cond
@@ -14,39 +16,117 @@
     (map? v) (or (get v "$oid") (get v :$oid))
     :else nil))
 
+(defn- position-options [players]
+  (->> players
+       (map :position)
+       (filter some?)
+       set
+       sort
+       (map (fn [pos] [pos pos]))
+       (cons ["" "Todas as posições"])))
+
 (defn player-list []
-  (let [{:keys [players players-loading? players-error]} @state/app-state]
-    [:div
-     [:h2 "Jogadores"]
-     [:div {:style {:margin-bottom "12px" :display "flex" :gap "8px"}}
-      [common/button "Novo Jogador" #(rfe/push-state :player-new)]
-      [common/button "Atualizar" #(effects/ensure-players! {:force? true})]]
-     (cond
-       players-error [common/error-message players-error]
-       players-loading? [:p "Carregando jogadores..."]
-       (seq players) [common/table
-                      ["Nome" "Apelido" "Posição" "Partidas" "Gols" "Assistências"]
-                      (map (fn [player]
-                             [(:name player)
-                              (:nickname player)
-                              (:position player)
-                              (get-in player [:aggregated-stats :total :games] 0)
-                              (get-in player [:aggregated-stats :total :goals] 0)
-                              (get-in player [:aggregated-stats :total :assists] 0)])
-                           players)
-                                     :on-row-click (fn [player]
-                                                     (if-let [id (normalize-id (or (:_id player) (:id player)))]
-                                                       (rfe/push-state :player-detail {:id id})
-                                                       (state/set-error! "ID do jogador ausente; não foi possível abrir detalhes.")))
-                      :row-data players
-                      :sortable? true]
-       :else [:p "Nenhum jogador encontrado"])]))
+  (let [view-mode (r/atom :table)
+        search (r/atom "")
+        position (r/atom "")]
+    (fn []
+      (let [{:keys [players players-loading? players-error]} @state/app-state
+            filtered (->> players
+                          (filter (fn [player]
+                                    (and (if (str/blank? @search)
+                                           true
+                                           (str/includes? (str/lower-case (str (:name player)))
+                                                          (str/lower-case @search)))
+                                         (if (str/blank? @position)
+                                           true
+                                           (= (:position player) @position))))))
+            positions (position-options players)]
+        [:div {:class "space-y-6"}
+         [:div {:class "flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"}
+          [:div
+           [:p {:class "text-sm text-slate-500"} "Gestão do elenco"]
+           [:h2 {:class "text-2xl font-semibold text-slate-900"} "Jogadores"]]
+          [:div {:class "flex flex-wrap gap-2"}
+           [common/button "Novo Jogador" #(rfe/push-state :player-new) :variant :primary]
+           [common/button "Atualizar" #(effects/ensure-players! {:force? true}) :variant :outline]]]
+
+         [common/card
+          [:div {:class "flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"}
+           [:div {:class "flex flex-col gap-3 sm:flex-row sm:items-center"}
+            [:input {:type "text"
+                     :value @search
+                     :placeholder "Buscar jogador..."
+                     :on-change #(reset! search (-> % .-target .-value))
+                     :class "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-brand-maroon focus:outline-none focus:ring-2 focus:ring-brand-maroon/20 sm:w-64"}]
+            [common/select-field "Posição" @position positions #(reset! position %)
+             :container-class "min-w-[200px]"]]
+           [:div {:class "flex items-center gap-2"}
+            [:button {:class (common/merge-classes "rounded-lg border px-3 py-2 text-sm"
+                                                  (if (= @view-mode :table)
+                                                    "bg-brand-maroon text-white border-brand-maroon"
+                                                    "border-slate-200 text-slate-600 hover:bg-slate-100"))
+                      :on-click #(reset! view-mode :table)}
+             [:> ListFilter {:size 16}]]
+            [:button {:class (common/merge-classes "rounded-lg border px-3 py-2 text-sm"
+                                                  (if (= @view-mode :cards)
+                                                    "bg-brand-maroon text-white border-brand-maroon"
+                                                    "border-slate-200 text-slate-600 hover:bg-slate-100"))
+                      :on-click #(reset! view-mode :cards)}
+             [:> Grid2X2 {:size 16}]]]] 
+
+          (cond
+            players-error [common/error-message players-error]
+            players-loading? [common/loading-spinner]
+            (seq filtered)
+            (if (= @view-mode :cards)
+              [:div {:class "mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"}
+               (for [player filtered]
+                 (let [id (normalize-id (or (:_id player) (:id player)))]
+                   ^{:key id}
+                   [:div {:class "app-card p-4 transition hover:shadow-md"
+                          :on-click #(when id (rfe/push-state :player-detail {:id id}))}
+                    [:div {:class "flex items-start gap-3"}
+                     [:div {:class "h-12 w-12 overflow-hidden rounded-xl bg-slate-100"}
+                      (when-let [photo (:photo-url player)]
+                        [:img {:src photo :alt (:name player) :class "h-full w-full object-cover"}])]
+                     [:div {:class "flex-1"}
+                      [:p {:class "text-base font-semibold text-slate-900"} (:name player)]
+                      [:p {:class "text-xs text-slate-500"} (or (:nickname player) "-")]
+                      [common/badge (:position player) :variant :info :class "mt-2"]]]
+                    [:div {:class "mt-4 grid grid-cols-3 gap-2 text-center text-xs text-slate-600"}
+                     [:div
+                      [:p {:class "text-sm font-semibold text-slate-900"} (get-in player [:aggregated-stats :total :games] 0)]
+                      [:p "Partidas"]]
+                     [:div
+                      [:p {:class "text-sm font-semibold text-slate-900"} (get-in player [:aggregated-stats :total :goals] 0)]
+                      [:p "Gols"]]
+                     [:div
+                      [:p {:class "text-sm font-semibold text-slate-900"} (get-in player [:aggregated-stats :total :assists] 0)]
+                      [:p "Assistências"]]]]))]
+              [common/table
+               ["Nome" "Apelido" "Posição" "Partidas" "Gols" "Assistências"]
+               (map (fn [player]
+                      [(:name player)
+                       (:nickname player)
+                       [common/badge (:position player) :variant :info]
+                       (get-in player [:aggregated-stats :total :games] 0)
+                       (get-in player [:aggregated-stats :total :goals] 0)
+                       (get-in player [:aggregated-stats :total :assists] 0)])
+                    filtered)
+               :on-row-click (fn [player]
+                               (if-let [id (normalize-id (or (:_id player) (:id player)))]
+                                 (rfe/push-state :player-detail {:id id})
+                                 (state/set-error! "ID do jogador ausente; não foi possível abrir detalhes.")))
+               :row-data filtered
+               :sortable? true])
+            :else [:p {:class "app-muted"} "Nenhum jogador encontrado"])]]))))
 
 (defn player-detail [params]
   (let [player (r/atom nil)
         loading? (r/atom true)
         error (r/atom nil)
         deleting? (r/atom false)
+        active-tab (r/atom :info)
         id (:id params)
         load-player! (fn []
                        (reset! error nil)
@@ -67,54 +147,84 @@
                                                (rfe/push-state :players))
                                              (fn [err]
                                                (reset! deleting? false)
-                                               (reset! error (str "Erro ao deletar jogador: " err))))))] 
+                                               (reset! error (str "Erro ao deletar jogador: " err))))))]
     (r/create-class
-      {:component-did-mount load-player!
-       :reagent-render
-       (fn []
-         [:div
-          [:h2 "Detalhes do Jogador"]
-          (cond
-            @error [:div
-                    [common/error-message @error]
-                    [common/button "Tentar novamente" load-player!]]
-            @loading? [:p "Carregando..."]
-            @player [:div
-                     [:div {:style {:margin-bottom "16px" :display "flex" :gap "8px"}}
-                      [common/button "Editar" #(rfe/push-state :player-edit {:id id})]
-                      [common/button "Deletar" delete-player!
-                       :disabled @deleting?
-                       :style {:background-color "#fee"}]]
-                     [:h3 (:name @player)]
-                     [:p "Apelido: " (or (:nickname @player) "-")]
-                     [:p "Posição: " (:position @player)]
-                     (when (:team-id @player) [:p "Time ID: " (:team-id @player)])
-                     (when (:birth-date @player) [:p "Data de Nascimento: " (:birth-date @player)])
-                     (when (:nationality @player) [:p "Nacionalidade: " (:nationality @player)])
-                     (when (:height @player) [:p "Altura: " (:height @player)])
-                     (when (:weight @player) [:p "Peso: " (:weight @player)])
-                     (when (:preferred-foot @player) [:p "Pé Preferido: " (:preferred-foot @player)])
-                     (when (:shirt-number @player) [:p "Número da Camisa: " (:shirt-number @player)])
-                     (when (:email @player) [:p "Email: " (:email @player)])
-                     (when (:phone @player) [:p "Telefone: " (:phone @player)])
-                     [:h4 "Estatísticas Gerais"]
-                     [:ul
-                      [:li "Partidas: " (get-in @player [:aggregated-stats :total :games] 0)]
-                      [:li "Gols: " (get-in @player [:aggregated-stats :total :goals] 0)]
-                      [:li "Assistências: " (get-in @player [:aggregated-stats :total :assists] 0)]]
-                     [:h4 "Estatísticas por Campeonato"]
-                     (if (seq (get-in @player [:aggregated-stats :by-championship]))
-                       [common/table
-                        ["Campeonato" "Partidas" "Gols" "Assistências"]
-                        (map (fn [ch-stats]
-                               [(:championship-name ch-stats)
-                                (:games ch-stats)
-                                (:goals ch-stats)
-                                (:assists ch-stats)])
-                             (get-in @player [:aggregated-stats :by-championship]))
-                        :sortable? true]
-                       [:p "Nenhuma estatística por campeonato"])]
-            :else [:p "Jogador não encontrado"])])})))
+     {:component-did-mount load-player!
+      :reagent-render
+      (fn []
+        (cond
+          @error [:div {:class "space-y-4"}
+                  [common/error-message @error]
+                  [common/button "Tentar novamente" load-player! :variant :outline]]
+          @loading? [common/loading-spinner]
+          @player (let [player-stats (get-in @player [:aggregated-stats :total] {})
+                        by-champ (get-in @player [:aggregated-stats :by-championship])]
+                    [:div {:class "space-y-6"}
+                     [:div {:class "flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"}
+                      [:div {:class "flex items-center gap-4"}
+                       [:div {:class "h-16 w-16 overflow-hidden rounded-2xl bg-slate-100"}
+                        (when-let [photo (:photo-url @player)]
+                          [:img {:src photo :alt (:name @player) :class "h-full w-full object-cover"}])]
+                       [:div
+                        [:p {:class "text-sm text-slate-500"} "Jogador"]
+                        [:h2 {:class "text-2xl font-semibold text-slate-900"} (:name @player)]
+                        [common/badge (:position @player) :variant :info :class "mt-2"]]]
+                      [:div {:class "flex flex-wrap gap-2"}
+                       [common/button "Editar" #(rfe/push-state :player-edit {:id id}) :variant :outline]
+                       [common/button "Deletar" delete-player! :variant :danger :disabled @deleting?]]]
+
+                     [:div {:class "grid gap-4 md:grid-cols-2 xl:grid-cols-4"}
+                      [common/stat-card "Partidas" (get player-stats :games 0) :icon [:> ChartColumn {:size 18}]]
+                      [common/stat-card "Gols" (get player-stats :goals 0) :icon [:> ChartColumn {:size 18}]]
+                      [common/stat-card "Assistências" (get player-stats :assists 0) :icon [:> ChartColumn {:size 18}]]
+                      [common/stat-card "Títulos" (get player-stats :titles 0) :icon [:> ChartColumn {:size 18}]]]
+
+                     [common/card
+                      [:div {:class "flex flex-wrap items-center justify-between gap-2"}
+                       [:div {:class "flex gap-2"}
+                        [common/button "Informações" #(reset! active-tab :info) :variant (if (= @active-tab :info) :primary :outline)]
+                        [common/button "Estatísticas" #(reset! active-tab :stats) :variant (if (= @active-tab :stats) :primary :outline)]]]
+                      (case @active-tab
+                        :info
+                        [:div {:class "mt-4 grid gap-4 md:grid-cols-2"}
+                         [:div {:class "space-y-2 text-sm text-slate-600"}
+                          [:p [:span {:class "font-medium text-slate-800"} "Apelido: "] (or (:nickname @player) "-")]
+                          [:p [:span {:class "font-medium text-slate-800"} "Time ID: "] (or (:team-id @player) "-")]
+                          [:p [:span {:class "font-medium text-slate-800"} "Data de Nascimento: "] (or (:birth-date @player) "-")]
+                          [:p [:span {:class "font-medium text-slate-800"} "Nacionalidade: "] (or (:nationality @player) "-")]]
+                         [:div {:class "space-y-2 text-sm text-slate-600"}
+                          [:p [:span {:class "font-medium text-slate-800"} "Altura: "] (or (:height @player) "-")]
+                          [:p [:span {:class "font-medium text-slate-800"} "Peso: "] (or (:weight @player) "-")]
+                          [:p [:span {:class "font-medium text-slate-800"} "Pé Preferido: "] (or (:preferred-foot @player) "-")]
+                          [:p [:span {:class "font-medium text-slate-800"} "Número: "] (or (:shirt-number @player) "-")]]]
+                        :stats
+                        [:div {:class "mt-4 space-y-6"}
+                         [common/card
+                          [:h3 {:class "app-section-title"} "Performance por campeonato"]
+                          (if (seq by-champ)
+                            [charts/bar-chart {:data (map (fn [entry] {:name (:championship-name entry) :value (:goals entry)})
+                                                          by-champ)
+                                               :x-key "name"
+                                               :y-key "value"
+                                               :fill "#3B82F6"}]
+                            [:p {:class "app-muted"} "Nenhuma estatística por campeonato"])]
+                         (if (seq by-champ)
+                           [common/table
+                            ["Campeonato" "Partidas" "Gols" "Assistências"]
+                            (map (fn [ch-stats]
+                                   [(:championship-name ch-stats)
+                                    (:games ch-stats)
+                                    (:goals ch-stats)
+                                    (:assists ch-stats)])
+                                 by-champ)
+                            :sortable? true
+                            :dense? true]
+                           [:p {:class "app-muted"} "Nenhuma estatística por campeonato"])]
+                        [:p {:class "app-muted"} "Selecione uma aba"])
+                      ]
+                     ])
+          :else [:p {:class "app-muted"} "Jogador não encontrado"]))
+      })))
 
 (defn player-form [params]
   (let [id (:id params)
@@ -209,58 +319,74 @@
      {:component-did-mount load-data!
       :reagent-render
       (fn []
-        [:div
-         [:h2 (if is-edit? "Editar Jogador" "Novo Jogador")]
+        [:div {:class "space-y-6"}
+         [:div
+          [:p {:class "text-sm text-slate-500"} "Cadastro"]
+          [:h2 {:class "text-2xl font-semibold text-slate-900"} (if is-edit? "Editar Jogador" "Novo Jogador")]]
          (if (or @player-loading? @teams-loading?)
-           [:p "Carregando..."]
-           [:form {:on-submit (fn [e]
-                               (.preventDefault e)
-                               (reset! form-error nil)
-                               (if-let [err (valid-form?)]
-                                 (reset! form-error err)
-                                 (do
-                                   (reset! submitting? true)
-                                   (let [payload (prepare-payload)
-                                         on-success (fn [_result]
-                                                     (reset! submitting? false)
-                                                     (effects/ensure-players! {:force? true})
-                                                     (rfe/push-state :players))
-                                         on-error (fn [error]
-                                                   (reset! submitting? false)
-                                                   (reset! form-error (str "Erro ao " (if is-edit? "atualizar" "criar") " jogador: " error)))]
-                                     (if is-edit?
-                                       (api/update-player id payload on-success on-error)
-                                       (api/create-player payload on-success on-error))))))}
-            [common/input-field "Nome *" (:name @form-data) #(swap! form-data assoc :name %) :placeholder "Nome completo"]
-            [common/input-field "Apelido" (:nickname @form-data) #(swap! form-data assoc :nickname %)]
-            [common/input-field "Posição *" (:position @form-data) #(swap! form-data assoc :position %) :placeholder "Ex: Atacante, Meia, Zagueiro"]
-            (let [teams-seq @teams
-                  options (cons ["" "Selecione um time"]
-                                (map (fn [team]
-                                       [(str (:_id team)) (:name team)])
-                                     teams-seq))]
-              [common/select-field
-               "Time"
-               (:team-id @form-data)
-               options
-               #(swap! form-data assoc :team-id %)])
-            [common/input-field "Data de Nascimento" (:birth-date @form-data) #(swap! form-data assoc :birth-date %) :type "date"]
-            [common/input-field "Nacionalidade" (:nationality @form-data) #(swap! form-data assoc :nationality %)]
-            [common/input-field "Altura (cm)" (:height @form-data) #(swap! form-data assoc :height %) :type "number"]
-            [common/input-field "Peso (kg)" (:weight @form-data) #(swap! form-data assoc :weight %) :type "number"]
-            [common/input-field "Pé Preferido" (:preferred-foot @form-data) #(swap! form-data assoc :preferred-foot %) :placeholder "Ex: Esquerdo, Direito"]
-            [common/input-field "Número da Camisa" (:shirt-number @form-data) #(swap! form-data assoc :shirt-number %) :type "number"]
-            [common/input-field "Email" (:email @form-data) #(swap! form-data assoc :email %) :type "email"]
-            [common/input-field "Telefone" (:phone @form-data) #(swap! form-data assoc :phone %) :type "tel"]
-            [common/input-field "URL da Foto" (:photo-url @form-data) #(swap! form-data assoc :photo-url %) :type "url"]
-            [common/input-field "Notas" (:notes @form-data) #(swap! form-data assoc :notes %) :placeholder "Observações adicionais"]
+           [common/loading-spinner]
+           [:form {:class "space-y-6"
+                   :on-submit (fn [e]
+                                (.preventDefault e)
+                                (reset! form-error nil)
+                                (if-let [err (valid-form?)]
+                                  (reset! form-error err)
+                                  (do
+                                    (reset! submitting? true)
+                                    (let [payload (prepare-payload)
+                                          on-success (fn [_result]
+                                                      (reset! submitting? false)
+                                                      (effects/ensure-players! {:force? true})
+                                                      (rfe/push-state :players))
+                                          on-error (fn [error]
+                                                    (reset! submitting? false)
+                                                    (reset! form-error (str "Erro ao " (if is-edit? "atualizar" "criar") " jogador: " error)))]
+                                      (if is-edit?
+                                        (api/update-player id payload on-success on-error)
+                                        (api/create-player payload on-success on-error))))))}
+            [common/card
+             [:h3 {:class "app-section-title"} "Informações básicas"]
+             [:div {:class "mt-4 grid gap-4 md:grid-cols-2"}
+              [common/input-field "Nome" (:name @form-data) #(swap! form-data assoc :name %) :placeholder "Nome completo" :required? true]
+              [common/input-field "Apelido" (:nickname @form-data) #(swap! form-data assoc :nickname %)]
+              [common/input-field "Posição" (:position @form-data) #(swap! form-data assoc :position %) :placeholder "Ex: Atacante, Meia, Zagueiro" :required? true]
+              (let [teams-seq @teams
+                    options (cons ["" "Selecione um time"]
+                                  (map (fn [team]
+                                         [(str (:_id team)) (:name team)])
+                                       teams-seq))]
+                [common/select-field
+                 "Time"
+                 (:team-id @form-data)
+                 options
+                 #(swap! form-data assoc :team-id %)])]]
+
+            [common/card
+             [:h3 {:class "app-section-title"} "Dados pessoais"]
+             [:div {:class "mt-4 grid gap-4 md:grid-cols-2"}
+              [common/input-field "Data de Nascimento" (:birth-date @form-data) #(swap! form-data assoc :birth-date %) :type "date"]
+              [common/input-field "Nacionalidade" (:nationality @form-data) #(swap! form-data assoc :nationality %)]
+              [common/input-field "Altura (cm)" (:height @form-data) #(swap! form-data assoc :height %) :type "number"]
+              [common/input-field "Peso (kg)" (:weight @form-data) #(swap! form-data assoc :weight %) :type "number"]]]
+
+            [common/card
+             [:h3 {:class "app-section-title"} "Contato e observações"]
+             [:div {:class "mt-4 grid gap-4 md:grid-cols-2"}
+              [common/input-field "Pé Preferido" (:preferred-foot @form-data) #(swap! form-data assoc :preferred-foot %) :placeholder "Esquerdo, Direito"]
+              [common/input-field "Número da Camisa" (:shirt-number @form-data) #(swap! form-data assoc :shirt-number %) :type "number"]
+              [common/input-field "Email" (:email @form-data) #(swap! form-data assoc :email %) :type "email"]
+              [common/input-field "Telefone" (:phone @form-data) #(swap! form-data assoc :phone %) :type "tel"]
+              [common/input-field "URL da Foto" (:photo-url @form-data) #(swap! form-data assoc :photo-url %) :type "url" :container-class "md:col-span-2"]
+              [common/input-field "Notas" (:notes @form-data) #(swap! form-data assoc :notes %) :placeholder "Observações adicionais" :container-class "md:col-span-2"]]]
+
             (when @form-error
               [common/error-message @form-error])
-            [:div {:style {:margin-top "12px" :display "flex" :gap "8px"}}
+
+            [:div {:class "flex flex-wrap gap-2"}
              [common/button (if @submitting? "Salvando..." (if is-edit? "Atualizar" "Criar"))
               nil
               :type "submit"
               :disabled @submitting?
-              :style {:background-color "#4CAF50" :color "white"}]
-             [common/button "Cancelar" #(rfe/push-state :players)]]])])})))
+              :variant :primary]
+             [common/button "Cancelar" #(rfe/push-state :players) :variant :outline]]])])})))
 

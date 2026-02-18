@@ -48,14 +48,46 @@ docs: atualiza documentação do schema
 refactor: reorganiza módulos de banco de dados
 ```
 
-### Testes
+### Testes e Cobertura
 
 Antes de enviar um PR, certifique-se de:
 
 - [ ] O código compila sem erros
+- [ ] Todos os testes passam: `./bin/galaticos test`
+- [ ] **Cobertura atinge os requisitos mínimos (80% linhas, 70% branches)**
+- [ ] Novos recursos incluem testes adequados
 - [ ] As dependências estão atualizadas
 - [ ] Não há warnings do compilador
 - [ ] O código segue os padrões do projeto
+
+#### Requisitos de Cobertura
+
+O projeto mantém os seguintes requisitos de cobertura de código:
+
+- **Cobertura de Linhas**: ≥ 80%
+- **Cobertura de Branches**: ≥ 70%
+
+**Validar cobertura localmente:**
+
+```bash
+# Cobertura backend (obrigatória)
+./bin/galaticos coverage
+
+# Cobertura completa (backend + E2E)
+./bin/galaticos coverage:all
+
+# Visualizar relatórios
+open target/coverage-report/index.html
+```
+
+**O que fazer se a cobertura estiver baixa:**
+
+1. Execute `./bin/galaticos coverage` para ver o relatório
+2. Identifique áreas não cobertas (linhas vermelhas no relatório HTML)
+3. Adicione testes para cobrir essas áreas
+4. Repita até atingir 80/70
+
+**Importante:** PRs que não atingirem os thresholds de cobertura serão bloqueados automaticamente pelo CI. Veja [docs/testing-coverage.md](docs/testing-coverage.md) para mais detalhes.
 
 ## Ambiente de Desenvolvimento
 

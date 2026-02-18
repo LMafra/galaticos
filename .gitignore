@@ -96,3 +96,14 @@ temp/
 *~
 
 node_modules/
+
+# Playwright
+playwright-report/
+test-results/
+
+# Test Coverage
+target/coverage/
+target/coverage.json
+coverage/
+playwright-coverage/
+.nyc_output/

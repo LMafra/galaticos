@@ -8,12 +8,28 @@
 
 (def collection-name "matches")
 
+(defn- sum-goals [team-id player-statistics]
+  (if team-id
+    (reduce + 0 (map #(or (:goals %) 0)
+                     (filter #(= (:team-id %) team-id) player-statistics)))
+    0))
+
+(defn- calculate-scores [match-data player-statistics]
+  (if (seq player-statistics)
+    (let [home-team-id (:home-team-id match-data)
+          away-team-id (:away-team-id match-data)]
+      {:home-score (sum-goals home-team-id player-statistics)
+       :away-score (sum-goals away-team-id player-statistics)})
+    {}))
+
 (defn create
   "Create a new match with player statistics"
   [match-data player-statistics]
   (let [now (java.util.Date.)
         id (ObjectId.)
+        scores (calculate-scores match-data player-statistics)
         doc (merge match-data
+                   scores
                    {:_id id
                     :player-statistics player-statistics
                     :created-at now
@@ -53,9 +69,12 @@
 (defn update-by-id
   "Update match by ID"
   [id updates]
-  (mc/update (db) collection-name
-             {:_id (->object-id id)}
-             {:$set (merge updates {:updated-at (java.util.Date.)})}))
+  (let [match (find-by-id id)
+        merged (merge (select-keys match [:home-team-id :away-team-id :player-statistics]) updates)
+        scores (calculate-scores merged (:player-statistics merged))]
+    (mc/update (db) collection-name
+               {:_id (->object-id id)}
+               {:$set (merge merged scores {:updated-at (java.util.Date.)})})))
 
 (defn delete-by-id
   "Delete match by ID"

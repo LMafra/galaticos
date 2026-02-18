@@ -343,6 +343,51 @@ Se preferir, você também pode executar os scripts diretamente:
 ./scripts/docker/dev.sh start
 ```
 
+## Testes e Cobertura
+
+### Executando Testes
+
+```bash
+# Executar todos os testes (backend + ClojureScript)
+./bin/galaticos test
+
+# Executar testes E2E (requer aplicação rodando)
+./bin/galaticos e2e
+```
+
+### Cobertura de Código
+
+O projeto mantém requisitos de cobertura de **80% de linhas** e **70% de branches**.
+
+```bash
+# Cobertura backend (Clojure)
+./bin/galaticos coverage
+
+# Cobertura E2E (Playwright)
+./bin/galaticos coverage:e2e
+
+# Cobertura completa (backend + E2E)
+./bin/galaticos coverage:all
+```
+
+**Visualizar relatórios:**
+```bash
+# Relatório consolidado
+open target/coverage-report/index.html
+
+# Relatório backend apenas
+open target/coverage/index.html
+```
+
+### CI/CD
+
+A cobertura é validada automaticamente no GitHub Actions para todos os Pull Requests. PRs que não atingirem os thresholds de 80/70 terão o merge bloqueado.
+
+**Badges:**
+[![Test Coverage](https://img.shields.io/badge/coverage-80%25-brightgreen)]()
+
+Para mais detalhes, consulte a [documentação completa de cobertura](docs/testing-coverage.md).
+
 ## Uso
 
 ### Conexão com MongoDB

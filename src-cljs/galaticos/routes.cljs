@@ -4,10 +4,10 @@
             [reitit.frontend.easy :as rfe]))
 
 (def routes
-  [["/login" {:name :login
-              :title "Login"}]
-   ["/" {:name :dashboard
-         :title "Dashboard"}]
+  [["/" {:name :login
+         :title "Login"}]
+   ["/dashboard" {:name :dashboard
+                  :title "Dashboard"}]
    ["/players" {:name :players
                 :title "Players"}]
    ["/players/new" {:name :player-new
@@ -41,16 +41,20 @@
                   :title "Team Details"}]])
 
 (defn- send-log!
-  "Lightweight debug logger that posts to the ingest endpoint."
-  [payload]
+  "Lightweight debug logger that posts to the ingest endpoint.
+   Fails silently if the service is not available."
+  [_payload]
   ;; #region agent log
-  (-> (js/fetch "http://127.0.0.1:7242/ingest/1c0f55b4-e5fd-4147-be12-c0c768e9871a"
-                (clj->js {:method "POST"
-                          :headers {"Content-Type" "application/json"}
-                          :body (.stringify js/JSON (clj->js payload))}))
-      (.catch (fn [_] nil)))
+  ;; Disabled by default - uncomment and configure if logging service is available
+  ;; (try
+  ;;   (-> (js/fetch "http://127.0.0.1:7242/ingest/1c0f55b4-e5fd-4147-be12-c0c768e9871a"
+  ;;                 (clj->js {:method "POST"
+  ;;                           :headers {"Content-Type" "application/json"}
+  ;;                           :body (.stringify js/JSON (clj->js payload))}))
+  ;;       (.catch (fn [_] nil)))
+  ;;   (catch :default _ nil))
   ;; #endregion
-  )
+  nil)
 
 (def router
   (let [_ (send-log! {:sessionId "debug-session"

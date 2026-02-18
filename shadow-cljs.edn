@@ -9,5 +9,13 @@
         :dev {:compiler-options {:source-map true}}
         :release {:compiler-options {:optimizations :advanced
                                      :source-map false
-                                     :pretty-print false}}}}}
+                                     :pretty-print false}}}
+  :app-coverage {:target :browser
+                 :output-dir "resources/public/js/compiled"
+                 :asset-path "/js/compiled"
+                 :modules {:app {:init-fn galaticos.core/init}}
+                 :devtools {:after-load galaticos.core/reload
+                            :watch-dir "resources/public"}
+                 :compiler-options {:instrument true}
+                 :dev {:compiler-options {:source-map true}}}}}
 

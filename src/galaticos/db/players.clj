@@ -63,6 +63,14 @@
   (mc/find-maps (db) collection-name
                 {:name {:$regex name :$options "i"}}))
 
+(defn find-by-ids
+  "Find players by a list of IDs"
+  [ids]
+  (let [object-ids (map ->object-id ids)]
+    (if (seq object-ids)
+      (mc/find-maps (db) collection-name {:_id {:$in object-ids}})
+      [])))
+
 (defn update-by-id
   "Update player by ID"
   [id updates]
@@ -70,6 +78,16 @@
     (mc/update (db) collection-name
                {:_id (->object-id id)}
                {:$set (merge normalized {:updated-at (java.util.Date.)})})))
+
+(defn increment-titles
+  "Increment titles for a list of players"
+  [player-ids]
+  (when (seq player-ids)
+    (mc/update (db) collection-name
+               {:_id {:$in (map ->object-id player-ids)}}
+               {:$inc {:aggregated-stats.total.titles 1}
+                :$set {:updated-at (java.util.Date.)}}
+               {:multi true})))
 
 (defn update-stats
   "Update player aggregated statistics"
