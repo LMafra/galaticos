@@ -14,9 +14,12 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install clj-kondo
-        uses: DeLaGuardo/setup-clj-kondo@v1
-        with:
-          version: "2024.02.09"
+        run: |
+          CLJ_KONDO_VERSION="2024.06.19"
+          curl -sSLO "https://github.com/clj-kondo/clj-kondo/releases/download/v${CLJ_KONDO_VERSION}/clj-kondo-${CLJ_KONDO_VERSION}-linux-amd64.zip"
+          unzip -o "clj-kondo-${CLJ_KONDO_VERSION}-linux-amd64.zip"
+          sudo mv clj-kondo /usr/local/bin/
+          chmod +x /usr/local/bin/clj-kondo
 
       - name: Lint Clojure/ClojureScript
         run: clj-kondo --lint src src-cljs --fail-level error
