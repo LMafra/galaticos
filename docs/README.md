@@ -59,19 +59,13 @@ Sistema de gestão de elenco esportivo com rastreamento de estatísticas, campeo
 
 ### 🔴 Alta Prioridade (CRÍTICO para produção)
 
-#### 1. Cálculo Automático de Placar
-- **Status**: ❌ Não implementado
-- **Problema**: Placar é manual e pode divergir dos gols
-- **Risco**: Inconsistência de dados
-- **Esforço**: 1 dia
-- **Impacto**: ALTO
+#### 1. Cálculo Automático de Placar (nosso time)
+- **Status**: ✅ Implementado
+- **Comportamento**: O placar do time mandante (`home-score`) é calculado automaticamente no backend pela soma dos gols em `player-statistics` (cada estatística tem `team-id` do nosso time). O placar do adversário (`away-score`) é informado manualmente (plataforma de gestão de um único time, sem estatísticas do adversário). Ver `src/galaticos/db/matches.clj` (calculate-scores) e `src/galaticos/handlers/matches.clj` (allowed-match-fields).
 
 #### 2. Finalização de Campeonato
-- **Status**: ❌ Não implementado
-- **Problema**: Não há processo para definir vencedores e títulos
-- **Risco**: Sistema de títulos incompleto
-- **Esforço**: 1-2 dias
-- **Impacto**: ALTO
+- **Status**: ✅ Implementado
+- **Comportamento**: Endpoint `POST /api/championships/:id/finalize` com payload `winner-player-ids` e `titles-award-count`. Status do campeonato passa a `completed`; títulos são incrementados nos jogadores vencedores conforme a quantidade informada. Ver `src/galaticos/handlers/championships.clj` (finalize-championship) e `src/galaticos/db/players.clj` (increment-titles).
 
 ### 🟡 Média Prioridade
 
@@ -95,24 +89,43 @@ Sistema de gestão de elenco esportivo com rastreamento de estatísticas, campeo
 ## 🛠️ Pendências Técnicas
 
 ### Críticas (Fazer antes do lançamento)
-- [ ] Smoke tests E2E (1-2 dias)
-- [ ] RN-PEND-05: Placar automático (1 dia)
-- [ ] RN-PEND-03: Finalização de campeonato (1-2 dias)
+- [x] Smoke tests E2E (1-2 dias)
+- [x] RN-PEND-05: Placar automático (implementado: home-score calculado, away-score manual)
+- [x] RN-PEND-03: Finalização de campeonato (implementado: status completed, titles-award-count)
 
 ### Alta Prioridade
-- [ ] Tratamento de 404 em telas de detalhe (0.5 dia)
-- [ ] Validações de formulário melhoradas (0.5-1 dia)
-- [ ] Endpoint reconciliação manual de stats (0.5-1 dia)
+- [x] Tratamento de 404 em telas de detalhe (0.5 dia)
+- [x] Validações de formulário melhoradas (0.5-1 dia)
+- [x] Endpoint reconciliação manual de stats (0.5-1 dia) — inclui botão "Reconciliar estatísticas" no Dashboard
 
 ### Média Prioridade
-- [ ] RN-PEND-01,02,04,06: Sistema de inscrições (2.5-4 dias)
-- [ ] Telas de agregações avançadas (2-4 dias)
-- [ ] Refresh automático por tempo (0.5 dia)
+- [x] RN-PEND-01,02,04,06: Sistema de inscrições (2.5-4 dias)
+- [x] Telas de agregações avançadas (2-4 dias)
+- [x] Refresh automático por tempo (0.5 dia)
 
 ### Baixa Prioridade (Pós-lançamento)
-- [ ] Acessibilidade básica (0.5-1 dia)
-- [ ] Monitoramento e logs estruturados (0.5-1 dia)
-- [ ] API base URL configurável (0.5 dia)
+
+#### 1. Acessibilidade básica (0.5–1 dia)
+- [x] **Landmarks e estrutura:** `<main id="main-content">`, header/nav/footer semânticos no layout; skip link "Pular para o conteúdo" no início do body.
+- [x] **Formulários e controles:** `<label>` (ou `aria-label`/`aria-labelledby`) em todos os inputs; botões só-ícone com `aria-label`.
+- [x] **Feedback e erros:** mensagens de erro com `aria-describedby` e `aria-invalid` nos campos.
+- [x] **Navegação por teclado:** fluxo de tab lógico; modais prendem foco e devolvem ao elemento que abriu.
+- [x] **Contraste e foco:** validar contraste de texto e anel de foco; foco visível em controles customizados.
+- [x] **Documentação:** registrar decisões de a11y (ex.: nível WCAG 2.1 AA) e como testar (teclado, Lighthouse).
+
+#### 2. Monitoramento e logs estruturados (0.5–1 dia)
+- [x] **Formato único:** logs do backend em JSON estruturado (uma linha por evento) com `timestamp`, `level`, `message`, `logger`; opcional `request-id`, `user`, `duration_ms`, `error`.
+- [x] **Request-id:** middleware Ring com UUID por requisição; propagar em logs e header `X-Request-Id` na resposta.
+- [x] **Níveis e ambiente:** configurar nível por ambiente (dev DEBUG/INFO, prod INFO/WARN); reduzir logs verbosos (ex.: `pr-str` de payloads) em produção.
+- [x] **Consolidar e limpar:** remover ou substituir `write-debug-log` em `handler.clj` e `errors.clj` pelo pipeline de log estruturado.
+- [x] **Health e métricas:** manter/expandir endpoint de health (ex.: versão, dependências como MongoDB) para orquestradores e monitoramento.
+- [x] **Documentação:** documentar no README variáveis de ambiente para nível de log e destino; exemplo de linha de log JSON para ingestão (Datadog, CloudWatch, etc.).
+
+#### 3. API base URL configurável (0.5 dia)
+- [x] **Runtime (deploy sem rebuild):** documentar que `window.GALATICOS_API_URL` pode ser definido antes do script da aplicação; incluir no README exemplo de snippet para produção (ex.: `window.GALATICOS_API_URL = 'https://api.seudominio.com';`).
+- [x] **Build-time (Shadow-cljs):** documentar uso de `:closure-defines` no `shadow-cljs.edn` para injetar `GALATICOS_API_URL` no build, com exemplo para dev e prod.
+- [x] **Comportamento quando vazio:** manter URL vazia = mesma origem; documentar que em produção é recomendável definir a URL explicitamente.
+- [x] **Validação opcional:** em dev, logar uma vez a base URL efetiva (sem expor token); evitar log em produção.
 
 ---
 
@@ -297,7 +310,36 @@ DISABLE_AUTH=true  # NÃO usar em produção
 
 # Ambiente
 APP_ENV=development  # ou production
+
+# Logs (backend): nível em JSON para stdout. Passe ao JVM: -DLOG_LEVEL=DEBUG (default: INFO)
+LOG_LEVEL=INFO
 ```
+
+Os logs do backend são emitidos em **JSON estruturado** (uma linha por evento) para stdout, com campos como `timestamp`, `level`, `message`, `logger` e `request_id` (correlação com o header `X-Request-Id` da resposta). Exemplo para ingestão em Datadog, CloudWatch, etc.:
+
+```json
+{"@timestamp":"2026-02-18T12:00:00.000+0000","@version":"1","message":"Request received","logger_name":"galaticos.handler","thread_name":"qtp123","level":"INFO","request_id":"a1b2c3d4-e5f6-7890-abcd-ef1234567890"}
+```
+
+### Frontend / API base URL
+
+A base URL das chamadas da API é configurada no frontend (ClojureScript).
+
+- **Runtime (deploy sem rebuild):** Defina `window.GALATICOS_API_URL` **antes** do script da aplicação. Exemplo para produção:
+
+```html
+<script>window.GALATICOS_API_URL = 'https://api.seudominio.com';</script>
+<script src="/js/compiled/app.js"></script>
+```
+
+- **Build-time (Shadow-cljs):** Em builds por ambiente, é possível injetar a URL via `:closure-defines` no `shadow-cljs.edn`, usando a variável que o frontend lê (ex.: `process.env.GALATICOS_API_URL`). Exemplo com builds separados para dev e prod:
+
+```clojure
+;; shadow-cljs.edn - build :app release com API de produção
+{:builds {:app {:release {:closure-defines {"process.env.GALATICOS_API_URL" "https://api.seudominio.com"}}}}}
+```
+
+- **Comportamento quando vazio:** Se `GALATICOS_API_URL` não estiver definido ou for vazio, as chamadas usam a **mesma origem** (mesmo host/porta do frontend). Em produção recomenda-se definir a URL explicitamente.
 
 ### Docker
 
@@ -309,6 +351,17 @@ APP_ENV=development  # ou production
 ./bin/galaticos docker:prod build
 ./bin/galaticos docker:prod start
 ```
+
+### Acessibilidade
+
+O frontend segue práticas básicas de acessibilidade (a11y), com nível alvo **WCAG 2.1 AA** onde aplicável:
+
+- **Landmarks e skip link:** Conteúdo principal em `<main id="main-content">`; link "Pular para o conteúdo" no início da página (visível ao receber foco).
+- **Formulários:** Labels associados aos campos (`<label for="...">`), mensagens de erro com `aria-describedby` e `aria-invalid`; botões só-ícone com `aria-label`.
+- **Modais:** `role="dialog"`, `aria-modal="true"` e `aria-labelledby` no título; botão fechar com `aria-label="Fechar"`.
+- **Contraste e foco:** Anel de foco visível em controles (CSS); contraste de texto validado.
+
+**Como testar:** Navegação apenas por teclado (Tab, Enter, Esc); relatório de acessibilidade do Lighthouse (Chrome DevTools); inspeção de atributos ARIA no DevTools.
 
 ---
 
@@ -396,11 +449,22 @@ galaticos/
 
 ---
 
+## Lint e formatação
+
+- **clj-kondo** (lint estático): `clj-kondo --lint src src-cljs`. Config em `.clj-kondo/config.edn`. O CI falha se houver erros (`--fail-level error`).
+- **cljfmt** (formatação): `clj -M:format` para formatar `src` e `src-cljs`. Opcional: rodar antes do commit ou usar um hook (ex.: [pre-commit](https://pre-commit.com/) com hook `clj-kondo`).
+- **Compilação**: rodar `shadow-cljs compile :app` (ou via Docker: `docker compose -f config/docker/docker-compose.dev.yml run --rm app clj -M:frontend -m shadow.cljs.devtools.cli compile app`) antes de push para evitar erros de delimitadores no CI.
+
+---
+
 ## 🔗 Links Úteis
 
 ### Documentação Detalhada
 - `docs/regras-de-negocio.md` - Todas as 71 regras implementadas
 - `docs/mongodb-schema.md` - Schema do banco
+- `docs/notebookLM/design-and-db-improvements.md` - Ideias para padrões de design e estrutura do banco
+- `docs/notebookLM/notebooklm-prompts.md` - Prompts para usar no NotebookLM (design e banco)
+- `docs/notebookLM/improvement-checklist.md` - Checklist de melhorias (baseado nas respostas do NotebookLM)
 - `docs/testing-coverage.md` - Guia de testes completo
 - `CONTRIBUTING.md` - Como contribuir
 

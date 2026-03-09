@@ -7,64 +7,44 @@
             [galaticos.routes.api :refer [api-routes]]
             [galaticos.middleware.cors :refer [wrap-cors]]
             [galaticos.middleware.errors :refer [wrap-errors]]
+            [galaticos.middleware.request-id :refer [wrap-request-id]]
             [galaticos.util.response :as resp]
+            [galaticos.db.core :as db]
             [clojure.data.json :as json]
             [clojure.string :as str]
             [clojure.java.io :as io]))
 
-(defn- ensure-log-dir! []
-  "Ensure the log directory exists"
-  (let [log-dir (java.io.File. "/app/.cursor")]
-    (when-not (.exists log-dir)
-      (.mkdirs log-dir))))
-
-(defn- write-debug-log [log-entry]
-  "Write a debug log entry"
-  (try
-    (ensure-log-dir!)
-    (let [log-file (java.io.FileWriter. "/app/.cursor/debug.log" true)]
-      (.write log-file (str log-entry "\n"))
-      (.close log-file))
-    (catch Exception _ nil)))
+(def ^:private app-version "1.0.0")
 
 (defn health-check
   "Health check endpoint for Docker and monitoring"
   [_request]
-  {:status 200
-   :headers {"Content-Type" "application/json"}
-   :body (json/write-str {:status "ok"
-                          :service "galaticos"
-                          :timestamp (str (java.util.Date.))})})
+  (let [mongodb-status (try (if (db/connection) "connected" "disconnected")
+                           (catch Exception _ "error"))]
+    {:status 200
+     :headers {"Content-Type" "application/json"}
+     :body (json/write-str {:status "ok"
+                            :service "galaticos"
+                            :version app-version
+                            :timestamp (str (java.util.Date.))
+                            :dependencies {:mongodb mongodb-status}})}))
 
 (defn serve-index
   "Serve the frontend index.html"
   [_request]
-  ;; #region agent log
-  (write-debug-log (str "{\"id\":\"log_" (System/currentTimeMillis) "_serve\",\"timestamp\":" (System/currentTimeMillis) ",\"location\":\"handler.clj:26\",\"message\":\"serve-index called\",\"data\":{},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A\"}"))
-  ;; #endregion
   (let [resource-url (io/resource "templates/index.html")]
-    ;; #region agent log
-    (write-debug-log (str "{\"id\":\"log_" (System/currentTimeMillis) "_resource\",\"timestamp\":" (System/currentTimeMillis) ",\"location\":\"handler.clj:28\",\"message\":\"Resource check\",\"data\":{\"has-resource\":" (if resource-url "true" "false") "},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A\"}"))
-    ;; #endregion
     (if resource-url
       (let [html-content (slurp resource-url)]
-        ;; #region agent log
-        (write-debug-log (str "{\"id\":\"log_" (System/currentTimeMillis) "_html\",\"timestamp\":" (System/currentTimeMillis) ",\"location\":\"handler.clj:30\",\"message\":\"HTML content loaded\",\"data\":{\"content-length\":" (count html-content) "},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A\"}"))
-        ;; #endregion
         (-> (response html-content)
             (content-type "text/html; charset=utf-8")
             (assoc-in [:headers "Cache-Control"] "no-cache, no-store, must-revalidate")
             (assoc-in [:headers "Pragma"] "no-cache")
             (assoc-in [:headers "Expires"] "0")))
-      (do
-        ;; #region agent log
-        (write-debug-log (str "{\"id\":\"log_" (System/currentTimeMillis) "_fallback\",\"timestamp\":" (System/currentTimeMillis) ",\"location\":\"handler.clj:35\",\"message\":\"Using fallback HTML\",\"data\":{},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A\"}"))
-        ;; #endregion
-        (-> (response "<!DOCTYPE html><html><head><title>Galáticos</title></head><body><div id=\"app\"></div><script src=\"/js/compiled/app.js\"></script></body></html>")
-            (content-type "text/html; charset=utf-8")
-            (assoc-in [:headers "Cache-Control"] "no-cache, no-store, must-revalidate")
-            (assoc-in [:headers "Pragma"] "no-cache")
-            (assoc-in [:headers "Expires"] "0"))))))
+      (-> (response "<!DOCTYPE html><html><head><title>Galáticos</title></head><body><div id=\"app\"></div><script src=\"/js/compiled/app.js\"></script></body></html>")
+          (content-type "text/html; charset=utf-8")
+          (assoc-in [:headers "Cache-Control"] "no-cache, no-store, must-revalidate")
+          (assoc-in [:headers "Pragma"] "no-cache")
+          (assoc-in [:headers "Expires"] "0")))))
 
 (defroutes app-routes
   ;; Health check
@@ -119,9 +99,6 @@
           json? (and content-type (str/includes? content-type "application/json"))
           method-requires-json? (contains? #{:post :put :patch} method)
           has-body? (some? body)]
-      ;; #region agent log
-      (write-debug-log (str "{\"id\":\"log_" (System/currentTimeMillis) "_json\",\"timestamp\":" (System/currentTimeMillis) ",\"location\":\"handler.clj:87\",\"message\":\"wrap-json-body\",\"data\":{\"method\":\"" (name method) "\",\"has-body\":" has-body? ",\"json?\":" json? "},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"C\"}"))
-      ;; #endregion
       (cond
         ;; Reject non-JSON bodies for mutating methods
         (and method-requires-json? has-body? (not json?))
@@ -138,9 +115,6 @@
             (handler (cond-> request
                        parsed (assoc :json-body parsed))))
           (catch Exception e
-            ;; #region agent log
-            (write-debug-log (str "{\"id\":\"log_" (System/currentTimeMillis) "_jsonerr\",\"timestamp\":" (System/currentTimeMillis) ",\"location\":\"handler.clj:105\",\"message\":\"JSON parsing exception\",\"data\":{\"class\":\"" (.getName (class e)) "\",\"message\":\"" (.getMessage e) "\"},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"C\"}"))
-            ;; #endregion
             (if (= 400 (-> e ex-data :status))
               (resp/error "Invalid JSON payload" 400)
               (resp/error "Invalid request body" 400))))))))
@@ -164,18 +138,12 @@
 (def app
   "Main application handler with middleware stack"
   (let [wrapped (-> app-routes
+                    wrap-request-id
                     wrap-errors
                     wrap-cors
                     wrap-json-body
                     wrap-static-cache
                     (wrap-defaults (assoc-in site-defaults [:security :anti-forgery] false)))]
     (fn [request]
-      ;; #region agent log
-      (write-debug-log (str "{\"id\":\"log_" (System/currentTimeMillis) "_req\",\"timestamp\":" (System/currentTimeMillis) ",\"location\":\"handler.clj:133\",\"message\":\"Request received\",\"data\":{\"method\":\"" (name (:request-method request)) "\",\"uri\":\"" (:uri request) "\"},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A,C\"}"))
-      ;; #endregion
-      (let [response (wrapped request)]
-        ;; #region agent log
-        (write-debug-log (str "{\"id\":\"log_" (System/currentTimeMillis) "_resp\",\"timestamp\":" (System/currentTimeMillis) ",\"location\":\"handler.clj:140\",\"message\":\"Response generated\",\"data\":{\"status\":" (get response :status "nil") ",\"has-body\":" (if (:body response) "true" "false") "},\"sessionId\":\"debug-session\",\"runId\":\"run1\",\"hypothesisId\":\"A,C\"}"))
-        ;; #endregion
-        response))))
+      (wrapped request))))
 

@@ -1,6 +1,191 @@
+---
+
+## Apêndice: Modelo de Regras segundo o Business Rules Manifesto
+
+Este apêndice estrutura um subconjunto das regras de negócio do sistema Galáticos seguindo o mantra do Business Rules Group:
+
+- **Termos** (vocabulário de negócio)
+- **Fatos** (assertivas sobre esses termos)
+- **Regras** (restrições ou derivação baseadas nesses fatos)
+
+O foco aqui são as regras explicitadas no enunciado:
+
+- CRUD de jogadores, times, campeonatos e partidas  
+- Temporadas de campeonatos (ativa e passadas)  
+- Finalização de campeonatos e incremento de títulos  
+- Visualização de jogadores e estatísticas por partida  
+- Navegação via dashboard  
+- Buscas de jogadores  
+- Inscrição automática via planilhas (campeonatos e jogadores, incluindo goleiros)
+
+### Vocabulário de Negócio (Termos)
+
+- **Jogador**: Pessoa cadastrada no sistema que pode participar de partidas e campeonatos, com atributos como nome, posição, estatísticas e títulos.
+- **Time**: Entidade que representa um clube ou equipe, à qual jogadores podem estar associados.
+- **Campeonato**: Competição composta por uma ou mais temporadas e um conjunto de partidas e jogadores inscritos.
+- **Temporada de Campeonato**: Período (por exemplo, ano ou ano/ano) associado a um campeonato, podendo estar em estado ativo ou passado.
+- **Temporada Ativa**: Temporada corrente de um campeonato, na qual partidas e estatísticas estão sendo registradas.
+- **Temporada Passada**: Temporada historicamente concluída de um campeonato, preservada para fins de consulta e estatísticas.
+- **Partida**: Evento esportivo individual associado a um campeonato, com data, adversário, resultado e estatísticas de jogadores.
+- **Estatística de Jogador na Partida**: Registro dos eventos/participações de um jogador em uma partida (gols, assistências, cartões, minutos, etc.).
+- **Título**: Conquista atribuída a jogadores quando seu clube é declarado campeão em um campeonato/finalização específica.
+- **Dashboard**: Tela principal de visão geral do sistema, com indicadores (cards, listas, atalhos) para navegação às telas de CRUD e consultas.
+- **Planilha de Campeonatos**: Fonte externa (arquivo) que contém dados de campeonatos e inscrições de jogadores a serem importados para o sistema.
+- **Planilha de Jogadores**: Fonte externa (arquivo) que contém dados de jogadores (nome, posição, etc.) a serem importados para o sistema.
+- **Goleiro**: Jogador cuja posição principal é de guarda-redes; pode ser inferida a partir de marcações como "GK" na planilha de jogadores.
+
+### Fatos Estruturais do Domínio
+
+- **F-01**: Um campeonato possui uma ou mais temporadas identificadas por um rótulo (por exemplo, "2023/2024").
+- **F-02**: Para cada campeonato existe no máximo uma temporada ativa em um dado momento.
+- **F-03**: Um campeonato pode ter zero ou mais temporadas passadas associadas (históricas).
+- **F-04**: Uma partida pertence exatamente a um campeonato.
+- **F-05**: Cada partida registra estatísticas de um ou mais jogadores.
+- **F-06**: Um jogador pode estar inscrito em zero ou mais campeonatos.
+- **F-07**: Um time pode ter zero ou mais jogadores ativos associados.
+- **F-08**: Jogadores que participam de partidas de um campeonato (via estatísticas) são considerados participantes daquele campeonato.
+- **F-09**: Cada jogador acumula estatísticas agregadas por campeonato e no total da carreira dentro da plataforma.
+- **F-10**: O dashboard apresenta indicadores agregados sobre jogadores, times, campeonatos e partidas com links para telas detalhadas.
+
+### Regras de Negócio Derivadas dos Requisitos
+
+Cada regra abaixo é classificada conforme o Manifesto:
+
+- **Tipo Estrutural (E)**: Constraint sobre a estrutura/dados.
+- **Tipo de Ação (A)**: Regras que controlam/comandam comportamento.
+- **Tipo de Derivação (D)**: Regras que calculam/derivam novos fatos a partir de fatos existentes.
+
+#### Grupo 1 – CRUD de Entidades
+
+- **BRM-01 (E/A – CRUD de Jogadores)**  
+  - **Descrição**: O sistema deve permitir criar, ler, atualizar e inativar jogadores, garantindo obrigatoriedade de nome e posição, e preservando referências históricas (soft delete).  
+  - **Relação com regras existentes**: Alinhado com `RN-PLAYER-01` a `RN-PLAYER-04`, `RN-INIT-01`, `RN-STATS-05`.
+
+- **BRM-02 (E/A – CRUD de Times)**  
+  - **Descrição**: O sistema deve permitir criar, ler, atualizar e deletar times, respeitando a constraint de que times com jogadores ativos não podem ser deletados.  
+  - **Relação com regras existentes**: Alinhado com `RN-TEAM-01` a `RN-TEAM-07`, `RN-REF-02`, `RN-INIT-02`.
+
+- **BRM-03 (E/A – CRUD de Campeonatos)**  
+  - **Descrição**: O sistema deve permitir criar, ler, atualizar e deletar campeonatos, exigindo campos obrigatórios (nome, temporada, títulos) e impedindo deleção quando existirem partidas associadas.  
+  - **Relação com regras existentes**: Alinhado com `RN-CHAMP-01` a `RN-CHAMP-06`, `RN-REF-01`.
+
+- **BRM-04 (E/A – CRUD de Partidas)**  
+  - **Descrição**: O sistema deve permitir criar, ler, atualizar e deletar partidas, exigindo vínculo a um campeonato e ao menos uma estatística de jogador, garantindo consistência das estatísticas agregadas em qualquer operação de CRUD de partida.  
+  - **Relação com regras existentes**: Alinhado com `RN-MATCH-01` a `RN-MATCH-08`, `RN-STATS-01` a `RN-STATS-07`.
+
+#### Grupo 2 – Temporadas de Campeonatos
+
+- **BRM-05 (E – Temporada Ativa por Campeonato)**  
+  - **Descrição**: Cada campeonato deve ter no máximo uma temporada ativa; alterações de temporada devem preservar o histórico das temporadas anteriores como temporadas passadas.  
+  - **Tipo**: Estrutural.  
+  - **Observação**: O modelo atual utiliza campo `season` no campeonato; a distinção entre ativa e passada pode demandar campos adicionais (`current-season`, `past-seasons`) ou convenções de status.
+
+- **BRM-06 (A – Gestão de Temporadas)**  
+  - **Descrição**: O administrador deve ser capaz de adicionar novas temporadas a um campeonato e selecionar qual temporada está ativa, garantindo que a temporada ativa apareça de forma destacada na tela de detalhes do campeonato, junto com o nome do campeonato.  
+  - **Tipo**: Ação.
+
+#### Grupo 3 – Finalização de Campeonatos e Títulos
+
+- **BRM-07 (A – Finalização de Campeonato)**  
+  - **Descrição**: O administrador deve ser capaz de finalizar um campeonato, alterando seu status para concluído e registrando a data de finalização. Um campeonato só pode ser finalizado uma vez.  
+  - **Tipo**: Ação.  
+  - **Relação com regras existentes**: Alinhado com `RN-PEND-03` (finalize-championship) e constraints de status.
+
+- **BRM-08 (A/D – Incremento de Títulos)**  
+  - **Descrição**: Ao finalizar um campeonato, os títulos dos jogadores só devem ser incrementados se o administrador informar explicitamente que o clube foi campeão. Desta maneira, todos os jogadores serão considerados vencedores.
+  - **Tipo**: Ação + Derivação (deriva novo valor de títulos com base em vencedores e `titles-award-count`).  
+  - **Relação com regras existentes**: Corresponde a `RN-PEND-03` (increment-titles).
+
+- **BRM-09 (E – Participação e Pertencimento ao Time)**  
+  - **Descrição**: Todos os jogadores que participam de um campeonato por meio de partidas (com estatísticas registradas) devem pertencer a um time válido e estar inscritos no campeonato, mantendo coerência entre inscrição, time e participação em partidas.  
+  - **Tipo**: Estrutural.  
+  - **Relação com regras existentes**: Corresponde a `RN-PEND-04` (validação de jogadores da partida pertencem ao campeonato) e regras de integridade referencial de time/jogador.
+
+#### Grupo 4 – Partidas e Estatísticas
+
+- **BRM-10 (A – Visualização de Jogadores da Partida)**  
+  - **Descrição**: Ao visualizar uma partida, o administrador deve conseguir ver todos os jogadores do campeonato que participaram daquela partida, juntamente com suas estatísticas (assistências, gols, cartões, minutos, etc.).  
+  - **Tipo**: Ação (orientada à UI/consulta).  
+  - **Relação com regras existentes**: Alinhada com `RN-MATCH-03` a `RN-MATCH-07` e endpoints de consulta de partidas/estatísticas.
+
+- **BRM-11 (A/D – Registro de Estatísticas na Partida)**  
+  - **Descrição**: Na tela de partida, o administrador deve poder registrar ou editar as estatísticas de cada jogador (gols, assistências e participação), disparando o recálculo das estatísticas agregadas do jogador e o cálculo automático do placar da partida.  
+  - **Tipo**: Ação + Derivação.  
+  - **Relação com regras existentes**: Conecta `RN-MATCH-05/06/07` com `RN-STATS-01` a `RN-STATS-07` e `RN-PEND-05`.
+
+#### Grupo 5 – Navegação via Dashboard
+
+- **BRM-12 (A – Navegação por Itens do Dashboard)**  
+  - **Descrição**: O administrador deve ser capaz de clicar em cada item (card, link ou atalho) do dashboard e ser redirecionado para a tela correspondente (por exemplo, lista de jogadores, lista de times, campeonatos, partidas, estatísticas agregadas).  
+  - **Tipo**: Ação (regra de UX/navegação).  
+  - **Observação**: Deve haver um mapeamento claro entre cada card do dashboard e sua rota de destino.
+
+#### Grupo 6 – Buscas de Jogadores
+
+- **BRM-13 (A – Busca de Jogadores ao Inscrever em Campeonato)**  
+  - **Descrição**: Ao adicionar jogadores a um campeonato, o administrador deve poder buscar jogadores pelo nome (total ou parcial), facilitando a inscrição via autocomplete ou lista filtrada.  
+  - **Tipo**: Ação.  
+  - **Relação com regras existentes**: Complementa `RN-PEND-01` e `RN-PEND-02` (inscrição/listagem de jogadores por campeonato).
+
+- **BRM-14 (A – Busca de Jogadores no Dashboard)**  
+  - **Descrição**: A partir do dashboard, o administrador deve poder buscar todos os jogadores cadastrados no sistema, com filtro por nome e, idealmente, por outras propriedades (posição, time, status).  
+  - **Tipo**: Ação.  
+  - **Relação com regras existentes**: Compatível com `RN-STATS-07` (busca avançada de jogadores) e componentes de UI de players/dashboard.
+
+#### Grupo 7 – Importação via Planilhas
+
+- **BRM-15 (A – Inscrição Automática de Jogadores na Importação de Campeonatos)**  
+  - **Descrição**: Ao importar campeonatos a partir da planilha de campeonatos, os jogadores listados para cada campeonato devem ser automaticamente inscritos nesse campeonato, respeitando constraints de limite de jogadores e consistência de IDs.  
+  - **Tipo**: Ação.  
+  - **Origem**: Regra de negócio de importação (scripts `scripts/python/*.py` e/ou fluxos futuros de UI).
+
+- **BRM-16 (D – Derivação de Posição Goleiro por "GK" no Nome)**  
+  - **Descrição**: Ao importar jogadores a partir da planilha de jogadores, se o nome do jogador contiver "GK" (por exemplo, "João Silva GK"), o sistema deve inferir automaticamente a posição do jogador como goleiro, caso nenhuma posição mais específica tenha sido definida.  
+  - **Tipo**: Derivação.  
+  - **Origem**: Regra de negócio de importação de jogadores (`scripts/python/read_excel.py`, `seed_mongodb.py` e correlatos).
+
+### Questões Abertas e Lacunas Identificadas
+
+- **Q-01 – Modelo de Temporadas**:  
+  - Não está totalmente explícito no modelo atual como múltiplas temporadas por campeonato são representadas (um campeonato por temporada vs. campeonato com coleção de temporadas).  
+  - **Sugestão de regra estrutural adicional**:  
+    - Cada combinação `campeonato + temporada` deve ser única, e o modelo de dados deve representar explicitamente temporadas ativas e passadas (por exemplo, entidade `championship-season`).
+
+- **Q-02 – Reabertura/Desfazer Finalização de Campeonato**:  
+  - O enunciado não especifica se é permitido reabrir um campeonato já finalizado ou corrigir títulos concedidos de forma equivocada.  
+  - **Sugestão de regras adicionais**:  
+    - Definir se há uma operação de "reabrir" campeonato, incluindo regras para estornar títulos já incrementados.
+
+- **Q-03 – Critérios de Busca de Jogadores**:  
+  - Não está totalmente definido se a busca por jogadores (BRM-13 e BRM-14) é case-insensitive, se suporta acentos, paginação e ordenação padronizada.  
+  - **Sugestão**:  
+    - Normalizar buscas para serem case-insensitive e accent-insensitive, com limites de resultados para performance e ordenação consistente (por exemplo, por nome).
+
+- **Q-04 – Conflitos na Importação por Planilhas**:  
+  - Não está especificado o comportamento quando um jogador ou campeonato já existe no sistema e também aparece na planilha (duplicidade; conflitos de dados).  
+  - **Sugestão**:  
+    - Definir regras de merge vs. sobrescrita, tratamento de duplicados e validação de integridade ao inscrever jogadores automaticamente.
+
+- **Q-05 – Derivação de "GK" quando Posição já Existe**:  
+  - Não está definido o que acontece se a planilha descreve um jogador com "GK" no nome mas também já traz um campo de posição explícito divergente.  
+  - **Sugestão**:  
+    - Regra de precedência: posição explícita prevalece sobre inferência por "GK"; a inferência só é aplicada quando a posição não for fornecida.
+
+- **Q-06 – Navegação do Dashboard para Novas Funcionalidades**:  
+  - O escopo exato dos itens do dashboard (quais cards e quais telas) não está totalmente detalhado.  
+  - **Sugestão**:  
+    - Manter um mapeamento de navegação formal (tabela card → rota) para garantir consistência entre regras de negócio e implementação.
+
+### Avaliação de Completude
+
+- **Cobertura**: As regras BRM-01 a BRM-16 cobrem os pontos principais descritos no enunciado original (CRUD, temporadas, finalização, estatísticas, dashboard, buscas e importação via planilhas).  
+- **Integração com regras existentes**: A maior parte dessas regras já está mapeada e/ou implementada nas seções anteriores (`RN-*`), especialmente no que diz respeito a campeonatos, partidas, estatísticas e finalização.  
+- **Lacunas**: As principais lacunas concentram-se na modelagem explícita de temporadas múltiplas, políticas de reabertura de campeonatos, detalhes finos de busca e estratégias de resolução de conflitos em importações de planilhas.  
+- **Próximos passos recomendados**: Validar as questões abertas com o time de negócio e, uma vez decididas, promover essas regras candidatas a regras oficiais (com novos identificadores `RN-*`) e alinhar implementações (API, scripts de importação e UI).
+
 # Regras de Negócio - Sistema Galáticos
 
-**Última atualização:** 29 de Janeiro de 2026
+**Última atualização:** 19 de Fevereiro de 2026
 
 Este documento lista todas as regras de negócio implementadas no sistema Galáticos, identificadas através da análise do código-fonte.
 
@@ -272,19 +457,23 @@ Este documento lista todas as regras de negócio implementadas no sistema Galát
 
 ### RN-MATCH-02: Campos Permitidos
 - **Descrição**: Apenas campos específicos são aceitos na criação/atualização de partidas.
-- **Arquivo**: `src/galaticos/handlers/matches.clj` (linha 9-11)
+- **Arquivo**: `src/galaticos/handlers/matches.clj` (linha 10-12)
 - **Campos Permitidos**:
   - `championship-id`: ID do campeonato
-  - `home-team-id`: ID do time mandante
-  - `away-team-id`: ID do time visitante
+  - `home-team-id`: ID do time mandante (nosso time)
+  - `away-team-id`: ID do time visitante (opcional; na plataforma de um único time não é usado)
   - `date`: Data da partida
   - `location`: Local
   - `round`: Rodada
   - `status`: Status
-  - `home-score`: Placar do mandante
-  - `away-score`: Placar do visitante
+  - `opponent`: Nome do time adversário (texto)
+  - `venue`: Local da partida
+  - `result`: Resultado (texto)
+  - `away-score`: Placar do adversário (manual; aceito como input — não há estatísticas do adversário)
   - `player-statistics`: Array de estatísticas dos jogadores
   - `notes`: Observações
+- **Campos calculados (somente leitura)**:
+  - `home-score`: Calculado automaticamente pela soma dos gols em `player-statistics` do time mandante; não aceito na criação/atualização.
 
 ### RN-MATCH-03: Estrutura de Estatísticas de Jogador
 - **Descrição**: Cada entrada em `player-statistics` deve ter estrutura específica.
@@ -697,222 +886,6 @@ O sistema está preparado para extensões:
 
 ---
 
-## Regras de Negócio Pendentes de Implementação
-
-As seguintes regras de negócio foram identificadas como requisitos mas **NÃO estão implementadas** no código atual:
-
-### RN-PEND-01: Limite de Jogadores por Campeonato
-- **Descrição**: Cada campeonato deve ter um limite máximo de jogadores que podem ser inscritos.
-- **Status**: ❌ **NÃO IMPLEMENTADO**
-- **Impacto**: Médio
-- **Requisitos para Implementação**:
-  1. Adicionar campo `max-players` ao schema de championships
-  2. Adicionar campo `enrolled-player-ids` (array de ObjectIds) ao schema de championships
-  3. Validar limite ao tentar inscrever jogador em campeonato
-  4. Retornar erro 409 se limite for excedido
-  5. Criar endpoints:
-     - `POST /api/championships/:id/enroll/:player-id` - Inscrever jogador
-     - `DELETE /api/championships/:id/unenroll/:player-id` - Desinscrever jogador
-     - `GET /api/championships/:id/players` - Listar jogadores inscritos
-- **Exemplo de Implementação**:
-  ```clojure
-  ;; Em championships.clj
-  (def ^:private allowed-championship-fields
-    #{:name :season :status :format :start-date :end-date :location :notes 
-      :titles-count :max-players :enrolled-player-ids})
-  
-  (defn enroll-player
-    "Enroll a player in a championship"
-    [championship-id player-id]
-    (let [champ (find-by-id championship-id)
-          max-players (:max-players champ)
-          enrolled (count (:enrolled-player-ids champ []))]
-      (if (and max-players (>= enrolled max-players))
-        {:error "Championship has reached maximum number of players" :status 409}
-        (update-by-id championship-id 
-          {:$addToSet {:enrolled-player-ids player-id}}))))
-  ```
-
-### RN-PEND-02: Listagem de Jogadores Inscritos por Campeonato
-- **Descrição**: Cada campeonato deve mostrar a lista de jogadores inscritos.
-- **Status**: ❌ **NÃO IMPLEMENTADO**
-- **Impacto**: Médio
-- **Dependências**: RN-PEND-01
-- **Requisitos para Implementação**:
-  1. Endpoint `GET /api/championships/:id/players`
-  2. Retornar jogadores com informações completas (join com collection players)
-  3. Frontend: componente para exibir lista de inscritos
-  4. Frontend: botão para inscrever/desinscrever jogadores
-
-### RN-PEND-03: Finalização de Campeonato e Definição de Títulos
-- **Descrição**: Ao finalizar um campeonato, o sistema deve permitir definir o(s) vencedor(es) e atualizar contador de títulos dos jogadores.
-- **Status**: ❌ **NÃO IMPLEMENTADO**
-- **Impacto**: Alto
-- **Requisitos para Implementação**:
-  1. Adicionar campo `winner-player-ids` (array de ObjectIds) ao schema de championships
-  2. Adicionar campo `finished-at` (Date) ao schema de championships
-  3. Criar endpoint `POST /api/championships/:id/finalize`
-  4. Payload deve incluir IDs dos jogadores vencedores
-  5. Ao finalizar:
-     - Mudar status para "finished"
-     - Definir `finished-at` com data atual
-     - Incrementar contador de títulos dos jogadores vencedores
-     - Atualizar `aggregated-stats.total.titles` de cada jogador
-  6. Validações:
-     - Campeonato deve estar com status "active"
-     - Vencedores devem ser jogadores inscritos no campeonato
-     - Campeonato só pode ser finalizado uma vez
-- **Exemplo de Implementação**:
-  ```clojure
-  ;; Em handlers/championships.clj
-  (defn finalize-championship
-    "Finalize a championship and award titles to winners"
-    [request]
-    (let [champ-id (get-in request [:params :id])
-          {:keys [winner-player-ids]} (:json-body request)
-          champ (championships-db/find-by-id champ-id)]
-      (cond
-        (not= (:status champ) "active")
-        (resp/error "Only active championships can be finalized" 400)
-        
-        (not (seq winner-player-ids))
-        (resp/error "At least one winner must be specified" 400)
-        
-        :else
-        (do
-          ;; Update championship status
-          (championships-db/update-by-id champ-id 
-            {:status "finished"
-             :finished-at (java.util.Date.)
-             :winner-player-ids winner-player-ids})
-          ;; Increment titles for winners
-          (doseq [player-id winner-player-ids]
-            (mc/update (db) "players"
-              {:_id player-id}
-              {:$inc {:aggregated-stats.total.titles 1}}))
-          (resp/success {:message "Championship finalized successfully"})))))
-  ```
-
-### RN-PEND-04: Validação de Jogadores da Partida pertencem ao Campeonato
-- **Descrição**: Ao criar ou editar uma partida, validar que todos os jogadores listados nas estatísticas estão inscritos no campeonato.
-- **Status**: ❌ **NÃO IMPLEMENTADO**
-- **Impacto**: Médio
-- **Dependências**: RN-PEND-01
-- **Requisitos para Implementação**:
-  1. Na validação de partida, buscar campeonato pelo `championship-id`
-  2. Verificar se cada `player-id` em `player-statistics` está em `enrolled-player-ids` do campeonato
-  3. Retornar erro 400 se algum jogador não estiver inscrito
-  4. Mensagem: "Player {name} is not enrolled in this championship"
-- **Exemplo de Implementação**:
-  ```clojure
-  ;; Em handlers/matches.clj
-  (defn- validate-players-enrolled [championship-id player-ids]
-    (let [champ (championships-db/find-by-id championship-id)
-          enrolled-ids (set (:enrolled-player-ids champ []))]
-      (when-not (every? #(contains? enrolled-ids %) player-ids)
-        (let [not-enrolled (remove #(contains? enrolled-ids %) player-ids)]
-          (throw (ex-info 
-            (str "Players not enrolled in championship: " 
-                 (str/join ", " not-enrolled))
-            {:status 400}))))))
-  
-  ;; No create-match, antes de criar:
-  (let [player-ids (map :player-id player-statistics)]
-    (validate-players-enrolled championship-id player-ids))
-  ```
-
-### RN-PEND-05: Cálculo Automático do Placar da Partida
-- **Descrição**: O resultado (placar) da partida deve ser calculado automaticamente somando os gols marcados pelos jogadores em cada time.
-- **Status**: ❌ **NÃO IMPLEMENTADO**
-- **Impacto**: Alto
-- **Requisitos para Implementação**:
-  1. Remover campos `home-score` e `away-score` dos campos permitidos (ou torná-los computed)
-  2. Adicionar campo `team-id` em `player-statistics` para identificar o time de cada jogador
-  3. Calcular placar automaticamente:
-     - `home-score` = soma de gols dos jogadores do time mandante
-     - `away-score` = soma de gols dos jogadores do time visitante
-  4. Recalcular placar sempre que `player-statistics` for atualizado
-  5. Armazenar campos calculados ou computá-los dinamicamente
-- **Exemplo de Implementação**:
-  ```clojure
-  ;; Em db/matches.clj
-  (defn- calculate-scores [home-team-id away-team-id player-statistics]
-    (let [home-goals (reduce + 0 
-                       (map :goals 
-                         (filter #(= (:team-id %) home-team-id) player-statistics)))
-          away-goals (reduce + 0 
-                       (map :goals 
-                         (filter #(= (:team-id %) away-team-id) player-statistics)))]
-      {:home-score home-goals
-       :away-score away-goals}))
-  
-  (defn create [match-data player-statistics]
-    (let [home-team-id (:home-team-id match-data)
-          away-team-id (:away-team-id match-data)
-          scores (calculate-scores home-team-id away-team-id player-statistics)
-          doc (merge match-data scores
-                {:_id (ObjectId.)
-                 :player-statistics player-statistics
-                 :created-at (java.util.Date.)
-                 :updated-at (java.util.Date.)})]
-      (mc/insert (db) collection-name doc)
-      doc))
-  ```
-
-### RN-PEND-06: UI para Seleção de Jogadores do Campeonato
-- **Descrição**: Na criação e edição de partida, exibir apenas jogadores inscritos no campeonato selecionado.
-- **Status**: ❌ **NÃO IMPLEMENTADO**
-- **Impacto**: Médio
-- **Dependências**: RN-PEND-01, RN-PEND-02
-- **Requisitos para Implementação**:
-  1. Ao selecionar campeonato no formulário, buscar jogadores inscritos
-  2. Exibir dropdown com apenas esses jogadores
-  3. Desabilitar adição de estatísticas até que campeonato seja selecionado
-  4. Atualizar lista de jogadores se campeonato for alterado
-
----
-
-## Resumo de Implementação
-
-### Status Atual
-- ✅ **Implementadas**: 65 regras de negócio
-- ❌ **Pendentes**: 6 regras de negócio
-
-### Priorização das Regras Pendentes
-
-#### Alta Prioridade
-- **RN-PEND-03**: Finalização de Campeonato e Definição de Títulos
-  - Essencial para ciclo completo de campeonato
-  - Impacta sistema de títulos de jogadores
-- **RN-PEND-05**: Cálculo Automático do Placar
-  - Evita inconsistências entre estatísticas e placar
-  - Reduz erro humano
-
-#### Média Prioridade
-- **RN-PEND-01**: Limite de Jogadores por Campeonato
-  - Controle de inscrições
-  - Requisito para RN-PEND-02 e RN-PEND-04
-- **RN-PEND-02**: Listagem de Jogadores Inscritos
-  - Visibilidade de participantes
-- **RN-PEND-04**: Validação de Jogadores nas Partidas
-  - Integridade de dados
-- **RN-PEND-06**: UI para Seleção de Jogadores
-  - Melhora UX
-
-### Esforço Estimado
-
-| Regra | Esforço | Complexidade |
-|-------|---------|--------------|
-| RN-PEND-01 | 1-2 dias | Média |
-| RN-PEND-02 | 0.5 dia | Baixa |
-| RN-PEND-03 | 1-2 dias | Alta |
-| RN-PEND-04 | 0.5 dia | Baixa |
-| RN-PEND-05 | 1 dia | Média |
-| RN-PEND-06 | 0.5-1 dia | Baixa |
-
-**Total Estimado**: 4.5-7.5 dias úteis
-
----
 
 **Documento gerado automaticamente através da análise do código-fonte.**
 **Última atualização: 29 de Janeiro de 2026**

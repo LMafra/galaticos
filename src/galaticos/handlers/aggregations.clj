@@ -195,15 +195,16 @@
   [request]
   (try
     (let [filters (-> request
-                     :params
-                     (select-keys [:position :min-games :min-goals :min-age :max-age :sort-by :sort-order :limit])
-                     (update :min-games #(when % (Integer/parseInt %)))
-                     (update :min-goals #(when % (Integer/parseInt %)))
-                     (update :min-age #(when % (Integer/parseInt %)))
-                     (update :max-age #(when % (Integer/parseInt %)))
-                     (update :limit #(when % (Integer/parseInt %)))
-                     (update :sort-by keyword)
-                     (update :sort-order #(when % (Integer/parseInt %))))]
+                      :params
+                      (select-keys [:q :position :min-games :min-goals :min-age :max-age :sort-by :sort-order :page :limit])
+                      (update :min-games #(when % (Integer/parseInt %)))
+                      (update :min-goals #(when % (Integer/parseInt %)))
+                      (update :min-age #(when % (Integer/parseInt %)))
+                      (update :max-age #(when % (Integer/parseInt %)))
+                      (update :page #(when % (Integer/parseInt %)))
+                      (update :limit #(when % (Integer/parseInt %)))
+                      (update :sort-by #(when % (keyword %)))
+                      (update :sort-order #(when % (Integer/parseInt %))))]
       (resp/success (agg/search-players filters)))
     (catch Exception e
       (log/error e "Error searching players")
@@ -243,3 +244,17 @@
       (log/error e "Error getting top players")
       (resp/server-error "Failed to get top players"))))
 
+(defn reconcile-stats
+  "Manual reconciliation: validate data integrity (log warnings) then recalculate all player aggregated stats."
+  [_request]
+  (try
+    (log/info "Manual stats reconciliation started")
+    (validate-data-integrity)
+    (let [result (agg/update-all-player-stats)
+          updated (get result :updated 0)]
+      (log/info (str "Reconciliation completed: " updated " player(s) updated"))
+      (resp/success {:updated updated
+                     :message (str "Reconciliação concluída. " updated " jogador(es) atualizado(s).")}))
+  (catch Exception e
+    (log/error e "Error during stats reconciliation")
+    (resp/server-error (str "Falha na reconciliação: " (.getMessage e))))))

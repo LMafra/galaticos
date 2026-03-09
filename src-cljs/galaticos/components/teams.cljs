@@ -62,10 +62,11 @@
                            :notes ""})
         submitting? (r/atom false)
         form-error (r/atom nil)
+        field-errors (r/atom {})
         valid-form? (fn []
-                      (cond
-                        (str/blank? (:name @form-data)) "Nome é obrigatório"
-                        :else nil))
+                      (let [errs (cond-> {}
+                                   (str/blank? (:name @form-data)) (assoc :name "Nome é obrigatório"))]
+                        (when (seq errs) errs)))
         prepare-payload (fn []
                           (let [base {:name (str/trim (:name @form-data))}
                                 optional (fn [k]
@@ -112,8 +113,9 @@
                    :on-submit (fn [e]
                                 (.preventDefault e)
                                 (reset! form-error nil)
-                                (if-let [err (valid-form?)]
-                                  (reset! form-error err)
+                                (reset! field-errors {})
+                                (if-let [errs (valid-form?)]
+                                  (reset! field-errors errs)
                                   (do
                                     (reset! submitting? true)
                                     (let [payload (prepare-payload)
@@ -130,7 +132,7 @@
             [common/card
              [:h3 {:class "app-section-title"} "Informações do time"]
              [:div {:class "mt-4 grid gap-4 md:grid-cols-2"}
-              [common/input-field "Nome" (:name @form-data) #(swap! form-data assoc :name %) :placeholder "Nome do time" :required? true]
+              [common/input-field "Nome" (:name @form-data) #(swap! form-data assoc :name %) :placeholder "Nome do time" :required? true :error (:name @field-errors)]
               [common/input-field "Cidade" (:city @form-data) #(swap! form-data assoc :city %)]
               [common/input-field "Treinador" (:coach @form-data) #(swap! form-data assoc :coach %)]
               [common/input-field "Estádio" (:stadium @form-data) #(swap! form-data assoc :stadium %)]
@@ -155,10 +157,12 @@
         all-players (r/atom [])
         loading? (r/atom true)
         error (r/atom nil)
+        not-found? (r/atom false)
         deleting? (r/atom false)
         id (:id params)
         load! (fn []
                 (reset! error nil)
+                (reset! not-found? false)
                 (reset! loading? true)
                 (api/get-team id
                               (fn [result]
@@ -173,16 +177,20 @@
                                                        (reset! players (filter (fn [p]
                                                                                  (some #(= (normalize-id (or (:_id p) (:id p))) (str %)) player-ids))
                                                                                all)))
-                                                     (fn [err]
+                                                     (fn [err _resp]
                                                        (reset! error (str "Erro ao carregar jogadores: " err))))
                                     (api/get-players {}
                                                      (fn [all]
                                                        (reset! all-players all))
-                                                     (fn [err]
+                                                     (fn [err _resp]
                                                        (reset! error (str "Erro ao carregar jogadores: " err)))))))
-                              (fn [err]
-                                (reset! error (str "Erro ao carregar time: " err))
-                                (reset! loading? false))))
+                              (fn [err resp]
+                                (reset! loading? false)
+                                (if (and resp (= 404 (:status resp)))
+                                  (do (reset! not-found? true)
+                                      (reset! error "Time não encontrado."))
+                                  (do (reset! not-found? false)
+                                      (reset! error (str "Erro ao carregar time: " err)))))))
         delete-team! (fn []
                        (when (js/confirm "Tem certeza que deseja deletar este time?")
                          (reset! deleting? true)
@@ -212,9 +220,11 @@
       (fn []
         [:div {:class "space-y-6"}
          (cond
-           @error [:div
-                   [common/error-message @error]
-                   [common/button "Tentar novamente" load! :variant :outline]]
+           @error (if @not-found?
+                    [common/not-found-resource @error #(rfe/push-state :teams)]
+                    [:div
+                     [common/error-message @error]
+                     [common/button "Tentar novamente" load! :variant :outline]])
            @loading? [common/loading-spinner]
            @team [:<>
                   [:div {:class "flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"}

@@ -28,18 +28,24 @@
 (defn player-list []
   (let [view-mode (r/atom :table)
         search (r/atom "")
-        position (r/atom "")]
+        position (r/atom "")
+        page (r/atom 1)
+        page-size 25
+        search-backend!
+        (fn []
+          (state/set-resource-loading! :players true)
+          (let [params (cond-> {:page @page
+                                :limit page-size}
+                         (not (str/blank? @search)) (assoc :q @search)
+                         (not (str/blank? @position)) (assoc :position @position))]
+            (api/search-players
+             params
+             (fn [result]
+               (state/set-players! result))
+             (fn [err _resp]
+               (state/set-resource-error! :players err)))))]
     (fn []
       (let [{:keys [players players-loading? players-error]} @state/app-state
-            filtered (->> players
-                          (filter (fn [player]
-                                    (and (if (str/blank? @search)
-                                           true
-                                           (str/includes? (str/lower-case (str (:name player)))
-                                                          (str/lower-case @search)))
-                                         (if (str/blank? @position)
-                                           true
-                                           (= (:position player) @position))))))
             positions (position-options players)]
         [:div {:class "space-y-6"}
          [:div {:class "flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"}
@@ -56,9 +62,15 @@
             [:input {:type "text"
                      :value @search
                      :placeholder "Buscar jogador..."
-                     :on-change #(reset! search (-> % .-target .-value))
+                     :on-change (fn [e]
+                                  (reset! page 1)
+                                  (reset! search (-> e .-target .-value))
+                                  (search-backend!))
                      :class "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-brand-maroon focus:outline-none focus:ring-2 focus:ring-brand-maroon/20 sm:w-64"}]
-            [common/select-field "Posição" @position positions #(reset! position %)
+            [common/select-field "Posição" @position positions (fn [v]
+                                                                 (reset! page 1)
+                                                                 (reset! position v)
+                                                                 (search-backend!))
              :container-class "min-w-[200px]"]]
            [:div {:class "flex items-center gap-2"}
             [:button {:class (common/merge-classes "rounded-lg border px-3 py-2 text-sm"
@@ -75,12 +87,12 @@
              [:> Grid2X2 {:size 16}]]]] 
 
           (cond
-            players-error [common/error-message players-error]
-            players-loading? [common/loading-spinner]
-            (seq filtered)
+           players-error [common/error-message players-error]
+           players-loading? [common/loading-spinner]
+           (seq players)
             (if (= @view-mode :cards)
               [:div {:class "mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"}
-               (for [player filtered]
+              (for [player players]
                  (let [id (normalize-id (or (:_id player) (:id player)))]
                    ^{:key id}
                    [:div {:class "app-card p-4 transition hover:shadow-md"
@@ -112,32 +124,60 @@
                        (get-in player [:aggregated-stats :total :games] 0)
                        (get-in player [:aggregated-stats :total :goals] 0)
                        (get-in player [:aggregated-stats :total :assists] 0)])
-                    filtered)
+                    players)
                :on-row-click (fn [player]
                                (if-let [id (normalize-id (or (:_id player) (:id player)))]
                                  (rfe/push-state :player-detail {:id id})
                                  (state/set-error! "ID do jogador ausente; não foi possível abrir detalhes.")))
-               :row-data filtered
+               :row-data players
                :sortable? true])
             :else [:p {:class "app-muted"} "Nenhum jogador encontrado"])]]))))
+
+(defn- format-evolution-period [id]
+  (when (map? id)
+    (let [y (:year id)
+          m (:month id)
+          w (:week id)]
+      (cond
+        (and y m) (str y "-" (if (< m 10) (str "0" m) m))
+        (and y w) (str y " (sem. " w ")")
+        y (str y)
+        :else "-"))))
 
 (defn player-detail [params]
   (let [player (r/atom nil)
         loading? (r/atom true)
         error (r/atom nil)
+        not-found? (r/atom false)
         deleting? (r/atom false)
         active-tab (r/atom :info)
+        evolution (r/atom nil)
+        evolution-loading? (r/atom false)
         id (:id params)
         load-player! (fn []
                        (reset! error nil)
+                       (reset! not-found? false)
                        (reset! loading? true)
+                       (reset! evolution nil)
                        (api/get-player id
                                        (fn [result]
                                          (reset! player result)
-                                         (reset! loading? false))
-                                       (fn [err]
-                                         (reset! error (str "Erro ao carregar jogador: " err))
-                                         (reset! loading? false))))
+                                         (reset! loading? false)
+                                         (reset! evolution-loading? true)
+                                         (api/get-player-evolution id
+                                                                   (fn [evo]
+                                                                     (reset! evolution evo)
+                                                                     (reset! evolution-loading? false))
+                                                                   (fn [_]
+                                                                     (reset! evolution [])
+                                                                     (reset! evolution-loading? false))))
+                                       (fn [err resp]
+                                         (reset! loading? false)
+                                         (if (and resp (= 404 (:status resp)))
+                                           (do (reset! not-found? true)
+                                               (reset! error "Jogador não encontrado."))
+                                           (do (reset! not-found? false)
+                                               (reset! error (str "Erro ao carregar jogador: " err)))))))
         delete-player! (fn []
                          (when (js/confirm "Tem certeza que deseja deletar este jogador?")
                            (reset! deleting? true)
@@ -153,9 +193,11 @@
       :reagent-render
       (fn []
         (cond
-          @error [:div {:class "space-y-4"}
-                  [common/error-message @error]
-                  [common/button "Tentar novamente" load-player! :variant :outline]]
+          @error (if @not-found?
+                   [common/not-found-resource @error #(rfe/push-state :players)]
+                   [:div {:class "space-y-4"}
+                    [common/error-message @error]
+                    [common/button "Tentar novamente" load-player! :variant :outline]])
           @loading? [common/loading-spinner]
           @player (let [player-stats (get-in @player [:aggregated-stats :total] {})
                         by-champ (get-in @player [:aggregated-stats :by-championship])]
@@ -219,7 +261,26 @@
                                  by-champ)
                             :sortable? true
                             :dense? true]
-                           [:p {:class "app-muted"} "Nenhuma estatística por campeonato"])]
+                           [:p {:class "app-muted"} "Nenhuma estatística por campeonato"])
+                         [common/card
+                          [:h3 {:class "app-section-title"} "Evolução por período"]
+                          (cond
+                            @evolution-loading? [common/loading-spinner]
+                            (seq @evolution)
+                            [common/table
+                             ["Período" "Partidas" "Gols" "Assistências" "Gols/Partida"]
+                             (map (fn [row]
+                                    [(format-evolution-period (:_id row))
+                                     (:games row)
+                                     (:goals row)
+                                     (:assists row)
+                                     (if (number? (:goals-per-game row))
+                                       (.toFixed (:goals-per-game row) 2)
+                                       "-")])
+                                   @evolution)
+                             :sortable? true
+                             :dense? true]
+                            :else [:p {:class "app-muted"} "Nenhum dado de evolução"])]]
                         [:p {:class "app-muted"} "Selecione uma aba"])
                       ]
                      ])
@@ -248,11 +309,18 @@
                           :notes ""})
         submitting? (r/atom false)
         form-error (r/atom nil)
+        field-errors (r/atom {})
         valid-form? (fn []
-                      (cond
-                        (str/blank? (:name @form-data)) "Nome é obrigatório"
-                        (str/blank? (:position @form-data)) "Posição é obrigatória"
-                        :else nil))
+                      (let [errs (cond-> {}
+                                   (str/blank? (:name @form-data)) (assoc :name "Nome é obrigatório")
+                                   (str/blank? (:position @form-data)) (assoc :position "Posição é obrigatória")
+                                   (and (not (str/blank? (:height @form-data)))
+                                        (js/isNaN (js/parseFloat (:height @form-data)))) (assoc :height "Altura deve ser um número")
+                                   (and (not (str/blank? (:weight @form-data)))
+                                        (js/isNaN (js/parseFloat (:weight @form-data)))) (assoc :weight "Peso deve ser um número")
+                                   (and (not (str/blank? (:shirt-number @form-data)))
+                                        (js/isNaN (js/parseInt (:shirt-number @form-data) 10))) (assoc :shirt-number "Número da camisa deve ser um número"))]
+                        (when (seq errs) errs)))
         prepare-payload (fn []
                          (let [base {:name (str/trim (:name @form-data))
                                     :position (str/trim (:position @form-data))}
@@ -329,8 +397,9 @@
                    :on-submit (fn [e]
                                 (.preventDefault e)
                                 (reset! form-error nil)
-                                (if-let [err (valid-form?)]
-                                  (reset! form-error err)
+                                (reset! field-errors {})
+                                (if-let [errs (valid-form?)]
+                                  (reset! field-errors errs)
                                   (do
                                     (reset! submitting? true)
                                     (let [payload (prepare-payload)
@@ -347,9 +416,9 @@
             [common/card
              [:h3 {:class "app-section-title"} "Informações básicas"]
              [:div {:class "mt-4 grid gap-4 md:grid-cols-2"}
-              [common/input-field "Nome" (:name @form-data) #(swap! form-data assoc :name %) :placeholder "Nome completo" :required? true]
+              [common/input-field "Nome" (:name @form-data) #(swap! form-data assoc :name %) :placeholder "Nome completo" :required? true :error (:name @field-errors)]
               [common/input-field "Apelido" (:nickname @form-data) #(swap! form-data assoc :nickname %)]
-              [common/input-field "Posição" (:position @form-data) #(swap! form-data assoc :position %) :placeholder "Ex: Atacante, Meia, Zagueiro" :required? true]
+              [common/input-field "Posição" (:position @form-data) #(swap! form-data assoc :position %) :placeholder "Ex: Atacante, Meia, Zagueiro" :required? true :error (:position @field-errors)]
               (let [teams-seq @teams
                     options (cons ["" "Selecione um time"]
                                   (map (fn [team]
@@ -366,14 +435,14 @@
              [:div {:class "mt-4 grid gap-4 md:grid-cols-2"}
               [common/input-field "Data de Nascimento" (:birth-date @form-data) #(swap! form-data assoc :birth-date %) :type "date"]
               [common/input-field "Nacionalidade" (:nationality @form-data) #(swap! form-data assoc :nationality %)]
-              [common/input-field "Altura (cm)" (:height @form-data) #(swap! form-data assoc :height %) :type "number"]
-              [common/input-field "Peso (kg)" (:weight @form-data) #(swap! form-data assoc :weight %) :type "number"]]]
+              [common/input-field "Altura (cm)" (:height @form-data) #(swap! form-data assoc :height %) :type "number" :error (:height @field-errors)]
+              [common/input-field "Peso (kg)" (:weight @form-data) #(swap! form-data assoc :weight %) :type "number" :error (:weight @field-errors)]]]
 
             [common/card
              [:h3 {:class "app-section-title"} "Contato e observações"]
              [:div {:class "mt-4 grid gap-4 md:grid-cols-2"}
               [common/input-field "Pé Preferido" (:preferred-foot @form-data) #(swap! form-data assoc :preferred-foot %) :placeholder "Esquerdo, Direito"]
-              [common/input-field "Número da Camisa" (:shirt-number @form-data) #(swap! form-data assoc :shirt-number %) :type "number"]
+              [common/input-field "Número da Camisa" (:shirt-number @form-data) #(swap! form-data assoc :shirt-number %) :type "number" :error (:shirt-number @field-errors)]
               [common/input-field "Email" (:email @form-data) #(swap! form-data assoc :email %) :type "email"]
               [common/input-field "Telefone" (:phone @form-data) #(swap! form-data assoc :phone %) :type "tel"]
               [common/input-field "URL da Foto" (:photo-url @form-data) #(swap! form-data assoc :photo-url %) :type "url" :container-class "md:col-span-2"]

@@ -176,17 +176,32 @@
       (handle-exception e "Failed to list enrolled players"))))
 
 
+(defn- parse-titles-award-count [v]
+  (cond
+    (nil? v) 1
+    (number? v) (long v)
+    (string? v) (let [trimmed (str/trim v)]
+                  (if (str/blank? trimmed)
+                    1
+                    (Long/parseLong trimmed)))
+    :else nil))
+
 (defn finalize-championship
-  "Finalize a championship and award titles to winners"
+  "Finalize a championship and optionally award titles to winners.
+   Payload: {:winner-player-ids [...] :titles-award-count N}.
+   titles-award-count defaults to 1; 0 means finalize without incrementing titles."
   [request]
   (try
     (let [championship-id (get-in request [:params :id])
-          winner-player-ids (mapv resp/->object-id (get-in request [:json-body :winner-player-ids] []))]
+          body (get-in request [:json-body] {})
+          winner-player-ids (mapv resp/->object-id (get body :winner-player-ids []))
+          raw-count (get body :titles-award-count)]
       (if-let [championship (championships-db/find-by-id championship-id)]
         (let [status (or (:status championship) "active")
               finished-at (:finished-at championship)
               enrolled-ids (set (:enrolled-player-ids championship []))
-              not-enrolled (remove #(contains? enrolled-ids %) winner-player-ids)]
+              not-enrolled (remove #(contains? enrolled-ids %) winner-player-ids)
+              titles-award-count (parse-titles-award-count raw-count)]
           (cond
             (not= status "active")
             (resp/error "Only active championships can be finalized" 400)
@@ -194,8 +209,14 @@
             finished-at
             (resp/error "Championship has already been finalized" 400)
 
-            (empty? winner-player-ids)
-            (resp/error "At least one winner must be specified" 400)
+            (nil? titles-award-count)
+            (resp/error "titles-award-count must be a non-negative number" 400)
+
+            (neg? titles-award-count)
+            (resp/error "titles-award-count must be non-negative" 400)
+
+            (and (pos? titles-award-count) (empty? winner-player-ids))
+            (resp/error "At least one winner must be specified when awarding titles" 400)
 
             (seq not-enrolled)
             (resp/error "Winners must be enrolled in the championship" 400)
@@ -203,11 +224,14 @@
             :else
             (do
               (championships-db/update-by-id championship-id
-                                             {:status "finished"
+                                             {:status "completed"
                                               :finished-at (java.util.Date.)
-                                              :winner-player-ids winner-player-ids})
-              (players-db/increment-titles winner-player-ids)
+                                              :winner-player-ids winner-player-ids
+                                              :titles-award-count titles-award-count})
+              (players-db/increment-titles winner-player-ids titles-award-count)
               (resp/success {:message "Championship finalized"}))))
         (resp/not-found "Championship not found")))
+    (catch NumberFormatException _
+      (resp/error "titles-award-count must be a valid number" 400))
     (catch Exception e
       (handle-exception e "Failed to finalize championship"))))

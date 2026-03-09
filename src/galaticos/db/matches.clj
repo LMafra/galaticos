@@ -15,12 +15,17 @@
     0))
 
 (defn- calculate-scores [match-data player-statistics]
-  (if (seq player-statistics)
-    (let [home-team-id (:home-team-id match-data)
-          away-team-id (:away-team-id match-data)]
-      {:home-score (sum-goals home-team-id player-statistics)
-       :away-score (sum-goals away-team-id player-statistics)})
-    {}))
+  "home-score is always calculated from our team's goals; away-score is manual (no opponent stats)."
+  (let [home-team-id (:home-team-id match-data)
+        home-score (if (seq player-statistics)
+                     (sum-goals home-team-id player-statistics)
+                     0)
+        ;; away-score: use value from request when provided (single-team platform), else 0
+        away-score (if (some? (:away-score match-data))
+                     (or (:away-score match-data) 0)
+                     0)]
+    {:home-score home-score
+     :away-score away-score}))
 
 (defn create
   "Create a new match with player statistics"
@@ -70,7 +75,7 @@
   "Update match by ID"
   [id updates]
   (let [match (find-by-id id)
-        merged (merge (select-keys match [:home-team-id :away-team-id :player-statistics]) updates)
+        merged (merge (select-keys match [:home-team-id :away-team-id :player-statistics :away-score]) updates)
         scores (calculate-scores merged (:player-statistics merged))]
     (mc/update (db) collection-name
                {:_id (->object-id id)}

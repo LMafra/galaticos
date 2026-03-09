@@ -507,6 +507,39 @@ video {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+.container {
+  width: 100%;
+}
+@media (min-width: 640px) {
+
+  .container {
+    max-width: 640px;
+  }
+}
+@media (min-width: 768px) {
+
+  .container {
+    max-width: 768px;
+  }
+}
+@media (min-width: 1024px) {
+
+  .container {
+    max-width: 1024px;
+  }
+}
+@media (min-width: 1280px) {
+
+  .container {
+    max-width: 1280px;
+  }
+}
+@media (min-width: 1536px) {
+
+  .container {
+    max-width: 1536px;
+  }
+}
 .app-card {
   border-radius: 1rem;
   border-width: 1px;
@@ -530,6 +563,9 @@ video {
   line-height: 1.25rem;
   --tw-text-opacity: 1;
   color: rgb(100 116 139 / var(--tw-text-opacity, 1));
+}
+.visible {
+  visibility: visible;
 }
 .static {
   position: static;
@@ -643,11 +679,20 @@ video {
 .w-full {
   width: 100%;
 }
+.min-w-\[100px\] {
+  min-width: 100px;
+}
+.min-w-\[140px\] {
+  min-width: 140px;
+}
 .min-w-\[200px\] {
   min-width: 200px;
 }
 .min-w-\[220px\] {
   min-width: 220px;
+}
+.min-w-\[240px\] {
+  min-width: 240px;
 }
 .min-w-full {
   min-width: 100%;
@@ -695,6 +740,9 @@ video {
 }
 .items-start {
   align-items: flex-start;
+}
+.items-end {
+  align-items: flex-end;
 }
 .items-center {
   align-items: center;
@@ -800,6 +848,10 @@ video {
 .border-rose-200 {
   --tw-border-opacity: 1;
   border-color: rgb(254 205 211 / var(--tw-border-opacity, 1));
+}
+.border-rose-500 {
+  --tw-border-opacity: 1;
+  border-color: rgb(244 63 94 / var(--tw-border-opacity, 1));
 }
 .border-sky-200 {
   --tw-border-opacity: 1;
@@ -939,6 +991,9 @@ video {
 }
 .pb-10 {
   padding-bottom: 2.5rem;
+}
+.pt-4 {
+  padding-top: 1rem;
 }
 .pt-6 {
   padding-top: 1.5rem;
@@ -1112,6 +1167,10 @@ video {
   --tw-border-opacity: 1;
   border-color: rgb(130 0 0 / var(--tw-border-opacity, 1));
 }
+.focus\:border-rose-500:focus {
+  --tw-border-opacity: 1;
+  border-color: rgb(244 63 94 / var(--tw-border-opacity, 1));
+}
 .focus\:outline-none:focus {
   outline: 2px solid transparent;
   outline-offset: 2px;
@@ -1126,6 +1185,9 @@ video {
 }
 .focus\:ring-brand-maroon\/40:focus {
   --tw-ring-color: rgb(130 0 0 / 0.4);
+}
+.focus\:ring-rose-500\/20:focus {
+  --tw-ring-color: rgb(244 63 94 / 0.2);
 }
 .disabled\:cursor-not-allowed:disabled {
   cursor: not-allowed;
@@ -1143,12 +1205,24 @@ video {
     width: 16rem;
   }
 
+  .sm\:w-full {
+    width: 100%;
+  }
+
   .sm\:grid-cols-2 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .sm\:flex-row {
     flex-direction: row;
+  }
+
+  .sm\:flex-wrap {
+    flex-wrap: wrap;
+  }
+
+  .sm\:items-end {
+    align-items: flex-end;
   }
 
   .sm\:items-center {
@@ -1165,8 +1239,8 @@ video {
     grid-column: span 2 / span 2;
   }
 
-  .md\:col-span-4 {
-    grid-column: span 4 / span 4;
+  .md\:col-span-3 {
+    grid-column: span 3 / span 3;
   }
 
   .md\:block {

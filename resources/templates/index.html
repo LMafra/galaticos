@@ -13,10 +13,26 @@
         #app {
             min-height: 100vh;
         }
+        .skip-link {
+            position: absolute;
+            left: -9999px;
+            z-index: 999;
+            padding: 0.75rem 1rem;
+            background: #7c2d12;
+            color: #fff;
+            font-weight: 600;
+            text-decoration: none;
+            border-radius: 0.5rem;
+        }
+        .skip-link:focus {
+            left: 1rem;
+            top: 1rem;
+        }
     </style>
     <link rel="stylesheet" href="/css/app.css">
 </head>
 <body>
+    <a href="#main-content" class="skip-link">Pular para o conteúdo</a>
     <div id="app">
         <div class="loading">Carregando aplicação...</div>
     </div>

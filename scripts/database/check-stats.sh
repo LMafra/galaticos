@@ -18,19 +18,44 @@ cd_project_root
 log_info "Checking aggregated stats in MongoDB..."
 echo ""
 
-# Check if MongoDB is accessible
-if ! command_exists mongosh; then
-    log_error "mongosh is not installed. Please install MongoDB shell tools."
+# Determine how to run Mongo shell (local or via Docker)
+USE_DOCKER_SHELL=false
+MONGO_CONTAINER=""
+
+if command_exists mongosh; then
+    USE_DOCKER_SHELL=false
+elif command_exists docker; then
+    MONGO_CONTAINER="$(docker ps --format '{{.Names}}' 2>/dev/null | grep -E 'galaticos-mongodb' | head -n 1 || true)"
+    if [[ -n "$MONGO_CONTAINER" ]]; then
+        log_info "mongosh not found locally, will run queries via Docker container: $MONGO_CONTAINER"
+        USE_DOCKER_SHELL=true
+    else
+        log_error "mongosh is not installed and no MongoDB container with name matching 'galaticos-mongodb' is running."
+        log_info "Please install MongoDB shell tools or start the Docker environment: ./bin/galaticos docker:dev start"
+        exit 1
+    fi
+else
+    log_error "mongosh is not installed and Docker is not available."
+    log_info "Please install MongoDB shell tools."
     exit 1
 fi
+
+run_mongo() {
+    local eval_str="$1"
+    if [[ "$USE_DOCKER_SHELL" == "true" ]]; then
+        docker exec "$MONGO_CONTAINER" mongosh --quiet --eval "$eval_str" "mongodb://$MONGO_HOST:$MONGO_PORT"
+    else
+        mongosh --quiet --eval "$eval_str" "mongodb://$MONGO_HOST:$MONGO_PORT"
+    fi
+}
 
 # Count players with and without stats
 log_step "Checking players collection..."
 
-TOTAL_PLAYERS=$(mongosh --quiet --eval "db.getSiblingDB('$DB_NAME').players.countDocuments({active: true})" mongodb://$MONGO_HOST:$MONGO_PORT 2>/dev/null || echo "0")
-PLAYERS_WITH_STATS=$(mongosh --quiet --eval "db.getSiblingDB('$DB_NAME').players.countDocuments({active: true, 'aggregated-stats': {\$exists: true}})" mongodb://$MONGO_HOST:$MONGO_PORT 2>/dev/null || echo "0")
-PLAYERS_WITH_GOALS=$(mongosh --quiet --eval "db.getSiblingDB('$DB_NAME').players.countDocuments({active: true, 'aggregated-stats.total.goals': {\$exists: true, \$gt: 0}})" mongodb://$MONGO_HOST:$MONGO_PORT 2>/dev/null || echo "0")
-PLAYERS_WITH_ASSISTS=$(mongosh --quiet --eval "db.getSiblingDB('$DB_NAME').players.countDocuments({active: true, 'aggregated-stats.total.assists': {\$exists: true, \$gt: 0}})" mongodb://$MONGO_HOST:$MONGO_PORT 2>/dev/null || echo "0")
+TOTAL_PLAYERS=$(run_mongo "db.getSiblingDB('$DB_NAME').players.countDocuments({active: true})" 2>/dev/null || echo "0")
+PLAYERS_WITH_STATS=$(run_mongo "db.getSiblingDB('$DB_NAME').players.countDocuments({active: true, 'aggregated-stats': {\$exists: true}})" 2>/dev/null || echo "0")
+PLAYERS_WITH_GOALS=$(run_mongo "db.getSiblingDB('$DB_NAME').players.countDocuments({active: true, 'aggregated-stats.total.goals': {\$exists: true, \$gt: 0}})" 2>/dev/null || echo "0")
+PLAYERS_WITH_ASSISTS=$(run_mongo "db.getSiblingDB('$DB_NAME').players.countDocuments({active: true, 'aggregated-stats.total.assists': {\$exists: true, \$gt: 0}})" 2>/dev/null || echo "0")
 
 echo "📊 Statistics Summary:"
 echo "  Total active players: $TOTAL_PLAYERS"
@@ -47,7 +72,7 @@ echo ""
 
 # Show sample player with stats
 log_step "Sample player with stats:"
-SAMPLE_PLAYER=$(mongosh --quiet --eval "
+SAMPLE_PLAYER=$(run_mongo "
 var player = db.getSiblingDB('$DB_NAME').players.findOne(
   {active: true, 'aggregated-stats.total.goals': {\$exists: true, \$gt: 0}},
   {name: 1, 'aggregated-stats.total': 1}
@@ -57,7 +82,7 @@ if (player) {
 } else {
   print('No players with goals found');
 }
-" mongodb://$MONGO_HOST:$MONGO_PORT 2>/dev/null || echo "{}")
+" 2>/dev/null || echo "{}")
 
 if [ "$SAMPLE_PLAYER" != "{}" ] && [ "$SAMPLE_PLAYER" != "No players with goals found" ]; then
     echo "$SAMPLE_PLAYER" | python3 -m json.tool 2>/dev/null || echo "$SAMPLE_PLAYER"

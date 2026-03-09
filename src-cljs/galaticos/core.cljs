@@ -7,6 +7,7 @@
             [galaticos.components.layout :as layout]
             [galaticos.components.login :as login]
             [galaticos.components.dashboard :as dashboard]
+            [galaticos.components.aggregations :as aggregations]
             [galaticos.components.players :as players]
             [galaticos.components.matches :as matches]
             [galaticos.components.championships :as championships]
@@ -55,6 +56,7 @@
       ;; Authenticated routes
       match (case route-name
               :dashboard [dashboard/dashboard]
+              :stats [aggregations/aggregations-page]
               :players [players/player-list]
               :player-new [players/player-form {}]
               :player-detail [players/player-detail path-params]

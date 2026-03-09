@@ -30,7 +30,8 @@
                 [(:name ch)
                  (:season ch)
                  (:format ch)
-                 (let [status (or (:status ch) "indefinido")
+                 (let [raw-status (or (:status ch) "indefinido")
+                       status (if (= raw-status "finished") "completed" raw-status)
                        variant (case status
                                  "active" :success
                                  "completed" :info
@@ -55,21 +56,28 @@
         all-players (r/atom [])
         enroll-id (r/atom "")
         selected-winners (r/atom #{})
+        titles-award-count (r/atom "1")
         finalizing? (r/atom false)
         loading? (r/atom true)
         error (r/atom nil)
+        not-found? (r/atom false)
         id (:id params)
         load! (fn []
                 (reset! error nil)
+                (reset! not-found? false)
                 (reset! loading? true)
                 (api/get-championship id
                                       (fn [result]
                                         (reset! championship result)
                                         (reset! selected-winners (set (map str (:winner-player-ids result))))
                                         (reset! loading? false))
-                                      (fn [err]
-                                        (reset! error (str "Erro ao carregar campeonato: " err))
-                                        (reset! loading? false)))
+                                      (fn [err resp]
+                                        (reset! loading? false)
+                                        (if (and resp (= 404 (:status resp)))
+                                          (do (reset! not-found? true)
+                                              (reset! error "Campeonato não encontrado."))
+                                          (do (reset! not-found? false)
+                                              (reset! error (str "Erro ao carregar campeonato: " err))))))
                 (api/get-matches {:championship-id id}
                                  (fn [result]
                                    (reset! matches result))
@@ -89,17 +97,21 @@
      {:component-did-mount (fn [] (load!))
       :reagent-render
       (fn []
-        (let [status (or (:status @championship) "indefinido")
+        (let [raw-status (or (:status @championship) "indefinido")
+              status (if (= raw-status "finished") "completed" raw-status)
               winner-ids (set (map str (:winner-player-ids @championship)))
               winner-names (->> @enrolled-players
                                 (filter #(contains? winner-ids (str (:_id %))))
-                                (map :name))]
+                                (map :name))
+              awarded-count (or (:titles-award-count @championship) 0)]
           [:div {:class "space-y-6"}
            (cond
              @error
-             [:div
-              [common/error-message @error]
-              [common/button "Tentar novamente" load! :variant :outline]]
+             (if @not-found?
+               [common/not-found-resource @error #(rfe/push-state :championships)]
+               [:div
+                [common/error-message @error]
+                [common/button "Tentar novamente" load! :variant :outline]])
 
              @loading?
              [common/loading-spinner]
@@ -149,7 +161,7 @@
                           [(.toLocaleDateString (js/Date. (:date match)))
                            (:opponent match)
                            (:venue match)
-                           (str (:result match))])
+                           (common/format-match-result (:result match))])
                         @matches)
                    :sortable? true
                    :dense? true]
@@ -209,10 +221,13 @@
 
                   (seq winner-ids)
                   [:p {:class "mt-2 text-xs text-slate-500"}
-                   (str "Vencedores: " (if (seq winner-names) (str/join ", " winner-names) "—"))]
+                   (str "Vencedores: " (if (seq winner-names) (str/join ", " winner-names) "—")
+                        (when (pos? awarded-count) (str " • Títulos concedidos: " awarded-count)))]
 
                   :else
                   [:div {:class "mt-3 space-y-2"}
+                   [common/input-field "Títulos a conceder" @titles-award-count #(reset! titles-award-count %)
+                    :type "number" :placeholder "1"]
                    (if (seq @enrolled-players)
                      [:div {:class "space-y-2"}
                       (for [player @enrolled-players]
@@ -228,22 +243,28 @@
                                                            (conj current pid)))))}]
                          [:span (:name player)]])]
                      [:p {:class "text-xs text-slate-500"} "Inscreva jogadores antes de finalizar."])
-                   [common/button (if @finalizing? "Finalizando..." "Finalizar campeonato")
-                    (fn []
-                      (when (seq @selected-winners)
-                        (reset! finalizing? true)
-                        (api/finalize-championship
-                         id
-                         (vec @selected-winners)
-                         (fn [_result]
-                           (reset! finalizing? false)
-                           (reset! selected-winners #{})
-                           (load!))
-                         (fn [err]
-                           (reset! finalizing? false)
-                           (reset! error (str "Erro ao finalizar campeonato: " err))))))
-                    :variant :primary
-                    :disabled (or @finalizing? (empty? @selected-winners))]])]]]
+                   (let [count-num (let [v @titles-award-count]
+                                     (if (str/blank? v) 0 (js/parseInt v 10)))
+                         need-winners? (and (number? count-num) (pos? count-num))
+                         can-submit? (or (not need-winners?) (seq @selected-winners))]
+                     [common/button (if @finalizing? "Finalizando..." "Finalizar campeonato")
+                      (fn []
+                        (when can-submit?
+                          (reset! finalizing? true)
+                          (api/finalize-championship
+                           id
+                           (vec @selected-winners)
+                           (if (str/blank? @titles-award-count) 1 (js/parseInt @titles-award-count 10))
+                           (fn [_result]
+                             (reset! finalizing? false)
+                             (reset! selected-winners #{})
+                             (reset! titles-award-count "1")
+                             (load!))
+                           (fn [err]
+                             (reset! finalizing? false)
+                             (reset! error (str "Erro ao finalizar campeonato: " err))))))
+                      :variant :primary
+                      :disabled (or @finalizing? (not can-submit?))])])]]]
 
              :else
              [:p {:class "app-muted"} "Campeonato não encontrado"])]))})))
@@ -264,15 +285,20 @@
                            :max-players ""})
         submitting? (r/atom false)
         form-error (r/atom nil)
+        field-errors (r/atom {})
         valid-form? (fn []
-                     (cond
-                       (str/blank? (:name @form-data)) "Nome é obrigatório"
-                       (str/blank? (:season @form-data)) "Temporada é obrigatória"
-                       (and (not (str/blank? (:titles-count @form-data)))
-                            (js/isNaN (js/parseInt (:titles-count @form-data) 10))) "Títulos deve ser um número"
-                       (and (not (str/blank? (:max-players @form-data)))
-                            (js/isNaN (js/parseInt (:max-players @form-data) 10))) "Limite de jogadores deve ser um número"
-                       :else nil))
+                      (let [tc (when-not (str/blank? (:titles-count @form-data))
+                                 (js/parseInt (:titles-count @form-data) 10))
+                            mp (when-not (str/blank? (:max-players @form-data))
+                                 (js/parseInt (:max-players @form-data) 10))
+                            errs (cond-> {}
+                                   (str/blank? (:name @form-data)) (assoc :name "Nome é obrigatório")
+                                   (str/blank? (:season @form-data)) (assoc :season "Temporada é obrigatória")
+                                   (and (some? tc) (js/isNaN tc)) (assoc :titles-count "Títulos deve ser um número")
+                                   (and (number? tc) (not (js/isNaN tc)) (< tc 0)) (assoc :titles-count "Títulos não pode ser negativo")
+                                   (and (some? mp) (js/isNaN mp)) (assoc :max-players "Limite de jogadores deve ser um número")
+                                   (and (number? mp) (not (js/isNaN mp)) (< mp 0)) (assoc :max-players "Limite de jogadores não pode ser negativo"))]
+                        (when (seq errs) errs)))
         prepare-payload (fn []
                          (let [base {:name (str/trim (:name @form-data))
                                     :season (str/trim (:season @form-data))}
@@ -327,8 +353,9 @@
                    :on-submit (fn [e]
                                 (.preventDefault e)
                                 (reset! form-error nil)
-                                (if-let [err (valid-form?)]
-                                  (reset! form-error err)
+                                (reset! field-errors {})
+                                (if-let [errs (valid-form?)]
+                                  (reset! field-errors errs)
                                   (do
                                     (reset! submitting? true)
                                     (let [payload (prepare-payload)
@@ -345,10 +372,10 @@
             [common/card
              [:h3 {:class "app-section-title"} "Informações principais"]
              [:div {:class "mt-4 grid gap-4 md:grid-cols-2"}
-              [common/input-field "Nome" (:name @form-data) #(swap! form-data assoc :name %) :placeholder "Nome do campeonato" :required? true]
-              [common/input-field "Temporada" (:season @form-data) #(swap! form-data assoc :season %) :placeholder "Ex: 2024" :required? true]
-              [common/input-field "Títulos" (:titles-count @form-data) #(swap! form-data assoc :titles-count %) :type "number" :placeholder "0"]
-              [common/input-field "Limite de jogadores" (:max-players @form-data) #(swap! form-data assoc :max-players %) :type "number" :placeholder "Sem limite"]
+              [common/input-field "Nome" (:name @form-data) #(swap! form-data assoc :name %) :placeholder "Nome do campeonato" :required? true :error (:name @field-errors)]
+              [common/input-field "Temporada" (:season @form-data) #(swap! form-data assoc :season %) :placeholder "Ex: 2024" :required? true :error (:season @field-errors)]
+              [common/input-field "Títulos" (:titles-count @form-data) #(swap! form-data assoc :titles-count %) :type "number" :placeholder "0" :error (:titles-count @field-errors)]
+              [common/input-field "Limite de jogadores" (:max-players @form-data) #(swap! form-data assoc :max-players %) :type "number" :placeholder "Sem limite" :error (:max-players @field-errors)]
               [common/select-field "Status" (:status @form-data)
                [["" "Selecione um status"]
                 ["active" "Ativo"]

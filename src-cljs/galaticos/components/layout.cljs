@@ -5,7 +5,7 @@
             [galaticos.api :as api]
             [galaticos.components.common :as common]
             [reitit.frontend.easy :as rfe]
-            ["lucide-react" :refer [LayoutDashboard Users CalendarDays Trophy Shield Menu Sun Moon]]))
+            ["lucide-react" :refer [LayoutDashboard Users CalendarDays Trophy Shield Menu Sun Moon BarChart2]]))
 
 (defn- user-label [user]
   (cond
@@ -15,6 +15,7 @@
 
 (defn- nav-items []
   [{:route :dashboard :label "Dashboard" :icon LayoutDashboard}
+   {:route :stats :label "Estatísticas" :icon BarChart2}
    {:route :players :label "Jogadores" :icon Users}
    {:route :matches :label "Partidas" :icon CalendarDays}
    {:route :championships :label "Campeonatos" :icon Trophy}
@@ -56,7 +57,7 @@
           [:div
            [:p {:class "text-sm font-semibold text-slate-900"} "Galáticos"]
            [:p {:class "text-xs text-slate-500"} "Gestão de elenco"]]]
-         [common/button "×" state/close-sidebar! :variant :ghost :class "text-lg"]]
+         [common/button "×" state/close-sidebar! :variant :ghost :class "text-lg" :aria-label "Fechar menu"]]
         [:nav {:class "mt-8 space-y-1"}
          (for [item (nav-items)]
            ^{:key (:route item)}
@@ -69,11 +70,13 @@
     [:header {:class "sticky top-0 z-20 flex items-center justify-between border-b border-slate-200 bg-white/90 px-4 py-4 backdrop-blur lg:px-8"}
      [:div {:class "flex items-center gap-3"}
       [:button {:class "rounded-lg p-2 text-slate-600 hover:bg-slate-100 lg:hidden"
-                :on-click state/toggle-sidebar!}
+                :on-click state/toggle-sidebar!
+                :aria-label "Abrir menu"}
        [:> Menu {:size 20}]]
       [:h1 {:class "text-base font-semibold text-slate-900"}
        (case current-route
          :dashboard "Dashboard"
+         :stats "Estatísticas"
          :players "Jogadores"
          :matches "Partidas"
          :championships "Campeonatos"
@@ -83,9 +86,11 @@
       [:div {:class "hidden md:block"}
        [:input {:type "text"
                 :placeholder "Buscar..."
+                :aria-label "Buscar"
                 :class "w-64 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-brand-maroon focus:outline-none focus:ring-2 focus:ring-brand-maroon/20"}]]
       [:button {:class "hidden rounded-lg p-2 text-slate-600 hover:bg-slate-100 md:inline-flex"
-                :on-click #(state/set-theme! (if (= theme "dark") "light" "dark"))}
+                :on-click #(state/set-theme! (if (= theme "dark") "light" "dark"))
+                :aria-label "Alternar tema claro/escuro"}
        (if (= theme "dark")
          [:> Sun {:size 18}]
          [:> Moon {:size 18}])]
@@ -120,7 +125,7 @@
       [sidebar current-route]
       [:div {:class "flex min-h-screen w-full flex-col"}
        [header current-route]
-       [:main {:class "flex-1 px-4 pb-10 pt-6 lg:px-8"}
+       [:main#main-content {:class "flex-1 px-4 pb-10 pt-6 lg:px-8"}
         (when (:error @state/app-state)
           [common/alert (:error @state/app-state)
            :variant :error

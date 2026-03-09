@@ -16,7 +16,7 @@
         ;; Redirect if already authenticated
         (when authenticated
           (rfe/push-state :dashboard))
-        [:div {:class "flex min-h-screen items-center justify-center bg-slate-50 px-4"}
+        [:main#main-content {:class "flex min-h-screen items-center justify-center bg-slate-50 px-4"}
          [common/card
           [:div {:class "w-full max-w-md space-y-6"}
            [:div {:class "text-center"}
@@ -47,6 +47,5 @@
              (fn [_e] nil)
              :type "submit"
              :disabled @loading
-             :variant :primary
-             :class "w-full"]]]]]))))
+             :variant :primary :class "w-full"]]]]]))))
 

@@ -6,6 +6,38 @@ on:
   pull_request:
 
 jobs:
+  lint:
+    name: lint (clj-kondo)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install clj-kondo
+        uses: DeLaGuardo/setup-clj-kondo@v1
+        with:
+          version: "2024.02.09"
+
+      - name: Lint Clojure/ClojureScript
+        run: clj-kondo --lint src src-cljs --fail-level error
+
+  frontend-compile:
+    name: frontend (shadow-cljs compile)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Compile ClojureScript
+        run: |
+          docker compose -f config/docker/docker-compose.dev.yml run --rm app clj -M:frontend -m shadow.cljs.devtools.cli compile app
+        shell: bash
+
+      - name: Cleanup
+        if: always()
+        run: docker compose -f config/docker/docker-compose.dev.yml down -v --remove-orphans
+        shell: bash
+
   unit:
     name: unit (clj + cljs)
     runs-on: ubuntu-latest

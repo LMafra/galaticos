@@ -149,12 +149,12 @@ Este comando:
 - Lê o arquivo Excel e popula o banco de dados
 - Verifica que os dados foram inseridos corretamente
 
-**Nota:** O arquivo Excel deve estar em `data/raw/Galáticos 2025 Automatizada 1.12.xlsm`
+**Nota:** O arquivo Excel deve estar em `data/galaticos.xlsm`
 
-**Nota:** O arquivo Excel deve estar em `data/raw/Galáticos 2025 Automatizada 1.12.xlsm`
+**Nota:** O arquivo Excel deve estar em `data/galaticos.xlsm`
 
 O script irá:
-- Ler o arquivo `data/raw/Galáticos 2025 Automatizada 1.12.xlsm`
+- Ler o arquivo `data/galaticos.xlsm`
 - Criar o time "Galáticos"
 - Criar jogadores a partir da planilha "Base de dados"
 - Criar campeonatos a partir das outras planilhas
@@ -539,14 +539,25 @@ Crie um arquivo `.env` baseado em `.env.example` (se disponível) ou configure a
 Para desenvolvimento com Docker:
 
 ```bash
-docker-compose -f docker-compose.dev.yml up
+./bin/galaticos docker:dev start
 ```
 
 Para produção:
 
 ```bash
-docker-compose -f docker-compose.prod.yml up
+./bin/galaticos docker:prod start
 ```
+
+#### Rodar tudo via Docker (sem instalar Python nem mongosh no host)
+
+Com o ambiente dev em Docker (`./bin/galaticos docker:dev start`), você pode executar os comandos de banco sem ter Python ou MongoDB shell instalados localmente:
+
+- **db:setup** – Cria índices no MongoDB. Se `mongosh`/`mongo` não existirem no host, o script roda os comandos dentro do container MongoDB.
+- **db:seed** – Popula o banco a partir do Excel. Se Python (venv + dependências) não estiver disponível, o script roda o seed dentro de um container Python temporário.
+- **db:seed-smoke** – Seed mínimo para testes. Se o Clojure CLI não estiver instalado, usa um container Clojure temporário.
+- **check-stats** – Verifica estatísticas. Se `mongosh` não existir, usa o shell dentro do container MongoDB.
+
+Requisitos: Docker instalado e ambiente dev rodando (`./bin/galaticos docker:dev start`).
 
 ## Contribuindo
 

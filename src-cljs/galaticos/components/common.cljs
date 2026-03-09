@@ -26,6 +26,32 @@
 (defn error-message [message]
   [alert message :variant :error])
 
+(defn button [text on-click & {:keys [class style disabled type variant aria-label]}]
+  (let [variant (or variant :secondary)
+        base "inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-brand-maroon/40 disabled:cursor-not-allowed disabled:opacity-60"
+        styles (case variant
+                 :primary "bg-brand-maroon text-white hover:bg-brand-maroon/90"
+                 :danger "bg-rose-600 text-white hover:bg-rose-700"
+                 :outline "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                 :ghost "text-slate-600 hover:bg-slate-100"
+                 "bg-slate-100 text-slate-700 hover:bg-slate-200")]
+    [:button (merge {:on-click on-click
+                     :class (merge-classes base styles class)
+                     :type (or type "button")
+                     :disabled disabled
+                     :style style}
+                    (when aria-label {:aria-label aria-label}))
+     text]))
+
+(defn not-found-resource
+  "Shown when a detail resource (player, championship, team) is not found (404).
+   message: e.g. 'Jogador não encontrado.'
+   on-back: callback to navigate to list (e.g. #(rfe/push-state :players))"
+  [message on-back]
+  [:div {:class "space-y-4"}
+   [alert message :variant :warning]
+   [button "Voltar" on-back :variant :outline]])
+
 (defn card [& children]
   (into [:div {:class "app-card p-5"}] children))
 
@@ -50,51 +76,77 @@
     [:span {:class (merge-classes "rounded-full px-2.5 py-1 text-xs font-medium" styles class)}
      text]))
 
-(defn button [text on-click & {:keys [class style disabled type variant]}]
-  (let [variant (or variant :secondary)
-        base "inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-brand-maroon/40 disabled:cursor-not-allowed disabled:opacity-60"
-        styles (case variant
-                 :primary "bg-brand-maroon text-white hover:bg-brand-maroon/90"
-                 :danger "bg-rose-600 text-white hover:bg-rose-700"
-                 :outline "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-                 :ghost "text-slate-600 hover:bg-slate-100"
-                 "bg-slate-100 text-slate-700 hover:bg-slate-200")]
-    [:button {:on-click on-click
-              :class (merge-classes base styles class)
-              :type (or type "button")
-              :disabled disabled
-              :style style}
-     text]))
+(defn format-match-result
+  "Format match result for display. result can be a map with :our-score/:opponent-score
+   (or :result.our-score from API) or nil. Returns e.g. \"3 x 1\" or \"-\"."
+  [result]
+  (cond
+    (nil? result) "-"
+    (map? result)
+    (let [our (get result :our-score (get result "our-score"))
+          opp (get result :opponent-score (get result "opponent-score"))]
+      (if (and (some? our) (some? opp))
+        (str our " x " opp)
+        "-"))
+    :else "-"))
 
-(defn input-field [label value on-change & {:keys [type placeholder class container-class required?]}]
-  [:div {:class (merge-classes "space-y-2" container-class)}
-   [:label {:class "text-sm font-medium text-slate-700"} (str label (when required? " *"))]
-   [:input {:type (or type "text")
-            :value value
-            :on-change #(on-change (-> % .-target .-value))
-            :placeholder placeholder
-            :class (merge-classes "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-brand-maroon focus:outline-none focus:ring-2 focus:ring-brand-maroon/20"
-                                  class)}]])
+(defonce field-id-counter (atom 0))
 
-(defn select-field [label value options on-change & {:keys [class container-class required?]}]
-  [:div {:class (merge-classes "space-y-2" container-class)}
-   [:label {:class "text-sm font-medium text-slate-700"} (str label (when required? " *"))]
-   (into [:select {:value value
-                   :on-change #(on-change (-> % .-target .-value))
-                   :class (merge-classes "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-brand-maroon focus:outline-none focus:ring-2 focus:ring-brand-maroon/20"
-                                         class)}]
-         (map (fn [[opt-value opt-label]]
-                [:option {:key opt-value :value opt-value} opt-label])
-              options))])
+(defn input-field [label value on-change & {:keys [type placeholder class container-class required? error id]}]
+  (let [field-id (or id (str "field-" (swap! field-id-counter inc)))
+        error-id (str field-id "-error")
+        border-class (if error
+                      "border-rose-500 focus:border-rose-500 focus:ring-rose-500/20"
+                      "border-slate-300 focus:border-brand-maroon focus:ring-brand-maroon/20")]
+    [:div {:class (merge-classes "space-y-2" container-class)}
+     [:label {:for field-id
+              :class (merge-classes "text-sm font-medium" (if error "text-rose-700" "text-slate-700"))}
+      (str label (when required? " *"))]
+     [:input (merge {:type (or type "text")
+                     :id field-id
+                     :value value
+                     :on-change #(on-change (-> % .-target .-value))
+                     :placeholder placeholder
+                     :class (merge-classes "w-full rounded-lg border bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-2" border-class class)}
+                   (when error {:aria-invalid "true"
+                                :aria-describedby error-id}))]
+     (when error
+       [:p {:id error-id :class "text-xs text-rose-600"} error])]))
+
+(defn select-field [label value options on-change & {:keys [class container-class required? error id]}]
+  (let [field-id (or id (str "field-" (swap! field-id-counter inc)))
+        error-id (str field-id "-error")
+        border-class (if error
+                      "border-rose-500 focus:border-rose-500 focus:ring-rose-500/20"
+                      "border-slate-300 focus:border-brand-maroon focus:ring-brand-maroon/20")]
+    [:div {:class (merge-classes "space-y-2" container-class)}
+     [:label {:for field-id
+              :class (merge-classes "text-sm font-medium" (if error "text-rose-700" "text-slate-700"))}
+      (str label (when required? " *"))]
+     (into [:select (merge {:value value
+                            :id field-id
+                            :on-change #(on-change (-> % .-target .-value))
+                            :class (merge-classes "w-full rounded-lg border bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2" border-class class)}
+                          (when error {:aria-invalid "true"
+                                       :aria-describedby error-id}))]
+           (map (fn [[opt-value opt-label]]
+                  [:option {:key opt-value :value opt-value} opt-label])
+                options))
+     (when error
+       [:p {:id error-id :class "text-xs text-rose-600"} error])]))
 
 (defn modal [{:keys [title content on-close actions]}]
-  [:div {:class "fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4"}
-   [:div {:class "app-card w-full max-w-lg p-6"}
-    [:div {:class "flex items-center justify-between"}
-     [:h3 {:class "text-lg font-semibold text-slate-900"} title]
-     [:button {:class "text-slate-400 hover:text-slate-600" :on-click on-close} "×"]]
-    [:div {:class "mt-4 text-sm text-slate-600"} content]
-    [:div {:class "mt-6 flex justify-end gap-2"} actions]]])
+  (let [title-id "modal-title"]
+    [:div {:class "fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4"
+           :role "dialog"
+           :aria-modal "true"
+           :aria-labelledby title-id}
+     [:div {:class "app-card w-full max-w-lg p-6"}
+      [:div {:class "flex items-center justify-between"}
+       [:h3 {:id title-id :class "text-lg font-semibold text-slate-900"} title]
+       [:button {:class "text-slate-400 hover:text-slate-600" :on-click on-close :aria-label "Fechar"} "×"]]
+      [:div {:class "mt-4 text-sm text-slate-600"} content]
+      [:div {:class "mt-6 flex justify-end gap-2"} actions]]]))
 
 (defn- parse-number
   "Try to parse a string as a number, return nil if not a number"

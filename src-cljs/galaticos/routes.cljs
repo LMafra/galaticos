@@ -8,6 +8,8 @@
          :title "Login"}]
    ["/dashboard" {:name :dashboard
                   :title "Dashboard"}]
+   ["/stats" {:name :stats
+              :title "Estatísticas"}]
    ["/players" {:name :players
                 :title "Players"}]
    ["/players/new" {:name :player-new

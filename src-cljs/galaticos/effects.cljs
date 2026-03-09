@@ -102,6 +102,7 @@
         (ensure-auth!)
         (case route-name
           :dashboard (ensure-dashboard!)
+          :stats (ensure-championships!)
           :players (ensure-players!)
           :championships (ensure-championships!)
           :matches (ensure-matches!)

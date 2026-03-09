@@ -50,6 +50,13 @@
 (when (or (nil? api-base-url) (= "" api-base-url))
   (js/console.warn "GALATICOS_API_URL não definido; usando mesma origem para chamadas da API."))
 
+(defonce _api-base-url-logged (atom false))
+(when (and (some? js/goog) (.-DEBUG js/goog) (compare-and-set! _api-base-url-logged false true))
+  (let [display-url (if (or (nil? api-base-url) (= "" api-base-url))
+                      (str (.-origin js/window.location))
+                      (try (.-host (js/URL. api-base-url)) (catch :default _ api-base-url)))]
+    (js/console.info "API base URL:" display-url)))
+
 (def success-statuses #{200 201 202 203 204})
 
 (defn- extract-error [response]
@@ -60,16 +67,17 @@
       :else (str "Request failed: " (:status response)))))
 
 (defn handle-response
-  "Handle API response and extract data or error"
+  "Handle API response and extract data or error.
+   on-error is called with (message response); response includes :status for 404 etc."
   [response on-success on-error]
   (if (contains? success-statuses (:status response))
     (let [body (:body response)]
       (cond
         (nil? body) (on-success nil)
         (:success body) (on-success (:data body))
-        (map? body) (on-error (or (:error body) (:message body) "Unknown error"))
+        (map? body) (on-error (or (:error body) (:message body) "Unknown error") response)
         :else (on-success body)))
-    (on-error (extract-error response))))
+    (on-error (extract-error response) response)))
 
 (defn- auth-headers []
   (if-let [token (current-token)]
@@ -89,7 +97,7 @@
       (let [response (<! (http/get (str api-base-url url) (default-opts {:query-params params})))]
         (handle-response response on-success on-error))
       (catch :default e
-        (on-error (str "Network error: " (.-message e)))))))
+        (on-error (str "Network error: " (.-message e)) nil)))))
 
 (defn post-request
   "Make a POST request"
@@ -99,7 +107,7 @@
       (let [response (<! (http/post (str api-base-url url) (default-opts {:json-params data})))]
         (handle-response response on-success on-error))
       (catch :default e
-        (on-error (str "Network error: " (.-message e)))))))
+        (on-error (str "Network error: " (.-message e)) nil)))))
 
 (defn put-request
   "Make a PUT request"
@@ -109,7 +117,7 @@
       (let [response (<! (http/put (str api-base-url url) (default-opts {:json-params data})))]
         (handle-response response on-success on-error))
       (catch :default e
-        (on-error (str "Network error: " (.-message e)))))))
+        (on-error (str "Network error: " (.-message e)) nil)))))
 
 (defn delete-request
   "Make a DELETE request"
@@ -119,7 +127,7 @@
       (let [response (<! (http/delete (str api-base-url url) (default-opts {})))]
         (handle-response response on-success on-error))
       (catch :default e
-        (on-error (str "Network error: " (.-message e)))))))
+        (on-error (str "Network error: " (.-message e)) nil)))))
 
 ;; Auth API
 (defn login [username password on-success on-error]
@@ -186,9 +194,10 @@
 (defn unenroll-player-from-championship [championship-id player-id on-success on-error]
   (delete-request (str "/api/championships/" championship-id "/unenroll/" player-id) on-success on-error))
 
-(defn finalize-championship [championship-id winner-player-ids on-success on-error]
+(defn finalize-championship [championship-id winner-player-ids titles-award-count on-success on-error]
   (post-request (str "/api/championships/" championship-id "/finalize")
-                {:winner-player-ids winner-player-ids}
+                {:winner-player-ids winner-player-ids
+                 :titles-award-count (if (number? titles-award-count) titles-award-count (js/parseInt (str titles-award-count) 10))}
                 on-success
                 on-error))
 
@@ -234,6 +243,9 @@
 (defn get-dashboard-stats [on-success on-error]
   (get-request "/api/aggregations/stats" {} on-success on-error))
 
+(defn reconcile-stats [on-success on-error]
+  (post-request "/api/aggregations/stats/reconcile" {} on-success on-error))
+
 (defn get-player-stats-by-championship [championship-id on-success on-error]
   (get-request (str "/api/aggregations/players/stats/" championship-id) {} on-success on-error))
 
@@ -242,4 +254,13 @@
 
 (defn search-players [params on-success on-error]
   (get-request "/api/aggregations/players/search" params on-success on-error))
+
+(defn get-championship-comparison [on-success on-error]
+  (get-request "/api/aggregations/championships/comparison" {} on-success on-error))
+
+(defn get-player-evolution [player-id on-success on-error]
+  (get-request (str "/api/aggregations/players/" player-id "/evolution") {} on-success on-error))
+
+(defn get-avg-goals-by-position [championship-id on-success on-error]
+  (get-request (str "/api/aggregations/positions/" championship-id) {} on-success on-error))
 

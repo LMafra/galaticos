@@ -69,7 +69,7 @@
                     [:p {:class "text-sm font-semibold text-slate-900"} (:opponent match)]
                     [:p {:class "text-xs text-slate-500"} (str (.toLocaleDateString (js/Date. (:date match))) " • " (or (:venue match) "-"))]]]
                   [:div {:class "flex items-center gap-3"}
-                   [common/badge (or (:result match) "-") :variant :info]
+                   [common/badge (common/format-match-result (:result match)) :variant :info]
                    [:button {:class "rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-100"
                              :on-click #(rfe/push-state :match-edit {:id match-id})}
                     [:> Pencil {:size 16}]]
@@ -86,38 +86,41 @@
         players-loading? (r/atom false)
         form-data (r/atom {:championship-id ""
                            :home-team-id ""
-                           :away-team-id ""
                            :date ""
                            :opponent ""
+                           :away-score ""
                            :venue ""
                            :result ""
                            :player-statistics [{:player-id "" :team-id "" :goals "" :assists "" :minutes-played ""}]})
         submitting? (r/atom false)
         form-error (r/atom nil)
+        field-errors (r/atom {})
         parse-int (fn [v]
                     (let [trimmed (str/trim (or v ""))]
                       (when (not-empty trimmed)
                         (js/parseInt trimmed 10))))
         valid-form? (fn []
-                     (cond
-                       (str/blank? (:championship-id @form-data)) "Selecione um campeonato"
-                       (str/blank? (:date @form-data)) "Informe a data"
-                       (empty? (:player-statistics @form-data)) "Inclua estatísticas de pelo menos um jogador"
-                       (some #(clojure.string/blank? (:player-id %)) (:player-statistics @form-data)) "ID do jogador é obrigatório"
-                       (some #(clojure.string/blank? (:team-id %)) (:player-statistics @form-data)) "Time do jogador é obrigatório"
-                       :else nil))
+                      (let [stats (:player-statistics @form-data)
+                            errs (cond-> {}
+                                    (str/blank? (:championship-id @form-data)) (assoc :championship-id "Selecione um campeonato")
+                                    (str/blank? (:date @form-data)) (assoc :date "Informe a data")
+                                    (str/blank? (:home-team-id @form-data)) (assoc :home-team-id "Selecione o time (mandante)")
+                                    (empty? stats) (assoc :player-statistics "Inclua estatísticas de pelo menos um jogador")
+                                    (some #(str/blank? (:player-id %)) stats) (assoc :player-statistics "Cada estatística deve ter um jogador selecionado"))]
+                        (when (seq errs) errs)))
         prepare-payload (fn []
-                          (-> @form-data
-                              (update :player-statistics
-                                      (fn [stats]
-                                        (mapv (fn [stat]
-                                                (cond-> stat
-                                                  true (update :player-id clojure.string/trim)
-                                                  true (update :team-id clojure.string/trim)
-                                                  true (update :goals parse-int)
-                                                  true (update :assists parse-int)
-                                                  true (update :minutes-played parse-int)))
-                                              stats)))))
+                          (let [home-team-id (:home-team-id @form-data)]
+                            (-> @form-data
+                                (update :away-score #(if (str/blank? (str %)) nil (parse-int %)))
+                                (update :player-statistics
+                                        (fn [stats]
+                                          (mapv (fn [stat]
+                                                  (cond-> (assoc stat :team-id home-team-id)
+                                                    true (update :player-id clojure.string/trim)
+                                                    true (update :goals parse-int)
+                                                    true (update :assists parse-int)
+                                                    true (update :minutes-played parse-int)))
+                                                stats))))))
         load-enrolled! (fn [championship-id]
                          (if (str/blank? championship-id)
                            (reset! enrolled-players [])
@@ -139,9 +142,9 @@
                                       (fn [result]
                                         (reset! form-data {:championship-id (if (:championship-id result) (str (:championship-id result)) "")
                                                           :home-team-id (if (:home-team-id result) (str (:home-team-id result)) "")
-                                                          :away-team-id (if (:away-team-id result) (str (:away-team-id result)) "")
                                                           :date (or (:date result) "")
                                                           :opponent (or (:opponent result) "")
+                                                          :away-score (if (some? (:away-score result)) (str (:away-score result)) "")
                                                           :venue (or (:venue result) "")
                                                           :result (or (:result result) "")
                                                           :player-statistics (if (seq (:player-statistics result))
@@ -174,11 +177,8 @@
               total-goals (reduce + 0 (map #(to-int (:goals %)) (:player-statistics @form-data)))
               total-assists (reduce + 0 (map #(to-int (:assists %)) (:player-statistics @form-data)))
               home-team-id (:home-team-id @form-data)
-              away-team-id (:away-team-id @form-data)
-              home-score (reduce + 0 (map #(to-int (:goals %))
-                                          (filter #(= (:team-id %) home-team-id) (:player-statistics @form-data))))
-              away-score (reduce + 0 (map #(to-int (:goals %))
-                                          (filter #(= (:team-id %) away-team-id) (:player-statistics @form-data))))]
+              home-score (reduce + 0 (map #(to-int (:goals %)) (:player-statistics @form-data)))
+              away-score (to-int (:away-score @form-data))]
           [:div {:class "space-y-6"}
            [:div
             [:p {:class "text-sm text-slate-500"} "Cadastro"]
@@ -189,8 +189,9 @@
                      :on-submit (fn [e]
                                   (.preventDefault e)
                                   (reset! form-error nil)
-                                  (if-let [err (valid-form?)]
-                                    (reset! form-error err)
+                                  (reset! field-errors {})
+                                  (if-let [errs (valid-form?)]
+                                    (reset! field-errors errs)
                                     (do
                                       (reset! submitting? true)
                                       (let [payload (prepare-payload)
@@ -215,22 +216,23 @@
                  (fn [value]
                    (swap! form-data assoc :championship-id value)
                    (load-enrolled! value))
-                 :required? true]
+                 :required? true :error (:championship-id @field-errors)]
                 [common/select-field "Time mandante" (:home-team-id @form-data) team-options
-                 #(swap! form-data assoc :home-team-id %)]
-                [common/select-field "Time visitante" (:away-team-id @form-data) team-options
-                 #(swap! form-data assoc :away-team-id %)]
-                [common/input-field "Data" (:date @form-data) #(swap! form-data assoc :date %) :type "date" :required? true]
+                 #(swap! form-data assoc :home-team-id %) :error (:home-team-id @field-errors)]
+                [common/input-field "Data" (:date @form-data) #(swap! form-data assoc :date %) :type "date" :required? true :error (:date @field-errors)]
                 [common/input-field "Adversário" (:opponent @form-data) #(swap! form-data assoc :opponent %)]
+                [common/input-field "Gols do adversário" (:away-score @form-data) #(swap! form-data assoc :away-score %) :type "number" :placeholder "0"]
                 [common/input-field "Local" (:venue @form-data) #(swap! form-data assoc :venue %)]
                 [common/input-field "Resultado" (:result @form-data) #(swap! form-data assoc :result %) :placeholder "Ex: 2-1"]]]
 
               [common/card
                [:div {:class "flex flex-wrap items-center justify-between gap-3"}
                 [:h3 {:class "app-section-title"} "Estatísticas dos jogadores"]
+                (when (:player-statistics @field-errors)
+                  [:p {:class "text-xs text-rose-600"} (:player-statistics @field-errors)])
                 [:div {:class "text-xs text-slate-500"}
                  (str "Gols: " total-goals " • Assistências: " total-assists
-                      (when (and (not (str/blank? home-team-id)) (not (str/blank? away-team-id)))
+                      (when (not (str/blank? home-team-id))
                         (str " • Placar: " home-score " x " away-score)))]]
                (cond
                  (str/blank? (:championship-id @form-data))
@@ -245,8 +247,6 @@
                      [:div {:class "grid gap-3 rounded-xl border border-slate-200 bg-white p-4 md:grid-cols-4"}
                       [common/select-field "Jogador" (:player-id stat) player-options
                        #(swap! form-data assoc-in [:player-statistics idx :player-id] %)]
-                      [common/select-field "Time" (:team-id stat) team-options
-                       #(swap! form-data assoc-in [:player-statistics idx :team-id] %)]
                       [common/input-field "Gols" (:goals stat)
                        #(swap! form-data assoc-in [:player-statistics idx :goals] %)
                        :type "number"]
@@ -256,7 +256,7 @@
                       [common/input-field "Minutos jogados" (:minutes-played stat)
                        #(swap! form-data assoc-in [:player-statistics idx :minutes-played] %)
                        :type "number"]
-                      [:div {:class "md:col-span-4"}
+                      [:div {:class "md:col-span-3"}
                        [common/button "Remover"
                         #(swap! form-data update :player-statistics
                                 (fn [stats]
@@ -264,7 +264,7 @@
                         :variant :danger]]]))]
                )
                [common/button "Adicionar estatística"
-                #(swap! form-data update :player-statistics conj {:player-id "" :team-id "" :goals "" :assists "" :minutes-played ""})
+                #(swap! form-data update :player-statistics conj {:player-id "" :goals "" :assists "" :minutes-played ""})
                 :variant :outline
                 :class "mt-3"
                 :disabled (str/blank? (:championship-id @form-data))]]

@@ -3,8 +3,10 @@
   (:require [monger.collection :as mc]
             [galaticos.db.core :refer [db]]
             [galaticos.util.response :refer [->object-id]]
+            [galaticos.util.string :as str-util]
             [clojure.tools.logging :as log])
-  (:import [org.bson.types ObjectId]))
+  (:import [org.bson.types ObjectId]
+           [java.util.regex Pattern]))
 
 (defn player-stats-by-championship
   "Get aggregated player statistics for a specific championship"
@@ -162,12 +164,20 @@
   "Search players with multiple filters"
   [filters]
   (try
-    (let [match-stage (merge {:active true} 
+    (let [q (some-> (:q filters) str-util/normalize-text)
+          limit (or (:limit filters) 25)
+          page (max 1 (or (:page filters) 1))
+          skip (* (dec page) limit)
+          base-match (merge {:active true}
                             (select-keys filters [:position])
                             (when (:min-games filters)
                               {"aggregated-stats.total.games" {:$gte (:min-games filters)}})
                             (when (:min-goals filters)
                               {"aggregated-stats.total.goals" {:$gte (:min-goals filters)}}))
+          match-stage (if (str-util/blank-normalized? q)
+                        base-match
+                        (let [pattern (str ".*" (Pattern/quote q) ".*")]
+                          (assoc base-match :search-name {:$regex pattern})))
           sort-field (or (:sort-by filters) :goals-per-game)
           sort-order (or (:sort-order filters) -1)
           sort-map {:$sort (hash-map (keyword (name sort-field)) sort-order)}
@@ -196,7 +206,8 @@
                                                    "$aggregated-stats.total.games"]}
                                         0]}}}
                         sort-map
-                        (when (:limit filters) {:$limit (:limit filters)})]
+                        {:$skip skip}
+                        {:$limit limit}]
           pipeline (remove nil? pipeline-raw)]
       (mc/aggregate (db) "players" pipeline))
     (catch Exception e

@@ -9,7 +9,7 @@
 
 (def ^:private allowed-match-fields
   #{:championship-id :home-team-id :away-team-id :date :location :round
-    :status :player-statistics :notes})
+    :status :player-statistics :notes :opponent :venue :result :away-score})
 
 (def ^:private required-match-fields
   #{:championship-id :player-statistics})

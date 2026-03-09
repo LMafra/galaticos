@@ -17,7 +17,8 @@ pom.xml.asc
 # ClojureScript
 .cljs_node_repl/
 .cljs_compiler_cache/
-.clj-kondo/
+.clj-kondo/cache/
+.clj-kondo/.cache/
 .clojure/
 .shadow-cljs/
 out/
