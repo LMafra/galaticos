@@ -102,6 +102,8 @@ jobs:
           done
 
       - name: Seed test data
+        env:
+          MONGO_URI: mongodb://admin:admin123@localhost:27017/galaticos-test?authSource=admin
         run: ./bin/galaticos db:seed-smoke
 
       - name: Run E2E tests
