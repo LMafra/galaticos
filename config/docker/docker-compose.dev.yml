@@ -35,7 +35,7 @@ services:
     volumes:
       - ../../src:/app/src:ro
       - ../../src-cljs:/app/src-cljs:ro
-      - ../../resources:/app/resources:ro
+      - ../../resources:/app/resources
       - galaticos-compiled:/app/resources/public/js/compiled
       - ../../test:/app/test:ro
       - ../../test-cljs:/app/test-cljs:ro
@@ -65,14 +65,17 @@ services:
     volumes:
       - ../../src:/app/src:ro
       - ../../src-cljs:/app/src-cljs:ro
-      - ../../resources:/app/resources:ro
-      - galaticos-compiled:/app/resources/public/js/compiled
+      - ../../resources:/app/resources
+      # nocopy avoids race when app and frontend-watch both mount same volume
+      - galaticos-compiled:/app/resources/public/js/compiled:nocopy
       - ../../shadow-cljs.edn:/app/shadow-cljs.edn:ro
       - ../../package.json:/app/package.json:ro
       - ../../package-lock.json:/app/package-lock.json:ro
     depends_on:
       mongodb:
         condition: service_healthy
+      app:
+        condition: service_started
     networks:
       - galaticos-network
 

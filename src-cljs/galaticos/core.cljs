@@ -7,6 +7,7 @@
             [galaticos.components.layout :as layout]
             [galaticos.components.login :as login]
             [galaticos.components.dashboard :as dashboard]
+            [galaticos.components.aggregations :as aggregations]
             [galaticos.components.players :as players]
             [galaticos.components.matches :as matches]
             [galaticos.components.championships :as championships]
@@ -55,6 +56,7 @@
       ;; Authenticated routes
       match (case route-name
               :dashboard [dashboard/dashboard]
+              :stats [aggregations/aggregations-page]
               :players [players/player-list]
               :player-new [players/player-form {}]
               :player-detail [players/player-detail path-params]
@@ -82,7 +84,7 @@
     (if (= route-name :login)
       (when @current-match
         [current-page @current-match])
-      [layout/layout
+      [layout/layout route-name
        (when @current-match
          [current-page @current-match])])))
 
@@ -105,8 +107,14 @@
      routes/router
      (fn [m _]
        (reset! current-match m)
-       (effects/on-route! m))
-     {:use-fragment true})
+       (let [route-name (when m (get-in m [:data :name]))
+             {:keys [authenticated auth-checked?]} @state/app-state]
+         ;; Redirect to login if not authenticated and trying to access protected route
+         (when (and auth-checked? (not authenticated) (not= route-name :login))
+           (rfe/push-state :login))
+         (effects/on-route! m)))
+     {:use-fragment true
+      :default :login})  ; Default route is login
     (mount-root)))
 
 (defn ^:dev/after-load reload []

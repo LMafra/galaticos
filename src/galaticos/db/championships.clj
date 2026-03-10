@@ -1,12 +1,9 @@
 (ns galaticos.db.championships
   "Database operations for championships collection"
   (:require [monger.collection :as mc]
-            [monger.query :as mq]
-            [monger.operators :refer :all]
             [galaticos.db.core :refer [db]]
             [galaticos.db.matches :as matches-db]
-            [galaticos.util.response :refer [->object-id]]
-            [clojure.tools.logging :as log])
+            [galaticos.util.response :refer [->object-id]])
   (:import [org.bson.types ObjectId]))
 
 (def collection-name "championships")
@@ -16,7 +13,8 @@
   [championship-data]
   (let [now (java.util.Date.)
         id (ObjectId.)
-        doc (merge championship-data
+        doc (merge {:enrolled-player-ids []}
+                   championship-data
                    {:_id id
                     :created-at now
                     :updated-at now})]
@@ -68,3 +66,18 @@
   (let [matches (matches-db/find-by-championship championship-id)]
     (seq matches)))
 
+(defn add-player
+  "Enroll a player in a championship"
+  [championship-id player-id]
+  (mc/update (db) collection-name
+             {:_id (->object-id championship-id)}
+             {:$addToSet {:enrolled-player-ids (->object-id player-id)}
+              :$set {:updated-at (java.util.Date.)}}))
+
+(defn remove-player
+  "Unenroll a player from a championship"
+  [championship-id player-id]
+  (mc/update (db) collection-name
+             {:_id (->object-id championship-id)}
+             {:$pull {:enrolled-player-ids (->object-id player-id)}
+              :$set {:updated-at (java.util.Date.)}}))

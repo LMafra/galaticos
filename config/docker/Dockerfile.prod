@@ -15,10 +15,11 @@ COPY deps.edn shadow-cljs.edn package.json package-lock.json ./
 RUN clj -P
 RUN npm ci --no-fund --no-audit
 
-# Copy sources
+# Copy sources and build script
 COPY src ./src
 COPY src-cljs ./src-cljs
 COPY resources ./resources
+COPY build.clj ./build.clj
 
 # Build frontend assets (advanced) and uberjar
 RUN clj -M:build:frontend prod

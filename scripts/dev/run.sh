@@ -17,9 +17,21 @@ ensure_node_deps() {
         log_error "npm is required to build the frontend. Please install Node.js 18+."
         exit 1
     fi
-    if [[ ! -d node_modules ]]; then
-        log_step "Installing npm dependencies (once)..."
-        npm ci --no-fund --no-audit
+    # Check if postcss binary is available
+    if [[ ! -d node_modules ]] || [[ ! -f node_modules/.bin/postcss ]]; then
+        log_step "Installing npm dependencies..."
+        # postcss, tailwindcss, and autoprefixer are now in dependencies (not devDependencies)
+        # so they will always be installed
+        npm install --no-fund --no-audit || {
+            log_error "Failed to install npm dependencies"
+            exit 1
+        }
+        # Verify postcss was installed
+        if [[ ! -f node_modules/.bin/postcss ]]; then
+            log_error "postcss binary was not created after install."
+            log_info "Try running manually: npm install"
+            exit 1
+        fi
     fi
 }
 
@@ -40,6 +52,18 @@ fi
 # Compile ClojureScript for development
 log_step "Compiling ClojureScript for development..."
 ensure_node_deps
+log_step "Building Tailwind CSS..."
+npm run css:build
+if [[ -z "${SHADOW_BUILD_ID:-}" ]]; then
+    if [[ -n "${FRONTEND_BUILD_ID:-}" ]]; then
+        export SHADOW_BUILD_ID="$FRONTEND_BUILD_ID"
+    elif [[ "${COVERAGE:-}" == "true" ]]; then
+        export SHADOW_BUILD_ID="app-coverage"
+    fi
+fi
+if [[ -n "${SHADOW_BUILD_ID:-}" ]]; then
+    log_info "Using shadow-cljs build: $SHADOW_BUILD_ID"
+fi
 if ! run_clojure -M:build:frontend dev; then
     log_error "Failed to compile ClojureScript"
     exit 1

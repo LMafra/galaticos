@@ -8,6 +8,8 @@
            :authenticated false
            :auth-loading? false
            :auth-checked? false
+           :ui {:sidebar-open? false
+                :theme "light"}
            :players []
            :players-loaded? false
            :players-loading? false
@@ -30,6 +32,15 @@
            :dashboard-error nil
            :loading false
            :error nil}))
+
+(defn toggle-sidebar! []
+  (swap! app-state update-in [:ui :sidebar-open?] not))
+
+(defn close-sidebar! []
+  (swap! app-state assoc-in [:ui :sidebar-open?] false))
+
+(defn set-theme! [theme]
+  (swap! app-state assoc-in [:ui :theme] theme))
 
 (defn set-user! [user token]
   (swap! app-state assoc :user user :token token :authenticated (some? user) :auth-loading? false :auth-checked? true))
@@ -58,9 +69,9 @@
   (let [{:keys [loading?]} (resource-keys k)]
     (swap! app-state assoc loading? loading)))
 
-(defn set-resource-error! [k error]
+(defn set-resource-error! [k err]
   (let [{:keys [error]} (resource-keys k)]
-    (swap! app-state assoc error error)))
+    (swap! app-state assoc error err)))
 
 (defn set-players! [players]
   (swap! app-state assoc :players players :players-loaded? true :players-loading? false :players-error nil))

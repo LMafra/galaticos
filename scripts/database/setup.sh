@@ -115,9 +115,28 @@ elif command_exists mongo; then
         exit 1
     fi
 else
-    log_error "Neither mongosh nor mongo command found."
-    log_info "Please install MongoDB shell tools."
-    exit 1
+    # Fallback: try running indexes inside MongoDB Docker container
+    if command_exists docker; then
+        MONGO_CONTAINER="$(docker ps --format '{{.Names}}' 2>/dev/null | grep -E 'galaticos-mongodb' | head -n 1 || true)"
+        if [[ -n "$MONGO_CONTAINER" ]]; then
+            log_info "Mongo shell not found locally, running indexes inside container: $MONGO_CONTAINER"
+            # Pipe script into mongosh inside the container
+            if docker exec -i "$MONGO_CONTAINER" mongosh "$MONGO_URI/$DB_NAME" --quiet < "$INDEXES_SCRIPT"; then
+                log_success "MongoDB indexes created successfully in database '$DB_NAME' (via Docker)!"
+            else
+                log_error "Failed to create indexes inside MongoDB container"
+                exit 1
+            fi
+        else
+            log_error "Neither mongosh nor mongo command found, and no MongoDB container detected."
+            log_info "Please install MongoDB shell tools or ensure the MongoDB Docker container is running."
+            exit 1
+        fi
+    else
+        log_error "Neither mongosh nor mongo command found, and 'docker' is not available."
+        log_info "Please install MongoDB shell tools."
+        exit 1
+    fi
 fi
 
 # Verify indexes were created
@@ -150,6 +169,8 @@ elif command_exists mongo; then
     else
         log_warning "Could not verify indexes (this is not critical)"
     fi
+else
+    log_warning "Skipping index verification (no local MongoDB shell available)"
 fi
 
 # Update titles-count for championships based on player data

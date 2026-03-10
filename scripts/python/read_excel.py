@@ -137,11 +137,11 @@ def main() -> Dict[str, pd.DataFrame]:
         SystemExit: If file not found or processing fails
     """
     # Excel file path (relative to project root)
-    excel_file = Path("Galáticos 2025 Automatizada 1.12.xlsm")
+    excel_file = Path("data/galaticos.xlsm")
     
     # Try to find file in current directory or data/raw
     if not excel_file.exists():
-        alt_path = Path("data/raw") / excel_file.name
+        alt_path = Path("data") / excel_file.name
         if alt_path.exists():
             excel_file = alt_path
         else:

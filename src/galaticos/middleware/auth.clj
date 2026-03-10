@@ -85,10 +85,9 @@
 (defn wrap-auth
   "Middleware to require authentication via Bearer token unless DISABLE_AUTH is set in dev/test."
   [handler]
-  (do
-    (when-not disable-auth?
-      (ensure-jwt-secret))
-    (fn [request]
+  (when-not disable-auth?
+    (ensure-jwt-secret))
+  (fn [request]
       (cond
         disable-auth?
         (handler (assoc request :identity {:bypass true}))
@@ -96,7 +95,7 @@
         :else
         (if-let [claims (some-> request bearer-token verify-token)]
           (handler (assoc request :identity claims))
-          (resp/unauthorized "Authentication required"))))))
+          (resp/unauthorized "Authentication required")))))
 
 (defn wrap-auth-handler
   "Wrap a handler function with authentication"

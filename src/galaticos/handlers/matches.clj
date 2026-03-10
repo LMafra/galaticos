@@ -2,23 +2,24 @@
   "Request handlers for match operations"
   (:require [galaticos.db.matches :as matches-db]
             [galaticos.db.aggregations :as agg]
+            [galaticos.db.championships :as championships-db]
             [galaticos.util.response :as resp]
             [clojure.tools.logging :as log]
             [clojure.string :as str]))
 
 (def ^:private allowed-match-fields
   #{:championship-id :home-team-id :away-team-id :date :location :round
-    :status :home-score :away-score :player-statistics :notes})
+    :status :player-statistics :notes :opponent :venue :result :away-score})
 
 (def ^:private required-match-fields
   #{:championship-id :player-statistics})
 
 (def ^:private allowed-player-stat-fields
-  #{:player-id :player-name :position :goals :assists :yellow-cards :red-cards
+  #{:player-id :player-name :position :team-id :goals :assists :yellow-cards :red-cards
     :minutes-played})
 
 (def ^:private required-player-stat-fields
-  #{:player-id})
+  #{:player-id :team-id})
 
 (defn- validate-player-stats [stats]
   (cond
@@ -37,9 +38,21 @@
                                 (throw (ex-info (str "Missing required player-statistics fields: "
                                                      (str/join ", " missing)) {:status 400})))
                               (cond-> stat
-                                (:player-id stat) (update :player-id resp/->object-id))))
+                                (:player-id stat) (update :player-id resp/->object-id)
+                                (:team-id stat) (update :team-id resp/->object-id))))
                           stats)]
       {:data validated})))
+
+(defn- validate-players-enrolled [championship-id player-ids]
+  (let [championship (championships-db/find-by-id championship-id)]
+    (when-not championship
+      (throw (ex-info "Championship not found" {:status 400})))
+    (let [enrolled-ids (set (:enrolled-player-ids championship []))
+          not-enrolled (remove #(contains? enrolled-ids %) player-ids)]
+      (when (seq not-enrolled)
+        (throw (ex-info (str "Players not enrolled in championship: "
+                             (str/join ", " (map str not-enrolled)))
+                        {:status 400}))))))
 
 (defn- validate-match-body
   ([body] (validate-match-body body true))
@@ -108,10 +121,13 @@
       (if error
         (resp/error error 400)
         (let [match-data (dissoc data :player-statistics)
-              player-statistics (:player-statistics data)
-              created (matches-db/create match-data player-statistics)]
+              player-statistics (:player-statistics data)]
+          (when (seq player-statistics)
+            (validate-players-enrolled (:championship-id match-data)
+                                       (map :player-id player-statistics)))
+          (let [created (matches-db/create match-data player-statistics)]
           (agg/update-player-stats-for-match (str (:_id created)))
-          (resp/success created 201))))
+            (resp/success created 201)))))
     (catch Exception e
       (handle-exception e "Failed to create match"))))
 
@@ -125,8 +141,12 @@
       (if error
         (resp/error error 400)
         (if (matches-db/exists? id)
-          (do
-            (matches-db/update-by-id id data)
+          (let [existing (matches-db/find-by-id id)
+                championship-id (or (:championship-id data) (:championship-id existing))
+                player-statistics (or (:player-statistics data) (:player-statistics existing))]
+            (when (seq player-statistics)
+              (validate-players-enrolled championship-id (map :player-id player-statistics)))
+            (matches-db/update-by-id id (assoc data :player-statistics player-statistics))
             (if-let [updated (matches-db/find-by-id id)]
               (do
                 (agg/update-player-stats-for-match id)

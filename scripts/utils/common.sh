@@ -131,6 +131,37 @@ install_python_deps() {
     return 0
 }
 
+# Check if we can run Python (either local python3+venv or Docker)
+python_available() {
+    if command_exists python3; then
+        activate_python_venv 2>/dev/null && install_python_deps 2>/dev/null && return 0
+    fi
+    return 1
+}
+
+# Run a Python script via Docker when Python is not available locally.
+# Usage: run_python_in_docker <script_path> [args...]
+# Expects MONGO_URI and DB_NAME to be set in the environment (for scripts that need them).
+run_python_in_docker() {
+    local script_path="$1"
+    shift
+    local project_root
+    project_root=$(get_project_root)
+    if [[ ! -f "$project_root/$script_path" ]]; then
+        log_error "Script not found: $script_path"
+        return 1
+    fi
+    docker run --rm \
+        --network host \
+        -e MONGO_URI="${MONGO_URI:-mongodb://localhost:27017}" \
+        -e DB_NAME="${DB_NAME:-galaticos}" \
+        -v "$project_root:/app" \
+        -w /app \
+        python:3.11-slim \
+        bash -c "pip install -q --no-cache-dir -r requirements.txt && exec python $script_path \"\$@\"" _ "$@"
+    return $?
+}
+
 # Check MongoDB connection with timeout
 check_mongodb_connection() {
     local uri="${1:-mongodb://localhost:27017}"

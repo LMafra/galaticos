@@ -16,56 +16,36 @@
         ;; Redirect if already authenticated
         (when authenticated
           (rfe/push-state :dashboard))
-        [:div {:style {:max-width "400px"
-                      :margin "100px auto"
-                      :padding "40px"
-                      :background-color "white"
-                      :border-radius "8px"
-                      :box-shadow "0 2px 10px rgba(0,0,0,0.1)"}}
-         [:h2 {:style {:margin-bottom "30px"
-                       :text-align "center"
-                       :color "#333"}}
-          "Login - Galáticos"]
-         (when @error
-           [:div {:style {:background-color "#fee"
-                         :border "1px solid #fcc"
-                         :padding "10px"
-                         :margin-bottom "20px"
-                         :border-radius "4px"
-                         :color "#c00"}}
-            @error])
-         [:form {:on-submit (fn [e]
-                             (.preventDefault e)
-                             (reset! error nil)
-                             (reset! loading true)
-                             (api/login @username @password
-                                       (fn [data]
-                                         (reset! loading false)
-                                         (let [user (:username data)
-                                               token (:token data)]
-                                           (when token
-                                             (state/set-user! user token)
-                                             (rfe/push-state :dashboard))))
-                                       (fn [err]
-                                         (reset! loading false)
-                                         (reset! error (str "Erro ao fazer login: " err)))))}
-          [common/input-field "Usuário" @username #(reset! username %) {:placeholder "Digite seu usuário"}]
-          [common/input-field "Senha" @password #(reset! password %) {:type "password" :placeholder "Digite sua senha"}]
-          [common/button "Entrar"
-           (fn [_e] nil)
-           {:type "submit"
-            :disabled @loading
-            :style {:width "100%"
-                   :margin-top "10px"
-                   :padding "12px"
-                   :background-color "#4CAF50"
-                   :color "white"
-                   :border "none"
-                   :font-size "16px"
-                   :font-weight "bold"}}]
-          (when @loading
-            [:div {:style {:text-align "center"
-                          :margin-top "15px"
-                          :color "#666"}}
-             "Autenticando..."])]]))))
+        [:main#main-content {:class "flex min-h-screen items-center justify-center bg-slate-50 px-4"}
+         [common/card
+          [:div {:class "w-full max-w-md space-y-6"}
+           [:div {:class "text-center"}
+            [:div {:class "mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-maroon text-white font-bold"} "G"]
+            [:h2 {:class "mt-4 text-2xl font-semibold text-slate-900"} "Login - Galáticos"]
+            [:p {:class "mt-1 text-sm text-slate-500"} "Acesse sua plataforma de gestão de elenco"]]
+           (when @error
+             [common/error-message @error])
+           [:form {:class "space-y-4"
+                   :on-submit (fn [e]
+                                (.preventDefault e)
+                                (reset! error nil)
+                                (reset! loading true)
+                                (api/login @username @password
+                                           (fn [data]
+                                             (reset! loading false)
+                                             (let [user (:username data)
+                                                   token (:token data)]
+                                               (when token
+                                                 (state/set-user! user token)
+                                                 (rfe/push-state :dashboard))))
+                                           (fn [err]
+                                             (reset! loading false)
+                                             (reset! error (str "Erro ao fazer login: " err)))))}
+            [common/input-field "Usuário" @username #(reset! username %) :placeholder "Digite seu usuário"]
+            [common/input-field "Senha" @password #(reset! password %) :type "password" :placeholder "Digite sua senha"]
+            [common/button (if @loading "Autenticando..." "Entrar")
+             (fn [_e] nil)
+             :type "submit"
+             :disabled @loading
+             :variant :primary :class "w-full"]]]]]))))
 

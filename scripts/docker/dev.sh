@@ -13,6 +13,30 @@ readonly COMPOSE_FILE="config/docker/docker-compose.dev.yml"
 readonly MONGO_URI="mongodb://localhost:27017/galaticos"
 readonly APP_URL="http://localhost:3000"
 
+# Frontend CSS build (Tailwind)
+ensure_node_deps() {
+    if ! command_exists npm; then
+        log_error "npm is required to build the frontend CSS. Please install Node.js 18+."
+        exit 1
+    fi
+    # Check if postcss binary is available
+    if [[ ! -d node_modules ]] || [[ ! -f node_modules/.bin/postcss ]]; then
+        log_step "Installing npm dependencies..."
+        # postcss, tailwindcss, and autoprefixer are now in dependencies (not devDependencies)
+        # so they will always be installed
+        npm install --no-fund --no-audit || {
+            log_error "Failed to install npm dependencies"
+            exit 1
+        }
+        # Verify postcss was installed
+        if [[ ! -f node_modules/.bin/postcss ]]; then
+            log_error "postcss binary was not created after install."
+            log_info "Try running manually: npm install"
+            exit 1
+        fi
+    fi
+}
+
 # Change to project root
 cd_project_root
 
@@ -50,6 +74,9 @@ cleanup() {
 case "$COMMAND" in
     start)
         log_info "Starting Docker development environment..."
+        log_step "Building Tailwind CSS..."
+        ensure_node_deps
+        npm run css:build
         $DOCKER_COMPOSE_CMD -f "$COMPOSE_FILE" up -d || {
             log_error "Failed to start Docker services"
             exit 1
@@ -77,6 +104,9 @@ case "$COMMAND" in
         
         if [[ -z "$running_services" ]]; then
             log_step "Starting services..."
+            log_step "Building Tailwind CSS..."
+            ensure_node_deps
+            npm run css:build
             $DOCKER_COMPOSE_CMD -f "$COMPOSE_FILE" up -d || {
                 log_error "Failed to start Docker services"
                 exit 1

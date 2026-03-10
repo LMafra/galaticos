@@ -17,7 +17,8 @@ pom.xml.asc
 # ClojureScript
 .cljs_node_repl/
 .cljs_compiler_cache/
-.clj-kondo/
+.clj-kondo/cache/
+.clj-kondo/.cache/
 .clojure/
 .shadow-cljs/
 out/
@@ -96,3 +97,14 @@ temp/
 *~
 
 node_modules/
+
+# Playwright
+playwright-report/
+test-results/
+
+# Test Coverage
+target/coverage/
+target/coverage.json
+coverage/
+playwright-coverage/
+.nyc_output/

@@ -2,8 +2,10 @@
   "Database operations for players collection"
   (:require [monger.collection :as mc]
             [galaticos.db.core :refer [db]]
-            [galaticos.util.response :refer [->object-id]])
-  (:import [org.bson.types ObjectId]))
+            [galaticos.util.response :refer [->object-id]]
+            [galaticos.util.string :as str-util])
+  (:import [org.bson.types ObjectId]
+           [java.util.regex Pattern]))
 
 (def collection-name "players")
 
@@ -21,8 +23,10 @@
                 normalize-player-data
                 (merge {:_id id
                         :active true
+                        ;; normalized name for case/accent-insensitive search
+                        :search-name (some-> (:name player-data) str-util/normalize-text)
                         :aggregated-stats {:total {:games 0 :goals 0 :assists 0 :titles 0}
-                                          :by-championship []}
+                                           :by-championship []}
                         :created-at now
                         :updated-at now}))]
     (mc/insert (db) collection-name doc)
@@ -60,16 +64,44 @@
 (defn find-by-name
   "Find players by name (partial match)"
   [name]
-  (mc/find-maps (db) collection-name
-                {:name {:$regex name :$options "i"}}))
+  (let [q (str-util/normalize-text name)]
+    (if (str-util/blank-normalized? q)
+      []
+      (let [pattern (str ".*" (Pattern/quote q) ".*")]
+        (mc/find-maps (db) collection-name
+                      {:search-name {:$regex pattern}})))))
+
+(defn find-by-ids
+  "Find players by a list of IDs"
+  [ids]
+  (let [object-ids (map ->object-id ids)]
+    (if (seq object-ids)
+      (mc/find-maps (db) collection-name {:_id {:$in object-ids}})
+      [])))
 
 (defn update-by-id
   "Update player by ID"
   [id updates]
-  (let [normalized (normalize-player-data updates)]
+  (let [normalized (normalize-player-data updates)
+        ;; keep search-name in sync when name changes
+        normalized (cond-> normalized
+                     (contains? normalized :name)
+                     (assoc :search-name (some-> (:name normalized) str-util/normalize-text)))]
     (mc/update (db) collection-name
                {:_id (->object-id id)}
                {:$set (merge normalized {:updated-at (java.util.Date.)})})))
+
+(defn increment-titles
+  "Increment titles for a list of players by the given amount (default 1)."
+  ([player-ids]
+   (increment-titles player-ids 1))
+  ([player-ids amount]
+   (when (and (seq player-ids) (pos? amount))
+     (mc/update (db) collection-name
+                {:_id {:$in (map ->object-id player-ids)}}
+                {:$inc {:aggregated-stats.total.titles amount}
+                 :$set {:updated-at (java.util.Date.)}}
+                {:multi true}))))
 
 (defn update-stats
   "Update player aggregated statistics"

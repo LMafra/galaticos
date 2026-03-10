@@ -14,14 +14,25 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../utils/common.sh"
 
 # Configuration
-readonly EXCEL_FILE="data/raw/Galáticos 2025 Automatizada 1.12.xlsm"
+readonly EXCEL_FILE="data/galaticos.xlsm"
 readonly SEED_SCRIPT="scripts/python/seed_mongodb.py"
+# Default admin credentials (must match seed_mongodb.py create_admin defaults)
+readonly ADMIN_USER="admin"
+readonly ADMIN_PASS="admin"
 # Allow DB_NAME and MONGO_URI to be overridden via environment variable (not readonly so they can be exported)
 DB_NAME="${DB_NAME:-galaticos}"
 MONGO_URI="${MONGO_URI:-mongodb://localhost:27017}"
 
 # Change to project root
 cd_project_root
+
+print_admin_credentials() {
+    echo ""
+    log_info "Admin credentials (login no sistema):"
+    echo "   Username: $ADMIN_USER"
+    echo "   Password: $ADMIN_PASS"
+    echo ""
+}
 
 log_info "Seeding MongoDB database..."
 log_info "Database: $DB_NAME"
@@ -44,21 +55,28 @@ if ! is_mongodb_running; then
     exit 1
 fi
 
-# Setup Python virtual environment first (needed for connection test)
-if ! activate_python_venv; then
-    log_error "Failed to activate Python virtual environment"
+# Check if Excel file exists
+if [[ ! -f "$EXCEL_FILE" ]]; then
+    log_warning "Excel file not found at: $EXCEL_FILE"
+    log_info "The seed script may fail if the file is required."
+    echo ""
+fi
+
+# Verify seed script exists
+if [[ ! -f "$SEED_SCRIPT" ]]; then
+    log_error "Seed script not found: $SEED_SCRIPT"
     exit 1
 fi
 
-# Install/update dependencies (needed for connection test)
-if ! install_python_deps; then
-    log_error "Failed to install Python dependencies"
-    exit 1
+USE_PYTHON_LOCALLY=false
+if python_available 2>/dev/null; then
+    USE_PYTHON_LOCALLY=true
 fi
 
-# Test MongoDB connection using Python (more reliable than mongosh)
-log_step "Testing MongoDB connection..."
-if ! python3 -c "
+if [[ "$USE_PYTHON_LOCALLY" == "true" ]]; then
+    # Test MongoDB connection using Python
+    log_step "Testing MongoDB connection..."
+    if ! python3 -c "
 import sys
 from pymongo import MongoClient
 from pymongo.errors import ServerSelectionTimeoutError
@@ -74,69 +92,54 @@ except Exception as e:
     print(f'✗ Connection failed: {e}', file=sys.stderr)
     sys.exit(1)
 " 2>&1; then
-    log_error "Cannot connect to MongoDB at $MONGO_URI"
-    log_info "Please ensure MongoDB is running and accessible:"
-    log_info "  - Local: sudo systemctl start mongod (or mongodb)"
-    log_info "  - Docker: ./bin/galaticos docker:dev start"
-    exit 1
-fi
-log_success "MongoDB connection verified"
-echo ""
-
-# Check if Excel file exists
-if [[ ! -f "$EXCEL_FILE" ]]; then
-    log_warning "Excel file not found at: $EXCEL_FILE"
-    log_info "The seed script may fail if the file is required."
+        log_error "Cannot connect to MongoDB at $MONGO_URI"
+        log_info "Please ensure MongoDB is running and accessible:"
+        exit 1
+    fi
+    log_success "MongoDB connection verified"
     echo ""
-fi
 
-# Verify seed script exists
-if [[ ! -f "$SEED_SCRIPT" ]]; then
-    log_error "Seed script not found: $SEED_SCRIPT"
-    exit 1
-fi
+    # Run seed script locally
+    log_step "Running seed script..."
+    if MONGO_URI="$MONGO_URI" DB_NAME="$DB_NAME" python3 "$SEED_SCRIPT" "${SEED_ARGS[@]}"; then
+        echo ""
+        log_success "Seed script completed successfully!"
+        log_step "Verifying data insertion..."
+        if MONGO_URI="$MONGO_URI" DB_NAME="$DB_NAME" python3 scripts/python/verify_seed.py 2>&1; then
+            log_success "Database seeded successfully!"
+        else
+            log_warning "Seed completed but verification had issues (data may still be present)"
+        fi
+        echo ""
+        print_admin_credentials
+    else
+        log_error "Seed script failed"
+        exit 1
+    fi
+elif command_exists docker; then
+    log_info "Python not available locally; running seed via Docker..."
+    echo ""
 
-# Run seed script with MONGO_URI environment variable
-log_step "Running seed script..."
-if MONGO_URI="$MONGO_URI" DB_NAME="$DB_NAME" python3 "$SEED_SCRIPT" "${SEED_ARGS[@]}"; then
+    log_step "Running seed script (Docker)..."
+    if ! MONGO_URI="$MONGO_URI" DB_NAME="$DB_NAME" run_python_in_docker "$SEED_SCRIPT" "${SEED_ARGS[@]}"; then
+        log_error "Seed script failed"
+        exit 1
+    fi
     echo ""
     log_success "Seed script completed successfully!"
-    
-    # Verify data was inserted
+
     log_step "Verifying data insertion..."
-    if python3 -c "
-import sys
-from pymongo import MongoClient
-try:
-    client = MongoClient('$MONGO_URI', serverSelectionTimeoutMS=5000)
-    db = client['$DB_NAME']
-    
-    admins_count = db.admins.count_documents({})
-    teams_count = db.teams.count_documents({})
-    players_count = db.players.count_documents({})
-    championships_count = db.championships.count_documents({})
-    
-    print(f'  Admins: {admins_count}')
-    print(f'  Teams: {teams_count}')
-    print(f'  Players: {players_count}')
-    print(f'  Championships: {championships_count}')
-    
-    if admins_count > 0 and teams_count > 0 and players_count > 0:
-        print('✓ Data verification successful')
-        sys.exit(0)
-    else:
-        print('⚠ Warning: Some collections appear to be empty', file=sys.stderr)
-        sys.exit(0)  # Don't fail, just warn
-except Exception as e:
-    print(f'⚠ Could not verify data: {e}', file=sys.stderr)
-    sys.exit(0)  # Don't fail verification
-" 2>&1; then
+    if MONGO_URI="$MONGO_URI" DB_NAME="$DB_NAME" run_python_in_docker scripts/python/verify_seed.py 2>&1; then
         log_success "Database seeded successfully!"
     else
         log_warning "Seed completed but verification had issues (data may still be present)"
     fi
+    echo ""
+    print_admin_credentials
 else
-    log_error "Seed script failed"
+    log_error "Python (with venv and dependencies) or Docker is required to run the seed."
+    log_info "  - Install Python 3 and run: python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt"
+    log_info "  - Or install Docker and ensure the MongoDB container is running: ./bin/galaticos docker:dev start"
     exit 1
 fi
 

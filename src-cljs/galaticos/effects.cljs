@@ -69,20 +69,28 @@
                     state/set-teams!)))
 
 (defn ensure-auth! []
-  (let [{:keys [auth-checked? auth-loading? authenticated]} @state/app-state]
+  (let [{:keys [auth-checked? auth-loading? authenticated]} @state/app-state
+        token (api/current-token)]
     (when (and (not (in-flight? :auth))
                (not auth-loading?)
                (or (not auth-checked?) (not authenticated)))
-      (state/set-auth-loading! true)
-      (mark-in-flight! :auth)
-      (api/check-auth
-       (fn [user]
-         (state/set-user! user (api/current-token))
-         (clear-in-flight! :auth))
-       (fn [_error]
-         (state/clear-auth!)
-         (api/clear-token!)
-         (clear-in-flight! :auth))))))
+      (if (and (not auth-checked?) (nil? token))
+        ;; No token and not checked yet - mark as not authenticated without making HTTP call
+        (do
+          (state/clear-auth!)
+          (clear-in-flight! :auth))
+        ;; Has token or already checked - verify with server
+        (do
+          (state/set-auth-loading! true)
+          (mark-in-flight! :auth)
+          (api/check-auth
+           (fn [user]
+             (state/set-user! user (api/current-token))
+             (clear-in-flight! :auth))
+           (fn [_error]
+             (state/clear-auth!)
+             (api/clear-token!)
+             (clear-in-flight! :auth))))))))
 
 (defn on-route!
   "Trigger route-specific effects such as fetching data."
@@ -94,10 +102,16 @@
         (ensure-auth!)
         (case route-name
           :dashboard (ensure-dashboard!)
+          :stats (ensure-championships!)
           :players (ensure-players!)
           :championships (ensure-championships!)
           :matches (ensure-matches!)
-          :match-new (ensure-championships!)
+          :match-new (do
+                       (ensure-championships!)
+                       (ensure-teams!))
+          :match-edit (do
+                        (ensure-championships!)
+                        (ensure-teams!))
           :teams (ensure-teams!)
           :team-new (ensure-teams!)
           :team-detail (ensure-teams!)

@@ -44,12 +44,17 @@ show_help() {
     echo "    run              Start the application"
     echo "    console          Start Clojure REPL"
     echo "    test             Run tests"
+    echo "    coverage         Run backend test coverage (80% lines, 70% branches)"
+    echo "    coverage:e2e     Run E2E test coverage"
+    echo "    coverage:all     Run all test coverage (backend + E2E)"
     echo "    validate         Validate application is running correctly"
     echo "    validate:docker  Validate application running in Docker"
+    echo "    e2e              Run Playwright E2E tests (optional base URL)"
     echo ""
     echo "  Database:"
     echo "    db:setup         Set up MongoDB indexes (creates indexes for all collections)"
     echo "    db:seed          Seed database from Excel file (populates teams, players, championships)"
+    echo "    db:seed-smoke    Seed minimal deterministic data for smoke/E2E tests"
     echo ""
     echo "  Docker:"
     echo "    docker:dev       Manage dev environment (start|stop|restart|logs|status|validate|clean)"
@@ -83,11 +88,24 @@ case "$COMMAND" in
     test)
         exec "$SCRIPTS_DIR/dev/test.sh"
         ;;
+    coverage)
+        exec "$SCRIPTS_DIR/dev/coverage.sh"
+        ;;
+    coverage:e2e)
+        exec "$SCRIPTS_DIR/e2e/coverage.sh"
+        ;;
+    coverage:all)
+        exec "$SCRIPTS_DIR/dev/coverage-all.sh"
+        ;;
     validate)
         exec "$SCRIPTS_DIR/dev/validate.sh"
         ;;
     validate:docker)
         exec "$SCRIPTS_DIR/docker/validate.sh"
+        ;;
+    e2e)
+        shift
+        exec "$SCRIPTS_DIR/e2e/run.sh" "$@"
         ;;
     
     # Database commands
@@ -96,6 +114,9 @@ case "$COMMAND" in
         ;;
     db:seed)
         exec "$SCRIPTS_DIR/database/seed.sh"
+        ;;
+    db:seed-smoke)
+        exec "$SCRIPTS_DIR/database/seed-smoke.sh"
         ;;
     
     # Docker commands

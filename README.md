@@ -149,12 +149,12 @@ Este comando:
 - Lê o arquivo Excel e popula o banco de dados
 - Verifica que os dados foram inseridos corretamente
 
-**Nota:** O arquivo Excel deve estar em `data/raw/Galáticos 2025 Automatizada 1.12.xlsm`
+**Nota:** O arquivo Excel deve estar em `data/galaticos.xlsm`
 
-**Nota:** O arquivo Excel deve estar em `data/raw/Galáticos 2025 Automatizada 1.12.xlsm`
+**Nota:** O arquivo Excel deve estar em `data/galaticos.xlsm`
 
 O script irá:
-- Ler o arquivo `data/raw/Galáticos 2025 Automatizada 1.12.xlsm`
+- Ler o arquivo `data/galaticos.xlsm`
 - Criar o time "Galáticos"
 - Criar jogadores a partir da planilha "Base de dados"
 - Criar campeonatos a partir das outras planilhas
@@ -343,6 +343,125 @@ Se preferir, você também pode executar os scripts diretamente:
 ./scripts/docker/dev.sh start
 ```
 
+## Testes e Cobertura
+
+### Executando Testes
+
+```bash
+# Executar todos os testes (backend + ClojureScript)
+./bin/galaticos test
+
+# Executar testes E2E (requer aplicação rodando)
+./bin/galaticos e2e
+```
+
+### Testes Locais (replicar CI)
+
+Para rodar localmente os mesmos checks que o CI executa antes de abrir um PR:
+
+#### 1. Lint (clj-kondo)
+
+```bash
+# Instalar clj-kondo (uma vez)
+curl -sSLO "https://github.com/clj-kondo/clj-kondo/releases/download/v2024.08.01/clj-kondo-2024.08.01-linux-amd64.zip"
+unzip -o clj-kondo-2024.08.01-linux-amd64.zip
+sudo mv clj-kondo /usr/local/bin/
+chmod +x /usr/local/bin/clj-kondo
+
+# Rodar lint
+clj-kondo --lint src src-cljs --fail-level error
+```
+
+#### 2. Compilação do frontend
+
+```bash
+docker compose -f config/docker/docker-compose.dev.yml run --rm app clj -M:frontend -m shadow.cljs.devtools.cli compile app
+```
+
+#### 3. Testes unitários (Clojure + ClojureScript)
+
+```bash
+# Subir MongoDB
+docker compose -f config/docker/docker-compose.dev.yml up -d mongodb
+
+# Rodar testes
+./bin/galaticos test
+
+# Parar e limpar
+docker compose -f config/docker/docker-compose.dev.yml down -v --remove-orphans
+```
+
+#### 4. Testes E2E (Playwright)
+
+```bash
+# Subir stack de dev
+docker compose -f config/docker/docker-compose.dev.yml up -d --build
+
+# Aguardar aplicação ficar pronta (use quebras de linha para evitar erro no zsh)
+until curl -sf http://localhost:3000/health
+do
+  sleep 2
+done
+
+# Seed para os testes
+./bin/galaticos db:seed-smoke
+
+# Instalar dependências e Playwright (uma vez)
+npm ci --no-fund --no-audit
+npx playwright install --with-deps chromium
+
+# Rodar E2E
+E2E_BASE_URL=http://localhost:3000 npm run e2e
+
+# Parar e limpar
+docker compose -f config/docker/docker-compose.dev.yml down -v --remove-orphans
+```
+
+#### Rodar tudo de uma vez (lint + frontend + unitários)
+
+```bash
+clj-kondo --lint src src-cljs --fail-level error && \
+docker compose -f config/docker/docker-compose.dev.yml up -d mongodb && \
+docker compose -f config/docker/docker-compose.dev.yml run --rm app clj -M:frontend -m shadow.cljs.devtools.cli compile app && \
+./bin/galaticos test && \
+docker compose -f config/docker/docker-compose.dev.yml down -v --remove-orphans
+```
+
+**Pré-requisitos:** Docker, Node.js 18+, clj-kondo (para lint). O MongoDB e o Clojure rodam via Docker.
+
+### Cobertura de Código
+
+O projeto mantém requisitos de cobertura de **80% de linhas** e **70% de branches**.
+
+```bash
+# Cobertura backend (Clojure)
+./bin/galaticos coverage
+
+# Cobertura E2E (Playwright)
+./bin/galaticos coverage:e2e
+
+# Cobertura completa (backend + E2E)
+./bin/galaticos coverage:all
+```
+
+**Visualizar relatórios:**
+```bash
+# Relatório consolidado
+open target/coverage-report/index.html
+
+# Relatório backend apenas
+open target/coverage/index.html
+```
+
+### CI/CD
+
+A cobertura é validada automaticamente no GitHub Actions para todos os Pull Requests. PRs que não atingirem os thresholds de 80/70 terão o merge bloqueado.
+
+**Badges:**
+[![Test Coverage](https://img.shields.io/badge/coverage-80%25-brightgreen)]()
+
+Para mais detalhes, consulte a [documentação completa de cobertura](docs/testing-coverage.md).
+
 ## Uso
 
 ### Conexão com MongoDB
@@ -494,14 +613,25 @@ Crie um arquivo `.env` baseado em `.env.example` (se disponível) ou configure a
 Para desenvolvimento com Docker:
 
 ```bash
-docker-compose -f docker-compose.dev.yml up
+./bin/galaticos docker:dev start
 ```
 
 Para produção:
 
 ```bash
-docker-compose -f docker-compose.prod.yml up
+./bin/galaticos docker:prod start
 ```
+
+#### Rodar tudo via Docker (sem instalar Python nem mongosh no host)
+
+Com o ambiente dev em Docker (`./bin/galaticos docker:dev start`), você pode executar os comandos de banco sem ter Python ou MongoDB shell instalados localmente:
+
+- **db:setup** – Cria índices no MongoDB. Se `mongosh`/`mongo` não existirem no host, o script roda os comandos dentro do container MongoDB.
+- **db:seed** – Popula o banco a partir do Excel. Se Python (venv + dependências) não estiver disponível, o script roda o seed dentro de um container Python temporário.
+- **db:seed-smoke** – Seed mínimo para testes. Se o Clojure CLI não estiver instalado, usa um container Clojure temporário.
+- **check-stats** – Verifica estatísticas. Se `mongosh` não existir, usa o shell dentro do container MongoDB.
+
+Requisitos: Docker instalado e ambiente dev rodando (`./bin/galaticos docker:dev start`).
 
 ## Contribuindo
 

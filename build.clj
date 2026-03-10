@@ -3,7 +3,8 @@
   (:require [shadow.cljs.devtools.api :as shadow]
             [shadow.cljs.devtools.server :as server]))
 
-(def build-id :app)
+(def build-id
+  (keyword (or (System/getenv "SHADOW_BUILD_ID") "app")))
 
 (defn- start-server! []
   ;; Idempotent start so scripts can run repeatedly.

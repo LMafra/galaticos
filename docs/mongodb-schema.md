@@ -42,6 +42,10 @@
   "start-date": ISODate("2025-01-01T00:00:00Z"),
   "end-date": ISODate("2025-12-31T23:59:59Z"),
   "status": "active",
+  "enrolled-player-ids": [
+    ObjectId("507f1f77bcf86cd799439012"),
+    ObjectId("507f1f77bcf86cd799439014")
+  ],
   "created-at": ISODate("2025-01-15T10:00:00Z"),
   "updated-at": ISODate("2025-01-15T10:00:00Z")
 }
@@ -55,7 +59,11 @@
 - `start-date` (Date): Data de início
 - `end-date` (Date): Data de término
 - `status` (String, enum): Status do campeonato
-  - Valores: "active", "finished", "cancelled"
+  - Valores: "active", "completed", "cancelled" (legado: "finished" tratado como completed)
+- `winner-player-ids` (Array of ObjectId): Preenchido ao finalizar; IDs dos jogadores vencedores
+- `finished-at` (Date): Preenchido ao finalizar; data/hora da finalização
+- `titles-award-count` (Number): Preenchido ao finalizar; quantidade de títulos concedidos a cada vencedor
+- `enrolled-player-ids` (Array of ObjectId): IDs dos jogadores inscritos no campeonato (preenchido automaticamente pelo seed/importação e pela API de inscrição)
 - `created-at` (Date): Data de criação
 - `updated-at` (Date): Data de última atualização
 
