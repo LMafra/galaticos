@@ -35,6 +35,8 @@ Thumbs.db
 target/
 *.jar
 *.class
+resources/public/js/compiled/
+.shadow-cljs/
 
 # Logs
 *.log
