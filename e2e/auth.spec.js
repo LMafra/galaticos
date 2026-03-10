@@ -6,8 +6,8 @@ test('login -> check -> logout', async ({ page, request }, testInfo) => {
     // Login via UI
     await loginAsAdmin(page);
 
-    // Header should show logged-in user
-    await expect(page.getByText('Logado como:')).toBeVisible();
+    // Header should show logout button when logged in
+    await expect(page.getByRole('button', { name: 'Sair' })).toBeVisible();
 
     // Verify API /check using the stored JWT
     const token = await getStoredToken(page);
@@ -30,8 +30,8 @@ test('login -> check -> logout', async ({ page, request }, testInfo) => {
       expect(protectedBody && protectedBody.success).toBeTruthy();
     }
 
-    // Logout via UI
-    await page.getByRole('link', { name: 'Sair' }).click();
+    // Logout via UI (Sair is a button, not a link)
+    await page.getByRole('button', { name: 'Sair' }).click();
     await expect(page.getByRole('heading', { name: 'Login - Galáticos' })).toBeVisible();
   } finally {
     await saveCoverage(page, testInfo);

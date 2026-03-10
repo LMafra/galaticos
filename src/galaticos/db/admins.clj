@@ -3,7 +3,6 @@
   (:require [monger.collection :as mc]
             [galaticos.db.core :refer [db]]
             [galaticos.util.response :refer [->object-id]]
-            [buddy.hashers :as hashers]
             [clojure.tools.logging :as log])
   (:import [org.bson.types ObjectId]
            [org.mindrot.jbcrypt BCrypt]))

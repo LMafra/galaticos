@@ -228,7 +228,8 @@
                                               :finished-at (java.util.Date.)
                                               :winner-player-ids winner-player-ids
                                               :titles-award-count titles-award-count})
-              (players-db/increment-titles winner-player-ids titles-award-count)
+              (when (pos? titles-award-count)
+                (players-db/increment-titles winner-player-ids titles-award-count))
               (resp/success {:message "Championship finalized"}))))
         (resp/not-found "Championship not found")))
     (catch NumberFormatException _

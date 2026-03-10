@@ -15,8 +15,8 @@ async function loginAsAdmin(page) {
   await page.getByPlaceholder('Digite sua senha').fill('admin');
   await page.getByRole('button', { name: 'Entrar' }).click();
 
-  // Redirect happens to dashboard; wait for dashboard heading.
-  await page.getByRole('heading', { name: 'Dashboard' }).waitFor();
+  // Redirect happens to dashboard; wait for dashboard heading (h1 - avoid strict mode with multiple headings).
+  await page.getByRole('heading', { name: 'Dashboard', level: 1 }).waitFor();
 }
 
 async function getStoredToken(page) {

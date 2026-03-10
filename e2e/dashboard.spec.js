@@ -6,7 +6,7 @@ test('dashboard loads and shows overview stats', async ({ page }, testInfo) => {
     await loginAsAdmin(page);
 
     await expect(page.getByText('Visão geral')).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible();
 
     const body = page.locator('body');
     await expect(body).toContainText('Dashboard');

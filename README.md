@@ -355,6 +355,80 @@ Se preferir, você também pode executar os scripts diretamente:
 ./bin/galaticos e2e
 ```
 
+### Testes Locais (replicar CI)
+
+Para rodar localmente os mesmos checks que o CI executa antes de abrir um PR:
+
+#### 1. Lint (clj-kondo)
+
+```bash
+# Instalar clj-kondo (uma vez)
+curl -sSLO "https://github.com/clj-kondo/clj-kondo/releases/download/v2024.08.01/clj-kondo-2024.08.01-linux-amd64.zip"
+unzip -o clj-kondo-2024.08.01-linux-amd64.zip
+sudo mv clj-kondo /usr/local/bin/
+chmod +x /usr/local/bin/clj-kondo
+
+# Rodar lint
+clj-kondo --lint src src-cljs --fail-level error
+```
+
+#### 2. Compilação do frontend
+
+```bash
+docker compose -f config/docker/docker-compose.dev.yml run --rm app clj -M:frontend -m shadow.cljs.devtools.cli compile app
+```
+
+#### 3. Testes unitários (Clojure + ClojureScript)
+
+```bash
+# Subir MongoDB
+docker compose -f config/docker/docker-compose.dev.yml up -d mongodb
+
+# Rodar testes
+./bin/galaticos test
+
+# Parar e limpar
+docker compose -f config/docker/docker-compose.dev.yml down -v --remove-orphans
+```
+
+#### 4. Testes E2E (Playwright)
+
+```bash
+# Subir stack de dev
+docker compose -f config/docker/docker-compose.dev.yml up -d --build
+
+# Aguardar aplicação ficar pronta (use quebras de linha para evitar erro no zsh)
+until curl -sf http://localhost:3000/health
+do
+  sleep 2
+done
+
+# Seed para os testes
+./bin/galaticos db:seed-smoke
+
+# Instalar dependências e Playwright (uma vez)
+npm ci --no-fund --no-audit
+npx playwright install --with-deps chromium
+
+# Rodar E2E
+E2E_BASE_URL=http://localhost:3000 npm run e2e
+
+# Parar e limpar
+docker compose -f config/docker/docker-compose.dev.yml down -v --remove-orphans
+```
+
+#### Rodar tudo de uma vez (lint + frontend + unitários)
+
+```bash
+clj-kondo --lint src src-cljs --fail-level error && \
+docker compose -f config/docker/docker-compose.dev.yml up -d mongodb && \
+docker compose -f config/docker/docker-compose.dev.yml run --rm app clj -M:frontend -m shadow.cljs.devtools.cli compile app && \
+./bin/galaticos test && \
+docker compose -f config/docker/docker-compose.dev.yml down -v --remove-orphans
+```
+
+**Pré-requisitos:** Docker, Node.js 18+, clj-kondo (para lint). O MongoDB e o Clojure rodam via Docker.
+
 ### Cobertura de Código
 
 O projeto mantém requisitos de cobertura de **80% de linhas** e **70% de branches**.

@@ -5,8 +5,7 @@
             [galaticos.util.response :refer [->object-id]]
             [galaticos.util.string :as str-util]
             [clojure.tools.logging :as log])
-  (:import [org.bson.types ObjectId]
-           [java.util.regex Pattern]))
+  (:import [java.util.regex Pattern]))
 
 (defn player-stats-by-championship
   "Get aggregated player statistics for a specific championship"

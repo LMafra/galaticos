@@ -7,14 +7,16 @@
             [clojure.tools.logging :as log])
   (:gen-class))
 
-(defn- ensure-log-dir! []
+(defn- ensure-log-dir!
   "Ensure the log directory exists"
+  []
   (let [log-dir (java.io.File. "/app/.cursor")]
     (when-not (.exists log-dir)
       (.mkdirs log-dir))))
 
-(defn- write-debug-log [log-entry]
+(defn- write-debug-log
   "Write a debug log entry"
+  [log-entry]
   (try
     (ensure-log-dir!)
     (let [log-file (java.io.FileWriter. "/app/.cursor/debug.log" true)]

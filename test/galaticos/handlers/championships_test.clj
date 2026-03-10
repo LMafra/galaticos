@@ -22,7 +22,7 @@
                   resp/error (fn [msg _] {:error msg})
                   resp/success (fn [_] {:success true})]
       (let [response (handlers/finalize-championship request)]
-        (is (= "Only active championships can be finalized" (:error response))))))
+        (is (= "Only active championships can be finalized" (:error response)))))))
 
 (deftest finalize-championship-already-finalized
   (let [champ-id (str (ObjectId.))
@@ -32,7 +32,7 @@
                   resp/error (fn [msg _] {:error msg})
                   resp/not-found (fn [_] {:not-found true})]
       (let [response (handlers/finalize-championship request)]
-        (is (= "Championship has already been finalized" (:error response))))))
+        (is (= "Championship has already been finalized" (:error response)))))))
 
 (deftest finalize-championship-titles-award-count-negative
   (let [champ-id (str (ObjectId.))
@@ -41,7 +41,7 @@
     (with-redefs [championships-db/find-by-id (fn [_] champ)
                   resp/error (fn [msg _] {:error msg})]
       (let [response (handlers/finalize-championship request)]
-        (is (= "titles-award-count must be non-negative" (:error response))))))
+        (is (= "titles-award-count must be non-negative" (:error response)))))))
 
 (deftest finalize-championship-winners-required-when-awarding-titles
   (let [champ-id (str (ObjectId.))
@@ -50,7 +50,7 @@
     (with-redefs [championships-db/find-by-id (fn [_] champ)
                   resp/error (fn [msg _] {:error msg})]
       (let [response (handlers/finalize-championship request)]
-        (is (= "At least one winner must be specified when awarding titles" (:error response))))))
+        (is (= "At least one winner must be specified when awarding titles" (:error response)))))))
 
 (deftest finalize-championship-success-with-titles-award-count
   (let [champ-id (str (ObjectId.))
@@ -69,7 +69,7 @@
         (is (= "completed" (:status @updated)))
         (is (some? (:finished-at @updated)))
         (is (= 2 (:titles-award-count @updated)))
-        (is (= 2 (second @increment-args))))))
+        (is (= 2 (second @increment-args)))))))
 
 (deftest finalize-championship-zero-titles-no-winners
   (let [champ-id (str (ObjectId.))

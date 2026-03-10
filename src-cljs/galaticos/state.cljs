@@ -69,9 +69,9 @@
   (let [{:keys [loading?]} (resource-keys k)]
     (swap! app-state assoc loading? loading)))
 
-(defn set-resource-error! [k error]
+(defn set-resource-error! [k err]
   (let [{:keys [error]} (resource-keys k)]
-    (swap! app-state assoc error error)))
+    (swap! app-state assoc error err)))
 
 (defn set-players! [players]
   (swap! app-state assoc :players players :players-loaded? true :players-loading? false :players-error nil))

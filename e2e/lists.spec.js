@@ -21,17 +21,17 @@ test('players/matches/championships list pages render without errors', async ({ 
 
     // Players
     await page.goto('/#/players');
-    await expect(page.getByRole('heading', { name: 'Jogadores' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Jogadores', level: 1 })).toBeVisible();
     await expect(page.getByText('Erro ao carregar players')).toHaveCount(0);
 
     // Matches
     await page.goto('/#/matches');
-    await expect(page.getByRole('heading', { name: 'Partidas' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Partidas', level: 1 })).toBeVisible();
     await expect(page.getByText('Erro ao carregar matches')).toHaveCount(0);
 
     // Championships
     await page.goto('/#/championships');
-    await expect(page.getByRole('heading', { name: 'Campeonatos' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Campeonatos', level: 1 })).toBeVisible();
     await expect(page.getByText('Erro ao carregar championships')).toHaveCount(0);
   } finally {
     await saveCoverage(page, testInfo);
