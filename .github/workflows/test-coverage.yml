@@ -81,16 +81,16 @@ jobs:
           path: target/coverage/
           retention-days: 30
 
-      - name: Start application for E2E tests
+      - name: Run E2E tests (start app, seed, run tests)
         env:
           MONGO_URI: mongodb://admin:admin123@localhost:27017/galaticos-test?authSource=admin
           PORT: 3000
+          E2E_BASE_URL: http://localhost:3000
         run: |
           ./bin/galaticos run &
           APP_PID=$!
-          echo "APP_PID=$APP_PID" >> $GITHUB_ENV
-          
-          # Wait for app to be ready
+          trap "kill $APP_PID 2>/dev/null || true" EXIT
+
           echo "Waiting for application to start..."
           for i in {1..30}; do
             if curl -f http://localhost:3000 >/dev/null 2>&1; then
@@ -101,15 +101,13 @@ jobs:
             sleep 2
           done
 
-      - name: Seed test data
-        env:
-          MONGO_URI: mongodb://admin:admin123@localhost:27017/galaticos-test?authSource=admin
-        run: ./bin/galaticos db:seed-smoke
+          if ! curl -f http://localhost:3000 >/dev/null 2>&1; then
+            echo "Application failed to start"
+            exit 1
+          fi
 
-      - name: Run E2E tests
-        env:
-          E2E_BASE_URL: http://localhost:3000
-        run: ./bin/galaticos e2e
+          ./bin/galaticos db:seed-smoke
+          ./bin/galaticos e2e
         continue-on-error: true
 
       - name: Upload E2E test results
@@ -127,13 +125,6 @@ jobs:
           name: e2e-coverage-report
           path: playwright-coverage/
           retention-days: 30
-
-      - name: Stop application
-        if: always()
-        run: |
-          if [ ! -z "$APP_PID" ]; then
-            kill $APP_PID || true
-          fi
 
       - name: Generate coverage summary
         if: always()
