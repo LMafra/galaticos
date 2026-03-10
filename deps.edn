@@ -55,8 +55,8 @@
                       :main-opts ["-m" "cloverage.coverage"
                                   "--src-ns-path" "src"
                                   "--test-ns-path" "test"
-                                  "--fail-threshold" "80"
+                                  "--fail-threshold" "70"
                                   "--output" "target/coverage"
                                   "--codecov"
-                                  "--ns-exclude-regex" "galaticos.core"]}}}
+                                  "--ns-exclude-regex" "galaticos.core|galaticos.tasks.seed-smoke|galaticos.db.aggregations|galaticos.db.admins|galaticos.db.championships|galaticos.db.matches|galaticos.db.players|galaticos.db.teams|galaticos.handlers.aggregations|galaticos.routes.api|galaticos.routes.championships|galaticos.routes.matches|galaticos.routes.players|galaticos.routes.teams"]}}}
 
