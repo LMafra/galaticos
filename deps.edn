@@ -43,7 +43,8 @@
            :uberjar {:replace-deps {com.github.seancorfield/depstar {:mvn/version "2.1.303"}}
                      :exec-fn hf.depstar/uberjar
                      :exec-args {:jar "target/galaticos-standalone.jar"
-                                 :main-class "galaticos.core"}}
+                                 :main-class "galaticos.core"
+                                 :compile-ns ["galaticos.core"]}}
            :deps-lock {:extra-paths ["scripts"]
                        :replace-deps {org.clojure/tools.deps.alpha {:mvn/version "0.14.1212"}}
                        :exec-fn build.lock/write-lock
