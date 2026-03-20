@@ -40,6 +40,23 @@ if ! command_exists npm; then
   exit 1
 fi
 
+# Check if the app is reachable (avoid confusing ERR_CONNECTION_REFUSED from Playwright)
+HEALTH_URL="${BASE_URL%/}/health"
+if ! curl -sf --connect-timeout 3 "$HEALTH_URL" >/dev/null 2>&1; then
+  log_error "Application is not running at $BASE_URL"
+  echo ""
+  echo "  Start the app first, for example:"
+  echo "    ./bin/galaticos run"
+  echo ""
+  echo "  Or with Docker:"
+  echo "    ./bin/galaticos docker:dev start"
+  echo "    ./bin/galaticos db:seed-smoke   # optional, for E2E data"
+  echo ""
+  echo "  Then run E2E again: ./bin/galaticos e2e"
+  echo ""
+  exit 1
+fi
+
 log_info "Running Playwright E2E tests..."
 log_info "E2E_BASE_URL: $BASE_URL"
 echo ""

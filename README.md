@@ -122,7 +122,7 @@ Edite `resources/config.edn` com suas configurações de MongoDB:
 
 ### 3. Criar Índices
 
-Execute o script de criação de índices:
+Execute o comando (usa `scripts/database/setup.sh`):
 
 ```bash
 ./bin/galaticos db:setup
@@ -136,7 +136,7 @@ Este comando:
 
 ### 4. Seed do Banco de Dados
 
-Para popular o banco de dados com dados do arquivo Excel:
+Para popular o banco de dados com dados do arquivo Excel (usa `scripts/database/seed.sh`):
 
 ```bash
 ./bin/galaticos db:seed
@@ -149,9 +149,7 @@ Este comando:
 - Lê o arquivo Excel e popula o banco de dados
 - Verifica que os dados foram inseridos corretamente
 
-**Nota:** O arquivo Excel deve estar em `data/galaticos.xlsm`
-
-**Nota:** O arquivo Excel deve estar em `data/galaticos.xlsm`
+**Nota:** O arquivo Excel deve estar em `data/galaticos.xlsm`.
 
 O script irá:
 - Ler o arquivo `data/galaticos.xlsm`
@@ -183,7 +181,7 @@ npm run cljs:watch
 clj -M:build:frontend prod
 ```
 
-**Nota:** O script `./bin/galaticos run` compila automaticamente o ClojureScript antes de iniciar o servidor. Os arquivos compilados são gerados em `resources/public/js/compiled/`.
+**Nota:** O comando `./bin/galaticos run` (que chama `scripts/dev/run.sh`) compila automaticamente o ClojureScript antes de iniciar o servidor. Os arquivos compilados são gerados em `resources/public/js/compiled/`.
 
 ## Scripts
 
@@ -191,36 +189,41 @@ O projeto inclui scripts utilitários organizados em uma estrutura clara e fáci
 
 ### Estrutura de Scripts
 
+Todos os comandos do `./bin/galaticos` delegam para scripts em `scripts/`:
+
 ```
 bin/
-  galaticos              # Ponto de entrada principal
+  galaticos              # Ponto de entrada principal (chama scripts abaixo)
 scripts/
-  dev/                   # Scripts de desenvolvimento
-    run.sh               # Executa a aplicação
-    console.sh           # Inicia REPL Clojure
-    test.sh              # Executa testes
-    validate.sh          # Valida aplicação
+  dev/                   # Desenvolvimento
+    run.sh               # ./bin/galaticos run
+    console.sh           # ./bin/galaticos console
+    test.sh              # ./bin/galaticos test
+    coverage.sh          # ./bin/galaticos coverage
+    coverage-all.sh      # ./bin/galaticos coverage:all
+    validate.sh          # ./bin/galaticos validate
     watch-cljs.sh        # Watch ClojureScript
-  database/              # Scripts de banco de dados
-    setup.sh             # Configura índices MongoDB
-    seed.sh              # Popula banco de dados
+  e2e/                   # Testes E2E (Playwright)
+    run.sh               # ./bin/galaticos e2e
+    coverage.sh          # ./bin/galaticos coverage:e2e
+  database/              # Banco de dados
+    setup.sh             # ./bin/galaticos db:setup
+    seed.sh              # ./bin/galaticos db:seed
+    seed-smoke.sh        # ./bin/galaticos db:seed-smoke
     check-stats.sh       # Verifica estatísticas
-  docker/                # Scripts Docker
-    dev.sh               # Ambiente de desenvolvimento
-    prod.sh              # Ambiente de produção
-    validate.sh          # Valida aplicação em Docker
-  build/                 # Scripts de build
-    build.sh             # Compila uberjar
+  docker/                # Docker
+    dev.sh               # ./bin/galaticos docker:dev
+    prod.sh              # ./bin/galaticos docker:prod
+    validate.sh          # ./bin/galaticos validate:docker
   utils/                 # Utilitários
-    check-deps.sh        # Verifica dependências
-    clean.sh             # Limpa artefatos
-    common.sh            # Funções comuns
-  python/                # Scripts Python
-    read_excel.py        # Leitura de arquivos Excel
-    seed_mongodb.py      # Script de seed
-  mongodb/               # Scripts MongoDB
-    mongodb-indexes.js   # Criação de índices
-    mongodb-aggregations.js # Exemplos de agregações
+    check-deps.sh        # ./bin/galaticos check-deps
+    clean.sh             # ./bin/galaticos clean
+    common.sh            # Funções comuns (sourced por outros scripts)
+  python/                # Scripts Python (usados pelos de database)
+    read_excel.py, seed_mongodb.py, etc.
+  mongodb/               # Índices e agregações
+    mongodb-indexes.js
+    mongodb-aggregations.js
 ```
 
 ### Uso Principal: `./bin/galaticos`
@@ -277,23 +280,25 @@ make clean             # Limpa artefatos
 
 ### Início Rápido
 
+Todos os passos abaixo usam os scripts do projeto via `./bin/galaticos`:
+
 ```bash
-# 1. Verificar dependências
+# 1. Verificar dependências — scripts/utils/check-deps.sh
 ./bin/galaticos check-deps
 
-# 2. Iniciar MongoDB (Docker)
+# 2. Iniciar MongoDB (Docker) — scripts/docker/dev.sh
 ./bin/galaticos docker:dev start
 
-# 3. Configurar índices
+# 3. Configurar índices — scripts/database/setup.sh
 ./bin/galaticos db:setup
 
-# 4. Popular banco de dados (opcional)
+# 4. Popular banco de dados (opcional) — scripts/database/seed.sh
 ./bin/galaticos db:seed
 
-# 5. Executar aplicação (compila ClojureScript automaticamente)
+# 5. Executar aplicação — scripts/dev/run.sh (compila ClojureScript automaticamente)
 ./bin/galaticos run
 
-# 6. Validar que aplicação está funcionando (em outro terminal)
+# 6. Validar que aplicação está funcionando (em outro terminal) — scripts/dev/validate.sh
 ./bin/galaticos validate
 ```
 
@@ -301,9 +306,9 @@ make clean             # Limpa artefatos
 
 ### Validação
 
-A aplicação inclui scripts de validação para verificar se está funcionando corretamente:
+A aplicação inclui scripts de validação para verificar se está funcionando corretamente (`scripts/dev/validate.sh` e `scripts/docker/validate.sh`):
 
-**Validação Local:**
+**Validação local:**
 ```bash
 ./bin/galaticos validate
 ```
@@ -317,7 +322,7 @@ Este comando verifica:
 
 **Validação Docker:**
 ```bash
-# Validar aplicação rodando em Docker
+# Validar aplicação rodando em Docker — scripts/docker/validate.sh
 ./bin/galaticos validate:docker
 
 # Ou usando o comando docker:dev
@@ -335,23 +340,31 @@ A validação Docker verifica:
 
 ### Executando Scripts Diretamente
 
-Se preferir, você também pode executar os scripts diretamente:
+Cada comando do `./bin/galaticos` corresponde a um script em `scripts/`. Você pode chamá-los diretamente se quiser:
 
 ```bash
-./scripts/dev/run.sh
-./scripts/database/setup.sh
-./scripts/docker/dev.sh start
+./scripts/dev/run.sh              # mesma coisa que ./bin/galaticos run
+./scripts/dev/test.sh              # ./bin/galaticos test
+./scripts/dev/validate.sh          # ./bin/galaticos validate
+./scripts/database/setup.sh        # ./bin/galaticos db:setup
+./scripts/database/seed.sh         # ./bin/galaticos db:seed
+./scripts/e2e/run.sh               # ./bin/galaticos e2e (aceita URL: ./scripts/e2e/run.sh http://localhost:3000)
+./scripts/e2e/coverage.sh         # ./bin/galaticos coverage:e2e
+./scripts/docker/dev.sh start      # ./bin/galaticos docker:dev start
+./scripts/utils/check-deps.sh      # ./bin/galaticos check-deps
 ```
 
 ## Testes e Cobertura
 
+Os testes são executados via scripts: `./bin/galaticos test` usa `scripts/dev/test.sh` e `./bin/galaticos e2e` usa `scripts/e2e/run.sh`.
+
 ### Executando Testes
 
 ```bash
-# Executar todos os testes (backend + ClojureScript)
+# Executar todos os testes (backend + ClojureScript) — scripts/dev/test.sh
 ./bin/galaticos test
 
-# Executar testes E2E (requer aplicação rodando)
+# Executar testes E2E (requer aplicação rodando) — scripts/e2e/run.sh
 ./bin/galaticos e2e
 ```
 
@@ -381,66 +394,70 @@ docker compose -f config/docker/docker-compose.dev.yml run --rm app clj -M:front
 #### 3. Testes unitários (Clojure + ClojureScript)
 
 ```bash
-# Subir MongoDB
-docker compose -f config/docker/docker-compose.dev.yml up -d mongodb
+# Subir MongoDB (via script Docker)
+./bin/galaticos docker:dev start
+# ou apenas MongoDB: docker compose -f config/docker/docker-compose.dev.yml up -d mongodb
 
-# Rodar testes
+# Rodar testes (scripts/dev/test.sh)
 ./bin/galaticos test
 
 # Parar e limpar
-docker compose -f config/docker/docker-compose.dev.yml down -v --remove-orphans
+./bin/galaticos docker:dev stop
+# ou: docker compose -f config/docker/docker-compose.dev.yml down -v --remove-orphans
 ```
 
 #### 4. Testes E2E (Playwright)
 
+Use o script via `./bin/galaticos e2e` (que chama `scripts/e2e/run.sh`):
+
 ```bash
 # Subir stack de dev
-docker compose -f config/docker/docker-compose.dev.yml up -d --build
+./bin/galaticos docker:dev start
+# ou: docker compose -f config/docker/docker-compose.dev.yml up -d --build
 
-# Aguardar aplicação ficar pronta (use quebras de linha para evitar erro no zsh)
-until curl -sf http://localhost:3000/health
-do
-  sleep 2
-done
+# Aguardar aplicação ficar pronta
+until curl -sf http://localhost:3000/health; do sleep 2; done
 
-# Seed para os testes
+# Seed mínimo para os testes
 ./bin/galaticos db:seed-smoke
 
 # Instalar dependências e Playwright (uma vez)
 npm ci --no-fund --no-audit
 npx playwright install --with-deps chromium
 
-# Rodar E2E
-E2E_BASE_URL=http://localhost:3000 npm run e2e
+# Rodar E2E (usa http://localhost:3000 por padrão; o script aceita URL como argumento)
+./bin/galaticos e2e
+# Ou com URL explícita e filtro: ./bin/galaticos e2e http://localhost:3000 -- --grep @smoke
 
 # Parar e limpar
-docker compose -f config/docker/docker-compose.dev.yml down -v --remove-orphans
+./bin/galaticos docker:dev stop
+# ou: docker compose -f config/docker/docker-compose.dev.yml down -v --remove-orphans
 ```
 
 #### Rodar tudo de uma vez (lint + frontend + unitários)
 
 ```bash
 clj-kondo --lint src src-cljs --fail-level error && \
-docker compose -f config/docker/docker-compose.dev.yml up -d mongodb && \
+./bin/galaticos docker:dev start && \
 docker compose -f config/docker/docker-compose.dev.yml run --rm app clj -M:frontend -m shadow.cljs.devtools.cli compile app && \
 ./bin/galaticos test && \
-docker compose -f config/docker/docker-compose.dev.yml down -v --remove-orphans
+./bin/galaticos docker:dev stop
 ```
 
-**Pré-requisitos:** Docker, Node.js 18+, clj-kondo (para lint). O MongoDB e o Clojure rodam via Docker.
+**Pré-requisitos:** Docker, Node.js 18+, clj-kondo (para lint). O MongoDB e o Clojure rodam via Docker. Sempre que possível, prefira os comandos `./bin/galaticos` (que usam os scripts em `scripts/`).
 
 ### Cobertura de Código
 
-O projeto mantém requisitos de cobertura de **80% de linhas** e **70% de branches**.
+O projeto mantém requisitos de cobertura de **80% de linhas** e **70% de branches**. Use os comandos abaixo (que chamam `scripts/dev/coverage.sh`, `scripts/e2e/coverage.sh` e `scripts/dev/coverage-all.sh`):
 
 ```bash
-# Cobertura backend (Clojure)
+# Cobertura backend (Clojure) — scripts/dev/coverage.sh
 ./bin/galaticos coverage
 
-# Cobertura E2E (Playwright)
+# Cobertura E2E (Playwright) — scripts/e2e/coverage.sh (roda E2E com COVERAGE=true)
 ./bin/galaticos coverage:e2e
 
-# Cobertura completa (backend + E2E)
+# Cobertura completa (backend + E2E) — scripts/dev/coverage-all.sh
 ./bin/galaticos coverage:all
 ```
 

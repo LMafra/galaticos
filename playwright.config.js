@@ -18,9 +18,20 @@ module.exports = defineConfig({
     video: 'retain-on-failure',
   },
   projects: [
+    { name: 'setup', testMatch: /.*\.setup\.js/ },
     {
       name: 'chromium',
+      use: {
+        ...devices['Desktop Chrome'],
+        storageState: 'e2e/.auth/user.json',
+      },
+      dependencies: ['setup'],
+      testIgnore: [/auth\.spec\.js/],
+    },
+    {
+      name: 'auth',
       use: { ...devices['Desktop Chrome'] },
+      testMatch: /auth\.spec\.js/,
     },
   ],
 });
