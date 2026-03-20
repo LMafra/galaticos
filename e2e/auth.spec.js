@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 const { loginAsAdmin, getStoredToken, saveCoverage } = require('./_helpers');
 
-test('login -> check -> logout', async ({ page, request }, testInfo) => {
+test('login -> check -> logout', { tag: '@auth' }, async ({ page, request }, testInfo) => {
   try {
     // Login via UI
     await loginAsAdmin(page);
@@ -32,6 +32,29 @@ test('login -> check -> logout', async ({ page, request }, testInfo) => {
 
     // Logout via UI (Sair is a button, not a link)
     await page.getByRole('button', { name: 'Sair' }).click();
+    await expect(page.getByRole('heading', { name: 'Login - Galáticos' })).toBeVisible();
+  } finally {
+    await saveCoverage(page, testInfo);
+  }
+});
+
+test('invalid credentials show error message', { tag: '@auth' }, async ({ page }, testInfo) => {
+  try {
+    await page.goto('/#/login');
+    await page.getByPlaceholder('Digite seu usuário').fill('invalid');
+    await page.getByPlaceholder('Digite sua senha').fill('wrong');
+    await page.getByRole('button', { name: 'Entrar' }).click();
+
+    await expect(page.getByText(/Erro ao fazer login/i)).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Login - Galáticos' })).toBeVisible();
+  } finally {
+    await saveCoverage(page, testInfo);
+  }
+});
+
+test('unauthenticated user redirected to login when accessing dashboard', { tag: '@auth' }, async ({ page }, testInfo) => {
+  try {
+    await page.goto('/#/dashboard');
     await expect(page.getByRole('heading', { name: 'Login - Galáticos' })).toBeVisible();
   } finally {
     await saveCoverage(page, testInfo);
