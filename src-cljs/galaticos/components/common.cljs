@@ -173,7 +173,8 @@
   (let [search-query (r/atom "")
         sort-column (r/atom nil)
         sort-direction (r/atom :asc)]
-    (fn [headers rows & {:keys [on-row-click row-data sortable? sortable-columns class dense?]}]
+    (fn [headers rows & {:keys [on-row-click row-data sortable? sortable-columns class dense? show-search?]
+                          :or {show-search? true}}]
       (let [headers-vec (vec headers)
             rows-vec (vec rows)
             row-data-vec (if row-data (vec row-data) (repeat nil))
@@ -188,14 +189,16 @@
                                       (reset! sort-column col-idx)
                                       (reset! sort-direction :asc))))
             row-pairs (map vector rows-vec row-data-vec)
-            filtered-pairs (if (or (nil? @search-query) (str/blank? @search-query))
+            filtered-pairs (if-not show-search?
                              row-pairs
-                             (let [query-lower (str/lower-case @search-query)]
-                               (filter (fn [[row _]]
-                                         (some (fn [cell]
-                                                 (str/includes? (str/lower-case (str cell)) query-lower))
-                                               row))
-                                       row-pairs)))
+                             (if (or (nil? @search-query) (str/blank? @search-query))
+                               row-pairs
+                               (let [query-lower (str/lower-case @search-query)]
+                                 (filter (fn [[row _]]
+                                           (some (fn [cell]
+                                                   (str/includes? (str/lower-case (str cell)) query-lower))
+                                                 row))
+                                         row-pairs))))
             sorted-pairs (if (and sortable?
                                   (some? @sort-column)
                                   (contains? sortable-cols @sort-column))
@@ -210,13 +213,14 @@
             final-rows (mapv first sorted-pairs)
             final-row-data (mapv second sorted-pairs)
             cell-class (if dense? "px-3 py-2 text-sm" "px-4 py-3 text-sm")]
-        [:div {:class (merge-classes "space-y-3" class)}
-         [:div {:class "flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"}
-          [:input {:type "text"
-                   :value @search-query
-                   :on-change #(reset! search-query (-> % .-target .-value))
-                   :placeholder "Buscar..."
-                   :class "w-full max-w-sm rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-brand-maroon focus:outline-none focus:ring-2 focus:ring-brand-maroon/20"}]]
+        [:div {:class (merge-classes (if show-search? "space-y-3" "") class)}
+         (when show-search?
+           [:div {:class "flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"}
+            [:input {:type "text"
+                     :value @search-query
+                     :on-change #(reset! search-query (-> % .-target .-value))
+                     :placeholder "Buscar..."
+                     :class "w-full max-w-sm rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-brand-maroon focus:outline-none focus:ring-2 focus:ring-brand-maroon/20"}]])
          [:div {:class "overflow-hidden rounded-xl border border-slate-200 bg-white"}
           [:table {:class "min-w-full divide-y divide-slate-200"}
            [:thead {:class "bg-slate-50"}

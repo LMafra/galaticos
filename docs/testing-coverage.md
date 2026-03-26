@@ -11,6 +11,47 @@ O projeto Galáticos mantém os seguintes requisitos de cobertura de código:
 
 Estes thresholds são validados automaticamente no CI/CD e bloqueiam merges de Pull Requests que não atendam aos requisitos.
 
+## ✅ Estratégia de testes para Sports Data Analytics
+
+Além da cobertura de código, a trilha de analytics exige validação contínua de qualidade e consistência de dados.
+
+### 1) Testes de contrato de dados
+
+- Validar shape mínimo de `matches.player-statistics`.
+- Validar estrutura de `players.aggregated-stats`.
+- Cobrir cenários de campos ausentes, tipos inválidos e valores negativos.
+
+### 2) Testes de reconciliação
+
+- Garantir que `aggregated-stats` seja reprodutível a partir de `matches`.
+- Testar recálculo completo e recálculo parcial por partida.
+- Garantir que divergências sejam detectadas e reportadas.
+
+### 3) Testes de regressão de métricas
+
+- Criar fixtures determinísticas e validar métricas-chave:
+  - `games`
+  - `goals`
+  - `assists`
+  - `goals-per-game`
+  - `assists-per-game`
+- Proteger fórmulas contra mudanças acidentais.
+
+### 4) Critério de aceite para mudanças analíticas
+
+Toda alteração em cálculo de métrica ou contrato de dados deve:
+
+1. Atualizar `docs/analytics/metrics-catalog.md` e/ou `docs/analytics/data-contracts.md`.
+2. Incluir teste de regressão correspondente.
+3. Validar reconciliação sem divergências críticas.
+
+### 5) Checklist de mudança obrigatória (métrica/contrato)
+
+- [ ] Catálogo de métricas atualizado (`docs/analytics/metrics-catalog.md`).
+- [ ] Contrato de dados atualizado (`docs/analytics/data-contracts.md`) quando houver mudança de schema.
+- [ ] Testes de contrato e regressão adicionados/atualizados.
+- [ ] Evidência de reconciliação registrada no runbook operacional.
+
 ## 🚀 Executando Cobertura Localmente
 
 ### Cobertura Backend (Clojure)

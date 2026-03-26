@@ -18,6 +18,10 @@
 
 (def ^:private refresh-interval-ms 60000)
 
+(defn- championship-key
+  [championship]
+  (str (:championship-id championship)))
+
 (defn dashboard
   "Dashboard component - render-only; data fetched via route watcher. Refreshes every 60s when tab is visible."
   []
@@ -66,7 +70,7 @@
               championships       (:championships dashboard-stats)
               filtered-championships
               (if (and championships (not= @selected-champ "all"))
-                (filter #(= (:championship-name %) @selected-champ) championships)
+                (filter #(= (championship-key %) @selected-champ) championships)
                 championships)
               total-matches       (reduce + 0 (map :matches-count (or championships [])))
               total-players       (reduce + 0 (map :players-count (or championships [])))
@@ -88,7 +92,7 @@
               champ-options       (into
                                    [["all" "Todos os campeonatos"]]
                                    (map (fn [ch]
-                                          [(:championship-name ch)
+                                          [(championship-key ch)
                                            (:championship-name ch)]))
                                    (or championships []))]
           [:div {:class "space-y-6"}
@@ -103,6 +107,12 @@
              [common/button "Atualizar"
               #(effects/ensure-dashboard! {:force? true})
               :variant :primary]
+             [common/button "Exportar CSV"
+              #(api/download-csv! "/api/exports/dashboard.csv"
+                                  "galaticos-dashboard.csv"
+                                  (fn [] nil)
+                                  (fn [err] (js/alert err)))
+              :variant :outline]
              [common/button
               (if @reconciling? "Reconciliando..." "Reconciliar estatísticas")
               reconcile!

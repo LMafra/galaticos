@@ -2,6 +2,19 @@
 
 Sistema web para gestão de elenco esportivo com dashboard analítico, desenvolvido em Clojure/Luminus com MongoDB.
 
+## Analytics-first roadmap
+
+O projeto passa a manter uma trilha de documentação dedicada a sports data analytics para orientar evolução técnica e de produto.
+
+- Hub de documentação: `docs/README.md`
+- Estratégia analítica: `docs/analytics/strategy.md`
+- Arquitetura analítica: `docs/analytics/architecture.md`
+- Catálogo de métricas: `docs/analytics/metrics-catalog.md`
+- Contratos de dados: `docs/analytics/data-contracts.md`
+- Qualidade de dados: `docs/analytics/data-quality.md`
+- Modelo operacional: `docs/analytics/operating-model.md`
+- Roadmap de evolução: `docs/analytics/roadmap.md`
+
 ## Stack Tecnológico
 
 - **Backend:** Clojure (Framework Luminus)

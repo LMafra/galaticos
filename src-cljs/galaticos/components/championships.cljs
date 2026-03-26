@@ -5,6 +5,7 @@
             [galaticos.api :as api]
             [galaticos.state :as state]
             [galaticos.components.common :as common]
+            [galaticos.components.player-picker :as player-picker]
             [galaticos.effects :as effects]
             [clojure.string :as str]
             ["lucide-react" :refer [Trophy]]))
@@ -54,7 +55,7 @@
         matches (r/atom [])
         enrolled-players (r/atom [])
         all-players (r/atom [])
-        enroll-id (r/atom "")
+        players-catalog-ready? (r/atom false)
         selected-winners (r/atom #{})
         titles-award-count (r/atom "1")
         finalizing? (r/atom false)
@@ -66,6 +67,8 @@
                 (reset! error nil)
                 (reset! not-found? false)
                 (reset! loading? true)
+                (reset! all-players [])
+                (reset! players-catalog-ready? false)
                 (api/get-championship id
                                       (fn [result]
                                         (reset! championship result)
@@ -90,8 +93,10 @@
                                                 (reset! error (str "Erro ao carregar inscritos: " err))))
                 (api/get-players {}
                                  (fn [result]
-                                   (reset! all-players result))
+                                   (reset! all-players (api/coerce-player-list result))
+                                   (reset! players-catalog-ready? true))
                                  (fn [err]
+                                   (reset! players-catalog-ready? true)
                                    (reset! error (str "Erro ao carregar jogadores: " err)))))]
     (r/create-class
      {:component-did-mount (fn [] (load!))
@@ -102,7 +107,10 @@
               winner-ids (set (map str (:winner-player-ids @championship)))
               winner-names (->> @enrolled-players
                                 (filter #(contains? winner-ids (str (:_id %))))
-                                (map :name))
+                                (map :name)
+                                (sort))
+              enrolled-sorted (sort-by #(str/lower-case (str (:name %))) @enrolled-players)
+              enrolled-exclude-ids (into #{} (keep player-picker/player-id @enrolled-players))
               awarded-count (or (:titles-award-count @championship) 0)]
           [:div {:class "space-y-6"}
            (cond
@@ -128,6 +136,12 @@
                  [common/badge status :variant :info :class "mt-2"]]]
                [:div {:class "flex flex-wrap gap-2"}
                 [common/button "Editar" #(rfe/push-state :championship-edit {:id id}) :variant :outline]
+                [common/button "Exportar CSV"
+                 #(api/download-csv! (str "/api/exports/championships/" id ".csv")
+                                     (str (or (:name @championship) "campeonato") ".csv")
+                                     (fn [] nil)
+                                     (fn [err] (js/alert err)))
+                 :variant :outline]
                 [common/button "Deletar"
                  (fn []
                    (when (js/confirm "Tem certeza que deseja deletar este campeonato?")
@@ -170,33 +184,51 @@
               [common/card
                [:h3 {:class "app-section-title"} "Inscrições"]
                [:div {:class "mt-3 space-y-3"}
-                [:div {:class "flex flex-col gap-2 sm:flex-row sm:items-end"}
-                 [common/select-field
-                  "Adicionar jogador"
-                  @enroll-id
-                  (cons ["" "Selecione um jogador"]
-                        (map (fn [player]
-                               [(str (:_id player)) (:name player)])
-                             @all-players))
-                  #(reset! enroll-id %)
-                  :container-class "min-w-[240px]"]
-                 [common/button "Inscrever"
-                  (fn []
-                    (when-not (str/blank? @enroll-id)
+                [player-picker/player-search-add-panel
+                 {:label "Adicionar jogador"
+                  :players @all-players
+                  :players-loading? (not @players-catalog-ready?)
+                  :exclude-ids enrolled-exclude-ids
+                  :action-label "Inscrever"
+                  :on-pick-player
+                  (fn [player]
+                    (when-let [pid (player-picker/player-id player)]
                       (api/enroll-player-in-championship
-                       id
-                       @enroll-id
+                       id pid
                        (fn [_result]
-                         (reset! enroll-id "")
                          (api/get-championship-players id
                                                        #(reset! enrolled-players %)
                                                        #(reset! error (str "Erro ao carregar inscritos: " %))))
                        (fn [err]
                          (reset! error (str "Erro ao inscrever jogador: " err))))))
-                  :variant :primary]]
+                  :on-quick-create
+                  (fn [name ok err]
+                    (api/create-player
+                     {:name name :position player-picker/quick-create-position}
+                     (fn [created]
+                       (if-let [pid (player-picker/player-id created)]
+                         (do
+                           (swap! all-players conj created)
+                           (api/enroll-player-in-championship
+                            id pid
+                            (fn [_result]
+                              (api/get-championship-players
+                               id
+                               (fn [rows]
+                                 (reset! enrolled-players rows)
+                                 (ok created))
+                               (fn [e]
+                                 (reset! error (str "Erro ao carregar inscritos: " e))
+                                 (err (str "Erro ao carregar inscritos: " e)))))
+                            (fn [e]
+                              (reset! error (str "Erro ao inscrever novo jogador: " e))
+                              (err (str "Erro ao inscrever novo jogador: " e)))))
+                         (err "Jogador criado sem ID retornado.")))
+                     (fn [e]
+                       (err (str "Erro ao criar jogador: " e)))))}]
                 (if (seq @enrolled-players)
                   [:div {:class "space-y-2"}
-                   (for [player @enrolled-players]
+                   (for [player enrolled-sorted]
                      ^{:key (:_id player)}
                      [:div {:class "flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"}
                       [:div {:class "text-slate-700"} (:name player)]
@@ -230,7 +262,7 @@
                     :type "number" :placeholder "1"]
                    (if (seq @enrolled-players)
                      [:div {:class "space-y-2"}
-                      (for [player @enrolled-players]
+                      (for [player enrolled-sorted]
                         ^{:key (:_id player)}
                         [:label {:class "flex items-center gap-2 text-xs text-slate-700"}
                          [:input {:type "checkbox"
