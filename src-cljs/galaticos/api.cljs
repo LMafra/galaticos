@@ -66,18 +66,69 @@
       (map? body) (or (:error body) (:message body) "Unknown error")
       :else (str "Request failed: " (:status response)))))
 
+(defn- json-envelope? [b]
+  (or (map? b)
+      ;; Objeto JS plano (ex. JSON.parse). Não usar (not (coll? b)): em alguns valores host
+      ;; coll? pode ser true e faria o envelope falhar, passando o objeto inteiro ao on-success.
+      (and (some? b) (object? b) (not (map? b)) (not (array? b)) (not (fn? b)))))
+
+(defn- envelope-get [b str-kw kw]
+  (cond
+    (map? b) (or (get b kw) (get b str-kw))
+    (json-envelope? b) (gobj/get b str-kw)
+    :else nil))
+
+(defn- envelope-success-flag [b]
+  (envelope-get b "success" :success))
+
+(defn- envelope-data-field [b]
+  (let [d (envelope-get b "data" :data)]
+    (if (undefined? d) nil d)))
+
+(defn- envelope-error-field [b]
+  (or (envelope-get b "error" :error)
+      (envelope-get b "message" :message)))
+
 (defn handle-response
   "Handle API response and extract data or error.
-   on-error is called with (message response); response includes :status for 404 etc."
+   on-error is called with (message response); response includes :status for 404 etc.
+   Aceita corpo como mapa CLJS ou objeto JS, com chaves :keyword ou string (ex. JSON parseado)."
   [response on-success on-error]
   (if (contains? success-statuses (:status response))
     (let [body (:body response)]
       (cond
         (nil? body) (on-success nil)
-        (:success body) (on-success (:data body))
-        (map? body) (on-error (or (:error body) (:message body) "Unknown error") response)
-        :else (on-success body)))
+        (not (json-envelope? body)) (on-success body)
+        (true? (envelope-success-flag body)) (on-success (envelope-data-field body))
+        (false? (envelope-success-flag body))
+        (on-error (str (or (some-> (envelope-error-field body) str not-empty)
+                           "Request failed"))
+                  response)
+        (map? body) (on-error (or (some-> (envelope-error-field body) str not-empty)
+                                  (:error body) (:message body)
+                                  "Unknown error")
+                              response)
+        :else (on-error "Unknown error" response)))
     (on-error (extract-error response) response)))
+
+(defn coerce-player-list
+  "Garante vetor de linhas para o catálogo de jogadores (GET /api/players etc.).
+  Aceita vetor, seq, array JS, ou envelope {success, data} em mapa CLJS ou objeto JS."
+  [x]
+  (letfn [(step [v]
+            (cond
+              (nil? v) []
+              (vector? v) v
+              (array? v) (vec (array-seq v))
+              (and (sequential? v) (not (map? v))) (vec v)
+              (and (map? v) (or (true? (:success v)) (true? (get v "success"))))
+              (step (or (:data v) (get v "data")))
+              (and (some? v) (object? v) (not (map? v)) (not (array? v))
+                   (true? (gobj/get v "success")))
+              (let [d (gobj/get v "data")]
+                (if (undefined? d) [] (step d)))
+              :else []))]
+    (step x)))
 
 (defn- auth-headers []
   (if-let [token (current-token)]
@@ -263,4 +314,32 @@
 
 (defn get-avg-goals-by-position [championship-id on-success on-error]
   (get-request (str "/api/aggregations/positions/" championship-id) {} on-success on-error))
+
+(defn download-csv!
+  "Download CSV file from API endpoint."
+  [url filename on-success on-error]
+  (let [headers (clj->js (auth-headers))]
+    (-> (js/fetch (str api-base-url url) #js {:method "GET" :headers headers})
+        (.then (fn [resp]
+                 (if (.-ok resp)
+                   (.then (.blob resp)
+                          (fn [blob]
+                            (let [object-url (.createObjectURL js/URL blob)
+                                  link (.createElement js/document "a")]
+                              (set! (.-href link) object-url)
+                              (set! (.-download link) filename)
+                              (.appendChild (.-body js/document) link)
+                              (.click link)
+                              (.remove link)
+                              (.revokeObjectURL js/URL object-url)
+                              (when on-success (on-success)))))
+                   (.then (.text resp)
+                          (fn [message]
+                            (when on-error
+                              (on-error (if (empty? message)
+                                          (str "Erro ao baixar CSV (" (.-status resp) ")")
+                                          message))))))))
+        (.catch (fn [e]
+                  (when on-error
+                    (on-error (str "Erro de rede ao baixar CSV: " (.-message e)))))))))
 

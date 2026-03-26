@@ -76,9 +76,7 @@ test('create championship', { tag: '@crud' }, async ({ page }, testInfo) => {
 
 test('create match with one player statistic', { tag: '@crud' }, async ({ page }, testInfo) => {
   try {
-    await page.goto('/#/matches');
-    await expect(page.getByRole('heading', { name: 'Partidas', level: 1 })).toBeVisible();
-    await page.getByRole('button', { name: 'Nova Partida' }).click();
+    await page.goto('/#/matches/new');
     await expect(page.getByRole('heading', { name: 'Nova Partida' })).toBeVisible();
 
     const champSelect = page.getByLabel(/^Campeonato/);
@@ -96,8 +94,7 @@ test('create match with one player statistic', { tag: '@crud' }, async ({ page }
         await page.getByLabel(/^Títulos/).fill('0');
         await page.getByRole('button', { name: 'Criar' }).click();
         await expect(page).toHaveURL(/\#\/championships$/);
-        await page.goto('/#/matches');
-        await page.getByRole('button', { name: 'Nova Partida' }).click();
+        await page.goto('/#/matches/new');
         await expect(page.getByRole('heading', { name: 'Nova Partida' })).toBeVisible();
         await champSelect.waitFor({ state: 'visible' });
         valueOptions = await champSelect.locator('option').evaluateAll((opts) => opts.map((o) => o.getAttribute('value')));
@@ -111,19 +108,25 @@ test('create match with one player statistic', { tag: '@crud' }, async ({ page }
     await champSelect.selectOption(firstValue);
     await page.waitForTimeout(800);
 
-    await page.getByLabel(/^Data/).fill('2025-06-01');
-    await page.getByLabel(/^Adversário/).fill('Adversário E2E');
-    await page.getByRole('button', { name: 'Adicionar estatística' }).click();
-
-    const playerSelects = page.getByLabel('Jogador');
-    await playerSelects.first().waitFor({ state: 'visible', timeout: 5000 });
-    const playerOptions = await page.getByLabel('Jogador').first().locator('option').evaluateAll((opts) => opts.map((o) => o.getAttribute('value')));
-    const firstPlayer = playerOptions.find((v) => v && v.length > 0);
-    if (!firstPlayer) {
-      test.skip(true, 'No enrolled players in championship - run db:seed-smoke or enroll a player');
+    const homeTeamSelect = page.getByLabel(/^Time mandante/);
+    await homeTeamSelect.waitFor({ state: 'visible' });
+    const homeTeamValues = await homeTeamSelect.locator('option').evaluateAll((opts) => opts.map((o) => o.getAttribute('value')));
+    const firstHomeTeam = homeTeamValues.find((v) => v && v.length > 0);
+    if (!firstHomeTeam) {
+      test.skip(true, 'No teams available to create a match');
       return;
     }
-    await page.getByLabel('Jogador').first().selectOption(firstPlayer);
+    await homeTeamSelect.selectOption(firstHomeTeam);
+
+    await page.getByLabel(/^Data/).fill('2025-06-01');
+    await page.getByLabel(/^Adversário/).fill('Adversário E2E');
+
+    const playerSearch = page.getByPlaceholder('Buscar por nome ou apelido...').first();
+    await playerSearch.waitFor({ state: 'visible', timeout: 5000 });
+    const playerName = `Jogador Match E2E ${Date.now()}`;
+    await playerSearch.fill(playerName);
+    await page.getByRole('button', { name: new RegExp(`Criar jogador "${playerName}"`) }).first().click();
+    await expect(page.getByText(new RegExp(`Selecionado:\\s*${playerName}`))).toBeVisible({ timeout: 10_000 });
     await page.getByLabel('Gols').first().fill('0');
 
     await page.getByRole('button', { name: 'Criar Partida' }).click();

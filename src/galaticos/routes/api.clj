@@ -7,6 +7,7 @@
             [galaticos.routes.teams :refer [team-routes]]
             [galaticos.routes.auth :refer [auth-routes]]
             [galaticos.handlers.aggregations :as agg-handlers]
+            [galaticos.handlers.exports :as export-handlers]
             [galaticos.middleware.auth :refer [wrap-auth]]))
 
 (def api-routes
@@ -26,5 +27,8 @@
         ((wrap-auth agg-handlers/player-performance-evolution) (assoc request :params {:player-id player-id})))
    (GET "/api/aggregations/players/search" request ((wrap-auth agg-handlers/search-players) request))
    (GET "/api/aggregations/championships/comparison" request ((wrap-auth agg-handlers/championship-comparison) request))
-   (GET "/api/aggregations/players/top" request ((wrap-auth agg-handlers/top-players) request))))
+   (GET "/api/aggregations/players/top" request ((wrap-auth agg-handlers/top-players) request))
+   (GET "/api/exports/dashboard.csv" request ((wrap-auth export-handlers/export-dashboard-csv) request))
+   (GET "/api/exports/championships/:id.csv" [id :as request]
+        ((wrap-auth export-handlers/export-championship-csv) (assoc request :params {:id id})))))
 

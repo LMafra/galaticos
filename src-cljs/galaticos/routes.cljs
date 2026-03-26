@@ -23,6 +23,8 @@
                 :title "Matches"}]
    ["/matches/new" {:name :match-new
                     :title "New Match"}]
+   ["/matches/by-championship/:championship-id/new" {:name :match-new-in-championship
+                                                     :title "New Match"}]
    ["/matches/:id/edit" {:name :match-edit
                          :title "Edit Match"}]
    ["/championships" {:name :championships

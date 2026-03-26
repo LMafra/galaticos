@@ -1,10 +1,22 @@
 #!/usr/bin/env python3
 """
 MongoDB Seed Script for Galáticos
-Reads data from Excel .xlsm file and seeds MongoDB database
+Reads data from Excel .xlsm and seeds MongoDB.
 
-This script processes an Excel file containing player statistics and championship
-data, creating teams, players, and championships in the MongoDB database.
+Default seed path (no legacy flags):
+- Players: Excel sheet "Base de dados" plus any names only in BASE_DADOS.csv.
+- Championships and per-championship table stats: BASE_DADOS.csv only (apply step).
+- Other Excel championship sheets and other data/*.csv files are not used by the default
+  seed (ignored unless legacy import flags are set).
+
+Optional legacy import: --import-excel-championships and --import-data-csv re-enable
+the old behavior (Excel abas de campeonato + CSV row-layout imports).
+
+Championship names from BASE_DADOS use canonical_championship_name(): a trailing
+' (qualifier)' is removed so e.g. 'ASTCU (campo)' is stored as 'ASTCU' (one document).
+
+Env DEFAULT_SEASON (default 2025) is used for championships from BASE_DADOS and,
+when legacy CSV import is on, as the single stored season for those CSVs.
 """
 
 import argparse
@@ -36,8 +48,17 @@ DB_NAME = os.getenv("DB_NAME", "galaticos")
 # Excel file path (relative to project root)
 EXCEL_FILE = "data/galaticos.xlsm"
 
+# Consolidated per-player, per-championship stats (not the same layout as row-based championship CSVs)
+BASE_DADOS_FILENAME = "BASE_DADOS.csv"
+
+# Default season for BASE_DADOS and for CSV rows without an explicit year in the label
+DEFAULT_SEASON = os.getenv("DEFAULT_SEASON", "2025")
+
 # Championship sheet names to skip (summary/aggregate sheets)
 SKIP_SHEETS = ["Base de dados", "PLACAS"]
+
+# CSV files under data/ that are not processed as row-layout championship exports
+SKIP_CSV_FILENAMES = frozenset({"galaticos.csv", "base_dados.csv"})
 
 # Position mapping (if needed)
 POSITION_OPTIONS = ["Goleiro", "Zagueiro", "Lateral", "Volante", "Meia", "Atacante"]
@@ -343,38 +364,87 @@ def find_player_by_name(player_map: Dict[str, ObjectId], name: str) -> Optional[
     return None
 
 
-def create_championship(db, name: str, season: str = "2025", titles_count: int = 0) -> ObjectId:
-    """Create or get championship"""
+def create_championship(
+    db,
+    name: str,
+    season: str = "2025",
+    titles_count: int = 0,
+    *,
+    status: str = "active",
+) -> ObjectId:
+    """Create or get championship. Excel seed uses status=active; data/*.csv and BASE use completed."""
     championships_collection = db.championships
-    
-    # Check if championship exists
+
     championship = championships_collection.find_one({
         "name": name,
         "season": season
     })
-    
+
     if championship:
         return championship["_id"]
-    
-    # Create championship
+
     now = datetime.now(timezone.utc)
     format_type = infer_championship_format(name)
-    
+
     championship_doc = {
         "name": name,
         "season": season,
         "format": format_type,
         "start-date": datetime(2025, 1, 1),
         "end-date": datetime(2025, 12, 31),
-        "status": "active",
+        "status": status,
         "titles-count": titles_count,
         "created-at": now,
         "updated-at": now
     }
-    
+    if status == "completed":
+        championship_doc["finished-at"] = now
+
     result = championships_collection.insert_one(championship_doc)
-    print(f"  ✓ Created championship: {name} ({format_type})")
+    print(f"  ✓ Created championship: {name} ({format_type}) [{status}]")
     return result.inserted_id
+
+
+def mark_championship_completed_from_data_import(db, championship_id: ObjectId) -> None:
+    """Mark championship as completed (historical data from data/*.csv or BASE_DADOS)."""
+    now = datetime.now(timezone.utc)
+    db.championships.update_one(
+        {"_id": championship_id},
+        {
+            "$set": {
+                "status": "completed",
+                "finished-at": now,
+                "updated-at": now,
+            }
+        },
+    )
+
+
+def canonical_championship_name(raw: str) -> str:
+    """
+    Single stored/display name for one tournament: strip one trailing qualifier
+    in parentheses so 'ASTCU (campo)' and 'ASTCU' map to the same championship.
+    """
+    s = str(raw).strip()
+    if not s:
+        return s
+    s = re.sub(r"\s*\([^)]*\)\s*$", "", s).strip()
+    return s or str(raw).strip()
+
+
+def normalize_championship_key(label: str) -> str:
+    """
+    Normalize championship labels for matching BASE Time column to CSV stems.
+    Trailing '(...)' is removed first so 'ASTCU (campo)' matches stem 'astcu'.
+    """
+    if not label or str(label).strip().lower() in ("", "nan", "time"):
+        return ""
+    s = canonical_championship_name(str(label)).lower()
+    s = s.replace("_", " ")
+    s = re.sub(r"\s+", " ", s).strip()
+    s = re.sub(r"[^a-z0-9áàâãéêíóôõúçüñ ]+", "", s, flags=re.IGNORECASE)
+    s = s.replace(" ", "")
+    return s
 
 
 def process_championship_sheet(
@@ -534,7 +604,7 @@ def parse_championship_label(label: str, fallback_name: str) -> Tuple[str, str]:
 
     text = str(label).strip()
     # Find a 4-digit year starting with 20
-    m = re.search(r"(20\\d{2})", text)
+    m = re.search(r"(20\d{2})", text)
     if m:
         season = m.group(1)
         name = text.replace(season, "").strip(" -")
@@ -555,7 +625,7 @@ def normalize_text_basic(value: str) -> str:
     if not value:
         return ""
     text = str(value).strip()
-    text = re.sub(r"\\s+", " ", text)
+    text = re.sub(r"\s+", " ", text)
     return text
 
 
@@ -617,7 +687,7 @@ def _update_player_stats_from_table(
 ) -> None:
     """
     Update a player's aggregated-stats with table (initial columns) values for one championship.
-    Used so that abas iniciais / tabela are the baseline; matches will validate later.
+    Used so that sheet or BASE table columns are the baseline before match-derived merge.
     """
     player = players_collection.find_one({"_id": player_id})
     if not player:
@@ -679,6 +749,172 @@ def read_csv_with_encoding(csv_path: Path) -> Optional[pd.DataFrame]:
     return None
 
 
+def _normalize_base_dados_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Map Portuguese/variant headers to internal names: atleta, jogos, gols, assistencias, titulos, campeonato."""
+    colmap = {}
+    for c in df.columns:
+        k = str(c).strip().lower()
+        k = re.sub(r"\s+", " ", k)
+        if k in ("atleta", "nome", "jogador"):
+            colmap[c] = "atleta"
+        elif "jogo" in k or "partida" in k:
+            colmap[c] = "jogos"
+        elif "gol" in k and "assist" not in k:
+            colmap[c] = "gols"
+        elif "assist" in k:
+            colmap[c] = "assistencias"
+        elif "tít" in k or k.startswith("titul") or k == "titulos":
+            colmap[c] = "titulos"
+        elif k in ("time", "campeonato", "competição", "competicao"):
+            colmap[c] = "campeonato"
+    out = df.rename(columns=colmap)
+    return out
+
+
+def read_base_dados_dataframe(csv_path: Path) -> Optional[pd.DataFrame]:
+    """Read BASE_DADOS.csv with ; or , and common encodings."""
+    if not csv_path.exists():
+        return None
+    for encoding in ("utf-8", "latin-1", "cp1252"):
+        for sep in (";", ","):
+            try:
+                df = pd.read_csv(
+                    csv_path, sep=sep, dtype=str, keep_default_na=False, encoding=encoding
+                )
+                if df.shape[1] < 3:
+                    continue
+                df = _normalize_base_dados_columns(df)
+                if "atleta" in df.columns and "campeonato" in df.columns:
+                    return df
+            except (UnicodeDecodeError, pd.errors.ParserError, ValueError, TypeError):
+                continue
+    return None
+
+
+def ensure_players_from_base_dados(
+    db,
+    team_id: ObjectId,
+    player_map: Dict[str, ObjectId],
+    base_path: Path,
+) -> None:
+    """Insert any players that appear in BASE_DADOS but not yet in player_map."""
+    df = read_base_dados_dataframe(base_path)
+    if df is None or df.empty:
+        return
+    players_collection = db.players
+    now = datetime.now(timezone.utc)
+    for _, row in df.iterrows():
+        player_name = normalize_player_name(row.get("atleta", ""))
+        if not player_name:
+            continue
+        if player_name.lower() == "atleta" and safe_int(row.get("jogos", 0), 0) == 0:
+            continue
+        if player_name in player_map:
+            continue
+        inferred_position = infer_position_from_name(player_name, None)
+        player_doc = {
+            "name": player_name,
+            "nickname": None,
+            "position": inferred_position or "Atacante",
+            "team-id": team_id,
+            "active": True,
+            "aggregated-stats": {
+                "total": {"games": 0, "goals": 0, "assists": 0, "titles": 0},
+                "by-championship": [],
+            },
+            "created-at": now,
+            "updated-at": now,
+        }
+        result = players_collection.insert_one(player_doc)
+        player_map[player_name] = result.inserted_id
+        print(f"  ✓ Created player from BASE_DADOS: {player_name}")
+
+
+def apply_base_dados_to_db(
+    db,
+    player_map: Dict[str, ObjectId],
+    team_id: ObjectId,
+    season: str,
+    base_path: Path,
+) -> int:
+    """
+    Overwrite per-championship table stats from BASE_DADOS (canonical).
+    Championships are created or marked completed for this season.
+    """
+    _ = team_id  # reserved for future team checks
+    df = read_base_dados_dataframe(base_path)
+    if df is None or df.empty:
+        print("\n⚠ BASE_DADOS.csv not found or empty; skipping apply step")
+        return 0
+
+    print("\n" + "=" * 60)
+    print("Step 3.7: Applying BASE_DADOS.csv (canonical table stats)")
+    print("=" * 60)
+
+    players_collection = db.players
+    championships_collection = db.championships
+    rows_applied = 0
+    enroll_sets: Dict[ObjectId, set] = {}
+
+    for _, row in df.iterrows():
+        player_name = normalize_player_name(row.get("atleta", ""))
+        ch_raw = str(row.get("campeonato", "")).strip()
+        if not player_name or not ch_raw or ch_raw.lower() == "time":
+            continue
+
+        champ_name_display = canonical_championship_name(ch_raw)
+        existing_ch = championships_collection.find_one(
+            {"name": champ_name_display, "season": season}
+        )
+        if existing_ch:
+            cid = existing_ch["_id"]
+            mark_championship_completed_from_data_import(db, cid)
+        else:
+            cid = create_championship(
+                db,
+                champ_name_display,
+                season,
+                titles_count=0,
+                status="completed",
+            )
+
+        player_id = find_player_by_name(player_map, player_name)
+        if not player_id:
+            print(f"  ⚠ BASE_DADOS: player not in map '{player_name}' — skipping row")
+            continue
+
+        games = safe_int(row.get("jogos", 0))
+        goals = safe_int(row.get("gols", 0))
+        assists = safe_int(row.get("assistencias", 0))
+        titles = safe_int(row.get("titulos", 0))
+
+        _update_player_stats_from_table(
+            players_collection,
+            player_id,
+            cid,
+            champ_name_display,
+            games,
+            goals,
+            assists,
+            titles,
+        )
+        enroll_sets.setdefault(cid, set()).add(player_id)
+        rows_applied += 1
+
+    now = datetime.now(timezone.utc)
+    for cid, pids in enroll_sets.items():
+        championships_collection.update_one(
+            {"_id": cid},
+            {
+                "$addToSet": {"enrolled-player-ids": {"$each": list(pids)}},
+                "$set": {"updated-at": now},
+            },
+        )
+
+    print(f"✓ BASE_DADOS applied: {rows_applied} row(s)")
+    return rows_applied
+
+
 def process_csv_championship_file(
     db,
     csv_path: Path,
@@ -686,7 +922,8 @@ def process_csv_championship_file(
     team_id: ObjectId,
 ) -> Tuple[int, int, int]:
     """
-    Process a single CSV file representing one or more championships.
+    Legacy import: one row-layout championship CSV (matches + athlete tables).
+    Not used in the default seed; use --import-data-csv to run process_all_csv_championships.
 
     Returns:
         (championships_touched, players_enrolled, matches_created_or_updated)
@@ -716,6 +953,8 @@ def process_csv_championship_file(
     championships_touched = 0
     players_enrolled_count = 0
     matches_created_or_updated = 0
+    # Sum table stats per (championship, player) across multiple year blocks in one file
+    table_stats_acc: Dict[Tuple[ObjectId, ObjectId], Dict[str, int]] = {}
 
     # Helper to get or create championship for a given label
     def get_or_create_championship_for_label(label: Optional[str]) -> Optional[ObjectId]:
@@ -727,15 +966,24 @@ def process_csv_championship_file(
         if effective_label in champ_id_by_label:
             return champ_id_by_label[effective_label]
 
-        name, season = parse_championship_label(effective_label, base_name)
+        # One document per championship name: always use DEFAULT_SEASON (ignore year in label).
+        name, _ = parse_championship_label(effective_label, base_name)
+        season = DEFAULT_SEASON
 
         # Try to find existing championship
         existing = championships_collection.find_one({"name": name, "season": season})
         if existing:
             champ_id = existing["_id"]
             champ_name_by_id[champ_id] = existing.get("name", name)
+            mark_championship_completed_from_data_import(db, champ_id)
         else:
-            champ_id = create_championship(db, name, season, titles_count=0)
+            champ_id = create_championship(
+                db,
+                name,
+                season,
+                titles_count=0,
+                status="completed",
+            )
             championships_touched += 1
             champ_name_by_id[champ_id] = name
 
@@ -870,7 +1118,7 @@ def process_csv_championship_file(
         for cell in row:
             if not cell:
                 continue
-            if re.search(r"20\\d{2}", cell):
+            if re.search(r"20\d{2}", cell):
                 current_champ_label = cell
                 break
 
@@ -878,7 +1126,7 @@ def process_csv_championship_file(
         joined_text = " ".join(row)
         if re.search(r"(?i)quartas? de final", joined_text):
             current_phase = "Quartas de Final"
-        elif re.search(r"(?i)semi\\s*final", joined_text):
+        elif re.search(r"(?i)semi\s*final", joined_text):
             current_phase = "Semi Final"
         elif re.search(r"(?i)oitavas? de final", joined_text):
             current_phase = "Oitavas de Final"
@@ -942,18 +1190,19 @@ def process_csv_championship_file(
                                 )
                             else:
                                 register_enrollment(champ_id, player_id)
-                                # Use table values as baseline stats for this championship
-                                champ_name = champ_name_by_id.get(champ_id, "")
-                                _update_player_stats_from_table(
-                                    players_collection,
-                                    player_id,
-                                    champ_id,
-                                    champ_name,
-                                    games,
-                                    goals,
-                                    assists,
-                                    titles,
-                                )
+                                key = (champ_id, player_id)
+                                if key not in table_stats_acc:
+                                    table_stats_acc[key] = {
+                                        "games": 0,
+                                        "goals": 0,
+                                        "assists": 0,
+                                        "titles": 0,
+                                    }
+                                acc = table_stats_acc[key]
+                                acc["games"] += games
+                                acc["goals"] += goals
+                                acc["assists"] += assists
+                                acc["titles"] += titles
 
         # Handle match rows (zone of matches)
         # Look for "GALÁTICOS" / "Galáticos" in any cell
@@ -1015,6 +1264,20 @@ def process_csv_championship_file(
                 player_stats=player_stats_list,
             )
 
+    # Flush accumulated athlete table stats (all blocks / seasons in this file)
+    for (champ_id, player_id), acc in table_stats_acc.items():
+        champ_name = champ_name_by_id.get(champ_id, "")
+        _update_player_stats_from_table(
+            players_collection,
+            player_id,
+            champ_id,
+            champ_name,
+            acc["games"],
+            acc["goals"],
+            acc["assists"],
+            acc["titles"],
+        )
+
     # After scanning rows, persist enrollments in championships
     for champ_id, player_ids in enrolled_players_by_champ.items():
         if not player_ids:
@@ -1038,7 +1301,8 @@ def process_all_csv_championships(
     team_id: ObjectId,
 ) -> None:
     """
-    Process all CSV files under data/ as championship + matches sources.
+    Legacy: process all CSV files under data/ as championship + matches sources.
+    Not called from main() unless --import-data-csv is set.
     """
     data_dir = Path("data")
     if not data_dir.exists():
@@ -1046,8 +1310,7 @@ def process_all_csv_championships(
         return
 
     csv_files = sorted(p for p in data_dir.glob("*.csv"))
-    # Skip consolidated galaticos.csv if present (it's handled via Excel)
-    csv_files = [p for p in csv_files if p.name.lower() != "galaticos.csv"]
+    csv_files = [p for p in csv_files if p.name.lower() not in SKIP_CSV_FILENAMES]
 
     if not csv_files:
         print("\n⚠ No CSV championship files found in data/; skipping CSV import")
@@ -1056,6 +1319,10 @@ def process_all_csv_championships(
     print("\n" + "=" * 60)
     print("Step 3.5: Importing championships and matches from CSV files")
     print("=" * 60)
+    print(
+        f"  Season for championships from CSV: {DEFAULT_SEASON} "
+        "(env DEFAULT_SEASON). Years inside sheets are not stored as separate tournaments."
+    )
 
     total_championships = 0
     total_enrollments = 0
@@ -1259,22 +1526,21 @@ def clear_database(db, keep_admins: bool = False) -> None:
 
 def main() -> None:
     """
-    Main seed function
-    
-    Processes Excel file and seeds MongoDB database with:
-    - Admin user (if --reset is used or doesn't exist)
-    - Team information
-    - Player data and statistics
-    - Championship data
-    
-    By default, the script is idempotent - it won't create duplicates.
-    Use --reset to clear existing data before seeding.
-    
+    Main seed function.
+
+    Default: players from Excel "Base de dados" + BASE_DADOS; championships/stats from
+    BASE_DADOS only; other Excel sheets and data CSVs are ignored unless legacy flags are set.
+
+    By default, the script is idempotent. Use --reset to clear existing data before seeding.
+
     Raises:
         SystemExit: If critical errors occur
     """
     parser = argparse.ArgumentParser(
-        description="Seed MongoDB database with data from Excel file",
+        description=(
+            "Seed MongoDB: players from Excel + BASE_DADOS; championships from BASE_DADOS. "
+            "Other sheets/CSVs are ignored unless legacy import flags are set."
+        ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -1286,6 +1552,9 @@ Examples:
   
   # Clear data but keep admin users
   python seed_mongodb.py --reset --keep-admins
+
+  # Re-enable old imports from Excel championship tabs and/or data/*.csv
+  python seed_mongodb.py --import-excel-championships --import-data-csv
         """
     )
     parser.add_argument(
@@ -1298,9 +1567,19 @@ Examples:
         action="store_true",
         help="When using --reset, keep existing admin users (only works with --reset)"
     )
-    
+    parser.add_argument(
+        "--import-excel-championships",
+        action="store_true",
+        help="Legacy: import championship data from all Excel sheets except Base de dados / PLACAS",
+    )
+    parser.add_argument(
+        "--import-data-csv",
+        action="store_true",
+        help="Legacy: import championships/matches from data/*.csv (excl. galaticos, BASE_DADOS)",
+    )
+
     args = parser.parse_args()
-    
+
     if args.keep_admins and not args.reset:
         print("✗ Error: --keep-admins can only be used with --reset", file=sys.stderr)
         sys.exit(1)
@@ -1370,40 +1649,71 @@ Examples:
     
     players_df = pd.read_excel(excel_path, sheet_name="Base de dados", engine="openpyxl")
     player_map = create_players(db, players_df, team_id)
-    
-    # Step 3: Process championship sheets
+
+    base_csv_path = Path("data") / BASE_DADOS_FILENAME
     print("\n" + "=" * 60)
-    print("Step 3: Processing championship sheets")
+    print("Step 2.5: Ensure players from BASE_DADOS.csv (if present)")
     print("=" * 60)
-    
+    ensure_players_from_base_dados(db, team_id, player_map, base_csv_path)
+
+    # Step 3: Excel championship sheets (skipped by default)
+    print("\n" + "=" * 60)
+    print("Step 3: Excel championship sheets")
+    print("=" * 60)
+
     championship_sheets = [s for s in sheet_names if s not in SKIP_SHEETS]
     championships_created = 0
     total_players_processed = 0
-    
-    for sheet_name in championship_sheets:
-        print(f"\n📊 Processing sheet: {sheet_name}")
-        try:
-            sheet_df = pd.read_excel(excel_path, sheet_name=sheet_name, engine="openpyxl")
-            # Skip empty sheets
-            if sheet_df.empty:
-                print(f"  ⚠ Skipping empty sheet: {sheet_name}")
-                continue
-            
-            champ_id, players_count = process_championship_sheet(
-                db, sheet_name, sheet_df, player_map
-            )
-            championships_created += 1
-            total_players_processed += players_count
-            print(f"  ✓ Processed {players_count} players")
-        except Exception as e:
-            print(f"  ✗ Error processing sheet '{sheet_name}': {e}")
 
-    # Step 3.5: Process CSV files for championships, enrollments and matches
-    process_all_csv_championships(db, player_map, team_id)
+    if args.import_excel_championships:
+        for sheet_name in championship_sheets:
+            print(f"\n📊 Processing sheet: {sheet_name}")
+            try:
+                sheet_df = pd.read_excel(
+                    excel_path, sheet_name=sheet_name, engine="openpyxl"
+                )
+                if sheet_df.empty:
+                    print(f"  ⚠ Skipping empty sheet: {sheet_name}")
+                    continue
 
-    # Step 3.6: Rebuild aggregated stats from matches
+                champ_id, players_count = process_championship_sheet(
+                    db, sheet_name, sheet_df, player_map
+                )
+                championships_created += 1
+                total_players_processed += players_count
+                print(f"  ✓ Processed {players_count} players")
+            except Exception as e:
+                print(f"  ✗ Error processing sheet '{sheet_name}': {e}")
+    else:
+        print(
+            "  Skipped (not writing to Mongo). Use --import-excel-championships for legacy import."
+        )
+        if championship_sheets:
+            print(f"  Sheets present but ignored: {', '.join(championship_sheets)}")
+
+    # Step 3.5: CSV row-layout imports (skipped by default)
+    print("\n" + "=" * 60)
+    print("Step 3.5: Championship CSV import from data/")
+    print("=" * 60)
+    if args.import_data_csv:
+        process_all_csv_championships(db, player_map, team_id)
+    else:
+        print(
+            "  Skipped (not writing to Mongo). Only BASE_DADOS.csv is used for championship stats."
+        )
+        print("  Use --import-data-csv for legacy import.")
+
+    # Step 3.6: Rebuild aggregated stats from matches (no-op if there are no matches)
     rebuild_aggregated_stats_from_matches(db)
-    
+    match_count = db.matches.count_documents({})
+    if match_count == 0:
+        print(
+            "  Note: no documents in matches; rebuild only affects players that already had match-derived stats."
+        )
+
+    # Step 3.7: BASE_DADOS canonical table stats (overwrites merged table fields)
+    apply_base_dados_to_db(db, player_map, team_id, DEFAULT_SEASON, base_csv_path)
+
     # Step 4: Update team with active player IDs
     print("\n" + "=" * 60)
     print("Step 4: Updating team with active players")

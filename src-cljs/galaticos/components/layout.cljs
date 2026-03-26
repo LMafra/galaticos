@@ -13,6 +13,13 @@
     (string? user) user
     :else "Usuário"))
 
+(defn- nav-route
+  "Collapse match create/edit routes so Partidas stays active in the sidebar."
+  [r]
+  (case r
+    (:match-new :match-new-in-championship :match-edit) :matches
+    r))
+
 (defn- nav-items []
   [{:route :dashboard :label "Dashboard" :icon LayoutDashboard}
    {:route :stats :label "Estatísticas" :icon BarChart2}
@@ -22,7 +29,7 @@
    {:route :teams :label "Times" :icon Shield}])
 
 (defn- nav-link [current-route {:keys [route label icon]}]
-  (let [active? (= current-route route)]
+  (let [active? (= (nav-route current-route) route)]
     [:a {:href (routes/href route)
          :class (common/merge-classes
                  "group flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition"
@@ -74,7 +81,7 @@
                 :aria-label "Abrir menu"}
        [:> Menu {:size 20}]]
       [:h1 {:class "text-base font-semibold text-slate-900"}
-       (case current-route
+       (case (nav-route current-route)
          :dashboard "Dashboard"
          :stats "Estatísticas"
          :players "Jogadores"

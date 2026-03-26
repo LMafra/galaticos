@@ -103,12 +103,17 @@
         (case route-name
           :dashboard (ensure-dashboard!)
           :stats (ensure-championships!)
-          :players (ensure-players!)
+          :players nil
           :championships (ensure-championships!)
-          :matches (ensure-matches!)
+          :matches (do
+                     (ensure-championships!)
+                     (ensure-matches!))
           :match-new (do
                        (ensure-championships!)
                        (ensure-teams!))
+          :match-new-in-championship (do
+                                        (ensure-championships!)
+                                        (ensure-teams!))
           :match-edit (do
                         (ensure-championships!)
                         (ensure-teams!))

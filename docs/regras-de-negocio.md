@@ -202,6 +202,7 @@ Este documento lista todas as regras de negócio implementadas no sistema Galát
 7. [Validação de Dados](#validação-de-dados)
 8. [Integridade Referencial](#integridade-referencial)
 9. [Formatação de Respostas](#formatação-de-respostas)
+10. [Alinhamento com Analytics](#alinhamento-com-analytics)
 
 ---
 
@@ -883,6 +884,31 @@ O sistema está preparado para extensões:
 3. **Pipeline de Agregação**: MongoDB pipelines permitem análises complexas
 4. **Soft Delete**: Dados históricos são preservados
 5. **Estatísticas Flexíveis**: Sistema de agregação é extensível
+
+---
+
+## Alinhamento com Analytics
+
+Para evolução de sports data analytics, este documento mantém regras operacionais e funcionais do domínio, enquanto definições semânticas de métricas e contratos devem ser centralizadas na trilha `docs/analytics`.
+
+### Fonte de verdade para métricas
+
+- Definições, fórmulas e granularidade das métricas: `docs/analytics/metrics-catalog.md`.
+- Este arquivo deve referenciar métricas, evitando redefinir fórmulas em duplicidade.
+
+### Fonte de verdade para contratos de dados
+
+- Estruturas versionadas de dados analíticos: `docs/analytics/data-contracts.md`.
+- Mudanças em shape de payload/documento exigem atualização conjunta de regras e contratos.
+
+### Governança de consistência documental
+
+Quando uma regra impactar cálculo analítico:
+
+1. Atualizar a regra neste documento.
+2. Atualizar catálogo/contrato na trilha `docs/analytics`.
+3. Incluir cobertura de regressão em `docs/testing-coverage.md`.
+4. Registrar validação operacional em `docs/analytics/reconciliation-runbook.md`.
 
 ---
 

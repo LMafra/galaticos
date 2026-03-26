@@ -31,6 +31,7 @@
         position (r/atom "")
         page (r/atom 1)
         page-size 25
+        position-catalog (r/atom [])
         search-backend!
         (fn []
           (state/set-resource-loading! :players true)
@@ -44,94 +45,106 @@
                (state/set-players! result))
              (fn [err _resp]
                (state/set-resource-error! :players err)))))]
-    (fn []
-      (let [{:keys [players players-loading? players-error]} @state/app-state
-            positions (position-options players)]
-        [:div {:class "space-y-6"}
-         [:div {:class "flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"}
-          [:div
-           [:p {:class "text-sm text-slate-500"} "Gestão do elenco"]
-           [:h2 {:class "text-2xl font-semibold text-slate-900"} "Jogadores"]]
-          [:div {:class "flex flex-wrap gap-2"}
-           [common/button "Novo Jogador" #(rfe/push-state :player-new) :variant :primary]
-           [common/button "Atualizar" #(effects/ensure-players! {:force? true}) :variant :outline]]]
+    (r/create-class
+     {:display-name "galaticos.player-list"
+      :component-did-mount
+      (fn [_]
+        (api/get-players {}
+                         (fn [result]
+                           (reset! position-catalog (api/coerce-player-list result)))
+                         (fn [_err _resp]
+                           (reset! position-catalog [])))
+        (search-backend!))
+      :reagent-render
+      (fn [_]
+        (let [{:keys [players players-loading? players-error]} @state/app-state
+              positions (position-options (if (seq @position-catalog) @position-catalog players))]
+          [:div {:class "space-y-6"}
+           [:div {:class "flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"}
+            [:div
+             [:p {:class "text-sm text-slate-500"} "Gestão do elenco"]
+             [:h2 {:class "text-2xl font-semibold text-slate-900"} "Jogadores"]]
+            [:div {:class "flex flex-wrap gap-2"}
+             [common/button "Novo Jogador" #(rfe/push-state :player-new) :variant :primary]
+             [common/button "Atualizar" #(search-backend!) :variant :outline]]]
 
-         [common/card
-          [:div {:class "flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"}
-           [:div {:class "flex flex-col gap-3 sm:flex-row sm:items-center"}
-            [:input {:type "text"
-                     :value @search
-                     :placeholder "Buscar jogador..."
-                     :on-change (fn [e]
-                                  (reset! page 1)
-                                  (reset! search (-> e .-target .-value))
-                                  (search-backend!))
-                     :class "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-brand-maroon focus:outline-none focus:ring-2 focus:ring-brand-maroon/20 sm:w-64"}]
-            [common/select-field "Posição" @position positions (fn [v]
-                                                                 (reset! page 1)
-                                                                 (reset! position v)
-                                                                 (search-backend!))
-             :container-class "min-w-[200px]"]]
-           [:div {:class "flex items-center gap-2"}
-            [:button {:class (common/merge-classes "rounded-lg border px-3 py-2 text-sm"
-                                                  (if (= @view-mode :table)
-                                                    "bg-brand-maroon text-white border-brand-maroon"
-                                                    "border-slate-200 text-slate-600 hover:bg-slate-100"))
-                      :on-click #(reset! view-mode :table)}
-             [:> ListFilter {:size 16}]]
-            [:button {:class (common/merge-classes "rounded-lg border px-3 py-2 text-sm"
-                                                  (if (= @view-mode :cards)
-                                                    "bg-brand-maroon text-white border-brand-maroon"
-                                                    "border-slate-200 text-slate-600 hover:bg-slate-100"))
-                      :on-click #(reset! view-mode :cards)}
-             [:> Grid2X2 {:size 16}]]]] 
+           [common/card
+            [:div {:class "flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"}
+             [:div {:class "flex flex-col gap-3 sm:flex-row sm:items-center"}
+              [:input {:type "text"
+                       :value @search
+                       :placeholder "Buscar jogador..."
+                       :on-change (fn [e]
+                                    (reset! page 1)
+                                    (reset! search (-> e .-target .-value))
+                                    (search-backend!))
+                       :class "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-brand-maroon focus:outline-none focus:ring-2 focus:ring-brand-maroon/20 sm:w-64"}]
+              [common/select-field "Posição" @position positions (fn [v]
+                                                                   (reset! page 1)
+                                                                   (reset! position v)
+                                                                   (search-backend!))
+               :container-class "min-w-[200px]"]]
+             [:div {:class "flex items-center gap-2"}
+              [:button {:class (common/merge-classes "rounded-lg border px-3 py-2 text-sm"
+                                                    (if (= @view-mode :table)
+                                                      "bg-brand-maroon text-white border-brand-maroon"
+                                                      "border-slate-200 text-slate-600 hover:bg-slate-100"))
+                        :on-click #(reset! view-mode :table)}
+               [:> ListFilter {:size 16}]]
+              [:button {:class (common/merge-classes "rounded-lg border px-3 py-2 text-sm"
+                                                    (if (= @view-mode :cards)
+                                                      "bg-brand-maroon text-white border-brand-maroon"
+                                                      "border-slate-200 text-slate-600 hover:bg-slate-100"))
+                        :on-click #(reset! view-mode :cards)}
+               [:> Grid2X2 {:size 16}]]]]
 
-          (cond
-           players-error [common/error-message players-error]
-           players-loading? [common/loading-spinner]
-           (seq players)
-            (if (= @view-mode :cards)
-              [:div {:class "mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"}
-              (for [player players]
-                 (let [id (normalize-id (or (:_id player) (:id player)))]
-                   ^{:key id}
-                   [:div {:class "app-card p-4 transition hover:shadow-md"
-                          :on-click #(when id (rfe/push-state :player-detail {:id id}))}
-                    [:div {:class "flex items-start gap-3"}
-                     [:div {:class "h-12 w-12 overflow-hidden rounded-xl bg-slate-100"}
-                      (when-let [photo (:photo-url player)]
-                        [:img {:src photo :alt (:name player) :class "h-full w-full object-cover"}])]
-                     [:div {:class "flex-1"}
-                      [:p {:class "text-base font-semibold text-slate-900"} (:name player)]
-                      [:p {:class "text-xs text-slate-500"} (or (:nickname player) "-")]
-                      [common/badge (:position player) :variant :info :class "mt-2"]]]
-                    [:div {:class "mt-4 grid grid-cols-3 gap-2 text-center text-xs text-slate-600"}
-                     [:div
-                      [:p {:class "text-sm font-semibold text-slate-900"} (get-in player [:aggregated-stats :total :games] 0)]
-                      [:p "Partidas"]]
-                     [:div
-                      [:p {:class "text-sm font-semibold text-slate-900"} (get-in player [:aggregated-stats :total :goals] 0)]
-                      [:p "Gols"]]
-                     [:div
-                      [:p {:class "text-sm font-semibold text-slate-900"} (get-in player [:aggregated-stats :total :assists] 0)]
-                      [:p "Assistências"]]]]))]
-              [common/table
-               ["Nome" "Apelido" "Posição" "Partidas" "Gols" "Assistências"]
-               (map (fn [player]
-                      [(:name player)
-                       (:nickname player)
-                       [common/badge (:position player) :variant :info]
-                       (get-in player [:aggregated-stats :total :games] 0)
-                       (get-in player [:aggregated-stats :total :goals] 0)
-                       (get-in player [:aggregated-stats :total :assists] 0)])
-                    players)
-               :on-row-click (fn [player]
-                               (if-let [id (normalize-id (or (:_id player) (:id player)))]
-                                 (rfe/push-state :player-detail {:id id})
-                                 (state/set-error! "ID do jogador ausente; não foi possível abrir detalhes.")))
-               :row-data players
-               :sortable? true])
-            :else [:p {:class "app-muted"} "Nenhum jogador encontrado"])]]))))
+            (cond
+             players-error [common/error-message players-error]
+             players-loading? [common/loading-spinner]
+             (seq players)
+             (if (= @view-mode :cards)
+               [:div {:class "mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"}
+                (for [player players]
+                  (let [id (normalize-id (or (:_id player) (:id player)))]
+                    ^{:key id}
+                    [:div {:class "app-card p-4 transition hover:shadow-md"
+                           :on-click #(when id (rfe/push-state :player-detail {:id id}))}
+                     [:div {:class "flex items-start gap-3"}
+                      [:div {:class "h-12 w-12 overflow-hidden rounded-xl bg-slate-100"}
+                       (when-let [photo (:photo-url player)]
+                         [:img {:src photo :alt (:name player) :class "h-full w-full object-cover"}])]
+                      [:div {:class "flex-1"}
+                       [:p {:class "text-base font-semibold text-slate-900"} (:name player)]
+                       [:p {:class "text-xs text-slate-500"} (or (:nickname player) "-")]
+                       [common/badge (:position player) :variant :info :class "mt-2"]]]
+                     [:div {:class "mt-4 grid grid-cols-3 gap-2 text-center text-xs text-slate-600"}
+                      [:div
+                       [:p {:class "text-sm font-semibold text-slate-900"} (get-in player [:aggregated-stats :total :games] 0)]
+                       [:p "Partidas"]]
+                      [:div
+                       [:p {:class "text-sm font-semibold text-slate-900"} (get-in player [:aggregated-stats :total :goals] 0)]
+                       [:p "Gols"]]
+                      [:div
+                       [:p {:class "text-sm font-semibold text-slate-900"} (get-in player [:aggregated-stats :total :assists] 0)]
+                       [:p "Assistências"]]]]))]
+               [common/table
+                ["Nome" "Apelido" "Posição" "Partidas" "Gols" "Assistências"]
+                (map (fn [player]
+                       [(:name player)
+                        (:nickname player)
+                        [common/badge (:position player) :variant :info]
+                        (get-in player [:aggregated-stats :total :games] 0)
+                        (get-in player [:aggregated-stats :total :goals] 0)
+                        (get-in player [:aggregated-stats :total :assists] 0)])
+                     players)
+                :on-row-click (fn [player]
+                                (if-let [id (normalize-id (or (:_id player) (:id player)))]
+                                  (rfe/push-state :player-detail {:id id})
+                                  (state/set-error! "ID do jogador ausente; não foi possível abrir detalhes.")))
+                :row-data players
+                :sortable? true
+                :show-search? false])
+             :else [:p {:class "app-muted"} "Nenhum jogador encontrado"])]]))})))
 
 (defn- format-evolution-period [id]
   (when (map? id)

@@ -5,15 +5,10 @@
             [galaticos.api :as api]
             [galaticos.state :as state]
             [galaticos.components.common :as common]
+            [galaticos.components.player-picker :as player-picker]
             [galaticos.effects :as effects]
             [clojure.string :as str]
             ["lucide-react" :refer [Shield UserPlus]]))
-
-(defn- normalize-id [v]
-  (cond
-    (string? v) v
-    (map? v) (or (get v "$oid") (get v :$oid))
-    :else nil))
 
 (defn team-list []
   (let [{:keys [teams teams-loading? teams-error]} @state/app-state
@@ -42,7 +37,7 @@
                              [common/badge (count (or (:active-player-ids team) [])) :variant :info]])
                           teams)
                      :on-row-click (fn [team]
-                                     (if-let [id (normalize-id (or (:_id team) (:id team)))]
+                                     (if-let [id (player-picker/normalize-id (or (:_id team) (:id team)))]
                                        (rfe/push-state :team-detail {:id id})
                                        (state/set-error! "ID do time ausente; não foi possível abrir detalhes.")))
                      :row-data teams
@@ -173,15 +168,16 @@
                                   (if (seq player-ids)
                                     (api/get-players {}
                                                      (fn [all]
-                                                       (reset! all-players all)
-                                                       (reset! players (filter (fn [p]
-                                                                                 (some #(= (normalize-id (or (:_id p) (:id p))) (str %)) player-ids))
-                                                                               all)))
+                                                       (let [catalog (api/coerce-player-list all)]
+                                                         (reset! all-players catalog)
+                                                         (reset! players (filter (fn [p]
+                                                                                   (some #(= (player-picker/normalize-id (or (:_id p) (:id p))) (str %)) player-ids))
+                                                                                 catalog))))
                                                      (fn [err _resp]
                                                        (reset! error (str "Erro ao carregar jogadores: " err))))
                                     (api/get-players {}
                                                      (fn [all]
-                                                       (reset! all-players all))
+                                                       (reset! all-players (api/coerce-player-list all)))
                                                      (fn [err _resp]
                                                        (reset! error (str "Erro ao carregar jogadores: " err)))))))
                               (fn [err resp]
@@ -259,7 +255,7 @@
                               [(:name player)
                                (:position player)
                                [:button {:class "rounded-lg border border-rose-200 px-2 py-1 text-xs text-rose-600 hover:bg-rose-50"
-                                         :on-click #(remove-player! (normalize-id (or (:_id player) (:id player))))}
+                                         :on-click #(remove-player! (player-picker/normalize-id (or (:_id player) (:id player))))}
                                 "Remover"]])
                             @players)
                        :sortable? true
@@ -271,22 +267,33 @@
                     [:h3 {:class "app-section-title"} "Adicionar jogadores"]
                     [:> UserPlus {:size 18 :class "text-slate-400"}]]
                    (if (seq @all-players)
-                     (let [team-player-ids (set (map #(normalize-id (or (:_id %) (:id %))) @players))
-                           available-players (filter (fn [p]
-                                                       (not (contains? team-player-ids (normalize-id (or (:_id p) (:id p))))))
-                                                     @all-players)]
-                       (if (seq available-players)
-                         [common/table
-                          ["Nome" "Posição" "Ações"]
-                          (map (fn [player]
-                                 [(:name player)
-                                  (:position player)
-                                  [:button {:class "rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-700 hover:bg-slate-100"
-                                            :on-click #(add-player! (normalize-id (or (:_id player) (:id player))))}
-                                   "Adicionar"]])
-                               available-players)
-                          :sortable? true
-                          :dense? true]
-                         [:p {:class "app-muted"} "Todos os jogadores já estão no time"]))
+                     (let [team-exclude-ids (into #{} (map #(player-picker/player-id %) @players))]
+                       [player-picker/player-search-add-panel
+                        {:label nil
+                         :players @all-players
+                         :exclude-ids team-exclude-ids
+                         :action-label "Adicionar"
+                         :on-pick-player
+                         (fn [player]
+                           (when-let [pid (player-picker/player-id player)]
+                             (add-player! pid)))
+                         :on-quick-create
+                         (fn [name ok err]
+                           (api/create-player
+                            {:name name :position player-picker/quick-create-position}
+                            (fn [created]
+                              (if-let [pid (player-picker/player-id created)]
+                                (do
+                                  (swap! all-players conj created)
+                                  (api/add-player-to-team
+                                   id pid
+                                   (fn [_result]
+                                     (load!)
+                                     (ok created))
+                                   (fn [e]
+                                     (err (str "Erro ao adicionar novo jogador ao time: " e)))))
+                                (err "Jogador criado sem ID retornado.")))
+                            (fn [e]
+                              (err (str "Erro ao criar jogador: " e)))))}])
                      [:p {:class "app-muted"} "Carregando jogadores..."])]] 
            :else [:p {:class "app-muted"} "Time não encontrado"])])})))
