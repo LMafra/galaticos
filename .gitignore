@@ -48,6 +48,7 @@ htmlcov/
 # IDE
 .vscode/
 .idea/
+.cursor/
 *.swp
 *.swo
 *.sublime-project
@@ -70,12 +71,18 @@ Desktop.ini
 .env
 .env.local
 .env.*.local
+.envrc
+.direnv/
 
 # Data files (large Excel files)
 *.xlsm
 *.xlsx
 data/raw/
 data/input/
+data/output/
+data/tmp/
+data/processed/*
+!data/processed/.gitkeep
 
 # MongoDB
 *.bson
@@ -100,8 +107,10 @@ node_modules/
 
 # Playwright
 playwright-report/
+blob-report/
 test-results/
 e2e/.auth/
+playwright/.cache/
 
 # Test Coverage
 target/coverage/
