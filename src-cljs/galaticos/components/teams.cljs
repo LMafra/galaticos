@@ -11,17 +11,15 @@
             ["lucide-react" :refer [Shield UserPlus]]))
 
 (defn team-list []
-  (let [{:keys [teams teams-loading? teams-error]} @state/app-state
-        load-teams! (fn []
-                     (effects/ensure-teams! {:force? true}))]
+  (let [{:keys [authenticated teams teams-loading? teams-error]} @state/app-state]
     [:div {:class "space-y-6"}
      [:div {:class "flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"}
       [:div
        [:p {:class "text-sm text-slate-500"} "Gestão de equipes"]
        [:h2 {:class "text-2xl font-semibold text-slate-900"} "Times"]]
-      [:div {:class "flex flex-wrap gap-2"}
-       [common/button "Novo Time" #(rfe/push-state :team-new) :variant :primary]
-       [common/button "Atualizar" load-teams! :variant :outline]]]
+      (when authenticated
+        [:div {:class "flex flex-wrap gap-2"}
+         [common/button "Novo Time" #(rfe/push-state :team-new) :variant :primary]])]
      [common/card
       (cond
         teams-error [common/error-message teams-error]
@@ -222,7 +220,8 @@
                      [common/error-message @error]
                      [common/button "Tentar novamente" load! :variant :outline]])
            @loading? [common/loading-spinner]
-           @team [:<>
+           @team (let [{:keys [authenticated]} @state/app-state]
+                   [:<>
                   [:div {:class "flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"}
                    [:div {:class "flex items-center gap-3"}
                     [:div {:class "rounded-xl bg-brand-maroon/10 p-3 text-brand-maroon"}
@@ -230,11 +229,12 @@
                     [:div
                      [:p {:class "text-sm text-slate-500"} "Time"]
                      [:h2 {:class "text-2xl font-semibold text-slate-900"} (:name @team)]]]
-                   [:div {:class "flex flex-wrap gap-2"}
-                    [common/button "Editar" #(rfe/push-state :team-edit {:id id}) :variant :outline]
-                    [common/button "Deletar" delete-team!
-                     :disabled @deleting?
-                     :variant :danger]]]
+                   (when authenticated
+                     [:div {:class "flex flex-wrap gap-2"}
+                      [common/button "Editar" #(rfe/push-state :team-edit {:id id}) :variant :outline]
+                      [common/button "Deletar" delete-team!
+                       :disabled @deleting?
+                       :variant :danger]])]
 
                   [:div {:class "grid gap-4 md:grid-cols-2"}
                    [common/card
@@ -254,46 +254,48 @@
                        (map (fn [player]
                               [(:name player)
                                (:position player)
-                               [:button {:class "rounded-lg border border-rose-200 px-2 py-1 text-xs text-rose-600 hover:bg-rose-50"
-                                         :on-click #(remove-player! (player-picker/normalize-id (or (:_id player) (:id player))))}
-                                "Remover"]])
+                               (when authenticated
+                                 [:button {:class "rounded-lg border border-rose-200 px-2 py-1 text-xs text-rose-600 hover:bg-rose-50"
+                                           :on-click #(remove-player! (player-picker/normalize-id (or (:_id player) (:id player))))}
+                                  "Remover"])])
                             @players)
                        :sortable? true
                        :dense? true]
                       [:p {:class "app-muted"} "Nenhum jogador no time"])]]
 
-                  [common/card
-                   [:div {:class "flex items-center justify-between"}
-                    [:h3 {:class "app-section-title"} "Adicionar jogadores"]
-                    [:> UserPlus {:size 18 :class "text-slate-400"}]]
-                   (if (seq @all-players)
-                     (let [team-exclude-ids (into #{} (map #(player-picker/player-id %) @players))]
-                       [player-picker/player-search-add-panel
-                        {:label nil
-                         :players @all-players
-                         :exclude-ids team-exclude-ids
-                         :action-label "Adicionar"
-                         :on-pick-player
-                         (fn [player]
-                           (when-let [pid (player-picker/player-id player)]
-                             (add-player! pid)))
-                         :on-quick-create
-                         (fn [name ok err]
-                           (api/create-player
-                            {:name name :position player-picker/quick-create-position}
-                            (fn [created]
-                              (if-let [pid (player-picker/player-id created)]
-                                (do
-                                  (swap! all-players conj created)
-                                  (api/add-player-to-team
-                                   id pid
-                                   (fn [_result]
-                                     (load!)
-                                     (ok created))
-                                   (fn [e]
-                                     (err (str "Erro ao adicionar novo jogador ao time: " e)))))
-                                (err "Jogador criado sem ID retornado.")))
-                            (fn [e]
-                              (err (str "Erro ao criar jogador: " e)))))}])
-                     [:p {:class "app-muted"} "Carregando jogadores..."])]] 
+                  (when authenticated
+                    [common/card
+                     [:div {:class "flex items-center justify-between"}
+                      [:h3 {:class "app-section-title"} "Adicionar jogadores"]
+                      [:> UserPlus {:size 18 :class "text-slate-400"}]]
+                     (if (seq @all-players)
+                       (let [team-exclude-ids (into #{} (map #(player-picker/player-id %) @players))]
+                         [player-picker/player-search-add-panel
+                          {:label nil
+                           :players @all-players
+                           :exclude-ids team-exclude-ids
+                           :action-label "Adicionar"
+                           :on-pick-player
+                           (fn [player]
+                             (when-let [pid (player-picker/player-id player)]
+                               (add-player! pid)))
+                           :on-quick-create
+                           (fn [name ok err]
+                             (api/create-player
+                              {:name name :position player-picker/quick-create-position}
+                              (fn [created]
+                                (if-let [pid (player-picker/player-id created)]
+                                  (do
+                                    (swap! all-players conj created)
+                                    (api/add-player-to-team
+                                     id pid
+                                     (fn [_result]
+                                       (load!)
+                                       (ok created))
+                                     (fn [e]
+                                       (err (str "Erro ao adicionar novo jogador ao time: " e)))))
+                                  (err "Jogador criado sem ID retornado.")))
+                              (fn [e]
+                                (err (str "Erro ao criar jogador: " e)))))}])
+                       [:p {:class "app-muted"} "Carregando jogadores..."])])])
            :else [:p {:class "app-muted"} "Time não encontrado"])])})))

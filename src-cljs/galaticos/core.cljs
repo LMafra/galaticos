@@ -29,6 +29,12 @@
    [:h2 "Não autenticado"]
    [:p "Sua sessão não está ativa. Faça login para continuar."]])
 
+(def ^:private protected-routes
+  #{:player-new :player-edit
+    :match-new :match-new-in-championship :match-edit
+    :championship-new :championship-edit
+    :teams :team-detail :team-new :team-edit})
+
 (defn current-page
   "Determine which page to render based on current route"
   [match]
@@ -46,15 +52,14 @@
       (nil? match) [not-found-page]
       
       ;; Protected routes - require authentication
-      (and auth-checked? (not authenticated))
+      (and auth-checked? (not authenticated) (contains? protected-routes route-name))
       (do
-        ;; Redirect to login if trying to access protected route
-        (when (not= route-name :login)
-          (rfe/push-state :login))
-        [login/login-page])
+        (rfe/push-state :dashboard)
+        [:div {:style {:text-align "center" :padding "40px"}} "Redirecionando..."])
       
       ;; Authenticated routes
       match (case route-name
+              :home [dashboard/dashboard]
               :dashboard [dashboard/dashboard]
               :stats [aggregations/aggregations-page]
               :players [players/player-list]
@@ -66,10 +71,14 @@
               :match-new-in-championship ^{:key (str "match-new-" (:championship-id path-params))}
               [matches/match-form path-params]
               :match-edit [matches/match-form path-params]
+              :match-detail [matches/match-detail path-params]
               :championships [championships/championship-list]
               :championship-new [championships/championship-form {}]
               :championship-edit [championships/championship-form path-params]
               :championship-detail ^{:key (:id path-params)} [championships/championship-detail path-params]
+              :championship-season-detail
+              ^{:key (str (:id path-params) "-" (:season-id path-params))}
+              [championships/championship-season-detail path-params]
               :teams [teams/team-list]
               :team-new [teams/team-form {}]
               :team-edit [teams/team-form path-params]
@@ -82,7 +91,6 @@
   "Main application component"
   []
   (let [route-name (when @current-match (get-in @current-match [:data :name]))]
-    ;; Don't show layout for login page
     (if (= route-name :login)
       (when @current-match
         [current-page @current-match])
@@ -109,14 +117,17 @@
      routes/router
      (fn [m _]
        (reset! current-match m)
-       (let [route-name (when m (get-in m [:data :name]))
+       (swap! state/app-state assoc :route-match m)
+        (let [route-name (when m (get-in m [:data :name]))
              {:keys [authenticated auth-checked?]} @state/app-state]
-         ;; Redirect to login if not authenticated and trying to access protected route
-         (when (and auth-checked? (not authenticated) (not= route-name :login))
-           (rfe/push-state :login))
+         ;; Redirect to login only for write routes.
+         (when (and auth-checked?
+                    (not authenticated)
+                    (contains? protected-routes route-name))
+           (rfe/push-state :dashboard))
          (effects/on-route! m)))
      {:use-fragment true
-      :default :login})  ; Default route is login
+      :default :dashboard})
     (mount-root)))
 
 (defn ^:dev/after-load reload []

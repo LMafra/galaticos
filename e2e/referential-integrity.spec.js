@@ -82,7 +82,11 @@ test.describe('Referential integrity - delete protection', { tag: '@integrity' }
         token,
         'POST',
         '/api/players',
-        { name: `Jogador Integridade E2E ${unique}`, position: 'Atacante' }
+        {
+          name: `Jogador Integridade E2E ${unique}`,
+          position: 'Atacante',
+          'team-id': teamId,
+        }
       );
       expect(createdPlayerResponse.ok()).toBeTruthy();
       const playerId = createdPlayerBody?.data?._id;

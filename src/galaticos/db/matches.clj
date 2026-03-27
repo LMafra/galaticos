@@ -61,6 +61,13 @@
            (mc/find-maps (db) collection-name
                          {:championship-id (->object-id championship-id)})))
 
+(defn find-by-season
+  "Find matches by season ID, ordered by date descending"
+  [season-id]
+  (sort-by :date #(compare %2 %1)
+           (mc/find-maps (db) collection-name
+                         {:season-id (->object-id season-id)})))
+
 (defn find-by-date-range
   "Find matches within date range"
   [start-date end-date]

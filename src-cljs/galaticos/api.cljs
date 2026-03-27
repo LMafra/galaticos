@@ -252,6 +252,35 @@
                 on-success
                 on-error))
 
+;; Seasons API
+(defn get-championship-seasons [championship-id on-success on-error]
+  (get-request (str "/api/championships/" championship-id "/seasons") {} on-success on-error))
+
+(defn create-season [championship-id data on-success on-error]
+  (post-request (str "/api/championships/" championship-id "/seasons") data on-success on-error))
+
+(defn get-season [season-id on-success on-error]
+  (get-request (str "/api/seasons/" season-id) {} on-success on-error))
+
+(defn get-season-players [season-id on-success on-error]
+  (get-request (str "/api/seasons/" season-id "/players") {} on-success on-error))
+
+(defn activate-season [season-id on-success on-error]
+  (post-request (str "/api/seasons/" season-id "/activate") {} on-success on-error))
+
+(defn enroll-player-in-season [season-id player-id on-success on-error]
+  (post-request (str "/api/seasons/" season-id "/enroll/" player-id) {} on-success on-error))
+
+(defn unenroll-player-from-season [season-id player-id on-success on-error]
+  (delete-request (str "/api/seasons/" season-id "/unenroll/" player-id) on-success on-error))
+
+(defn finalize-season [season-id winner-player-ids titles-award-count on-success on-error]
+  (post-request (str "/api/seasons/" season-id "/finalize")
+                {:winner-player-ids winner-player-ids
+                 :titles-award-count (if (number? titles-award-count) titles-award-count (js/parseInt (str titles-award-count) 10))}
+                on-success
+                on-error))
+
 ;; Matches API
 (defn get-matches [params on-success on-error]
   (get-request "/api/matches" params on-success on-error))
@@ -294,9 +323,6 @@
 (defn get-dashboard-stats [on-success on-error]
   (get-request "/api/aggregations/stats" {} on-success on-error))
 
-(defn reconcile-stats [on-success on-error]
-  (post-request "/api/aggregations/stats/reconcile" {} on-success on-error))
-
 (defn get-player-stats-by-championship [championship-id on-success on-error]
   (get-request (str "/api/aggregations/players/stats/" championship-id) {} on-success on-error))
 
@@ -308,6 +334,10 @@
 
 (defn get-championship-comparison [on-success on-error]
   (get-request "/api/aggregations/championships/comparison" {} on-success on-error))
+
+(defn get-championship-leaderboards [championship-id on-success on-error]
+  (get-request (str "/api/aggregations/championships/" championship-id "/leaderboards")
+               {} on-success on-error))
 
 (defn get-player-evolution [player-id on-success on-error]
   (get-request (str "/api/aggregations/players/" player-id "/evolution") {} on-success on-error))

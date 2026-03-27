@@ -91,5 +91,24 @@
       (is (= 200 (:status result)))
       (is (= 3 (get-in body [:data :updated]))))))
 
+(deftest championship-table-leaderboards-handler
+  (testing "success"
+    (let [cid (str (ObjectId.))
+          request {:params {:id cid}}
+          payload {:top-goals [{:name "A" :goals 3}]
+                   :top-assists []
+                   :top-games []
+                   :top-titles []}
+          result (with-redefs [agg/championship-table-leaderboards (fn [_] payload)]
+                  (handlers/championship-table-leaderboards request))
+          body (parse-body result)]
+      (is (= 200 (:status result)))
+      (is (= 3 (get-in body [:data :top-goals 0 :goals])))))
+  (testing "missing id"
+    (let [request {:params {:id ""}}
+          result (handlers/championship-table-leaderboards request)
+          body (parse-body result)]
+      (is (= 400 (:status result))))))
+
 ;; dashboard-stats omitted: requires real DB or complex stubs (mc/count/mc/find-maps
 ;; interact with Mongo Java driver and stub fns cause ClassCastException)

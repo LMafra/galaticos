@@ -80,7 +80,7 @@ def infer_position_from_name(name: str, explicit_position: Optional[str] = None)
     if not name:
         return None
 
-    if "gk" in str(name).upper():
+    if "GK" in str(name).upper():
         return "Goleiro"
 
     return None
@@ -684,10 +684,11 @@ def _update_player_stats_from_table(
     goals: int,
     assists: int,
     titles: int,
+    season: str,
 ) -> None:
     """
-    Update a player's aggregated-stats with table (initial columns) values for one championship.
-    Used so that sheet or BASE table columns are the baseline before match-derived merge.
+    Update a player's aggregated-stats with table (initial columns) values for one championship season.
+    Rows are keyed by (championship-id, season) so multiple seasons under the same root sum in leaderboards.
     """
     player = players_collection.find_one({"_id": player_id})
     if not player:
@@ -699,7 +700,7 @@ def _update_player_stats_from_table(
     by_champ = aggregated.get("by-championship", [])
     found = False
     for entry in by_champ:
-        if entry.get("championship-id") == championship_id:
+        if entry.get("championship-id") == championship_id and entry.get("season") == season:
             entry["championship-name"] = championship_name
             entry["games"] = games
             entry["goals"] = goals
@@ -711,6 +712,7 @@ def _update_player_stats_from_table(
         by_champ.append({
             "championship-id": championship_id,
             "championship-name": championship_name,
+            "season": season,
             "games": games,
             "goals": goals,
             "assists": assists,
@@ -853,8 +855,86 @@ def apply_base_dados_to_db(
 
     players_collection = db.players
     championships_collection = db.championships
+    seasons_collection = db.seasons
     rows_applied = 0
     enroll_sets: Dict[ObjectId, set] = {}
+    # Per season (season document _id): player_id -> table stats from BASE_DADOS (max if duplicate rows)
+    per_season_player_stats: Dict[ObjectId, Dict[ObjectId, Dict[str, int]]] = {}
+
+    def get_or_create_championship_root(root_name: str, format_type: str) -> ObjectId:
+        existing_root = championships_collection.find_one({"name": root_name})
+        if existing_root:
+            return existing_root["_id"]
+        now = datetime.now(timezone.utc)
+        root_doc = {
+            "name": root_name,
+            "format": format_type,
+            "season-ids": [],
+            "created-at": now,
+            "updated-at": now,
+        }
+        result = championships_collection.insert_one(root_doc)
+        return result.inserted_id
+
+    def get_or_create_season(championship_root_id: ObjectId, season_value: str, status_value: str, *,
+                              championship_name: str, format_type: str) -> ObjectId:
+        existing_season = seasons_collection.find_one(
+            {"championship-id": championship_root_id, "season": season_value}
+        )
+        now = datetime.now(timezone.utc)
+        if existing_season:
+            set_fields = {
+                "status": status_value,
+                "format": format_type,
+                "championship-name": championship_name,
+                "updated-at": now,
+            }
+            if status_value == "completed":
+                set_fields["finished-at"] = now
+            seasons_collection.update_one(
+                {"_id": existing_season["_id"]},
+                {"$set": set_fields},
+            )
+            # Ensure root linkage exists (idempotent)
+            championships_collection.update_one(
+                {"_id": championship_root_id},
+                {"$addToSet": {"season-ids": existing_season["_id"]}, "$set": {"updated-at": now}},
+            )
+            return existing_season["_id"]
+
+        # Default date placeholders: keep year boundaries when possible
+        try:
+            year = int(season_value)
+            start_dt = datetime(year, 1, 1)
+            end_dt = datetime(year, 12, 31, 23, 59, 59)
+        except Exception:
+            start_dt = datetime(2025, 1, 1)
+            end_dt = datetime(2025, 12, 31, 23, 59, 59)
+
+        season_doc = {
+            "championship-id": championship_root_id,
+            "championship-name": championship_name,
+            "season": season_value,
+            "format": format_type,
+            "status": status_value,
+            "enrolled-player-ids": [],
+            "match-ids": [],
+            "winner-player-ids": [],
+            "titles-award-count": 0,
+            "titles-count": 0,
+            "start-date": start_dt,
+            "end-date": end_dt,
+            "finished-at": now if status_value == "completed" else None,
+            "created-at": now,
+            "updated-at": now,
+        }
+        result = seasons_collection.insert_one(season_doc)
+        season_id = result.inserted_id
+        championships_collection.update_one(
+            {"_id": championship_root_id},
+            {"$addToSet": {"season-ids": season_id}, "$set": {"updated-at": now}},
+        )
+        return season_id
 
     for _, row in df.iterrows():
         player_name = normalize_player_name(row.get("atleta", ""))
@@ -863,20 +943,16 @@ def apply_base_dados_to_db(
             continue
 
         champ_name_display = canonical_championship_name(ch_raw)
-        existing_ch = championships_collection.find_one(
-            {"name": champ_name_display, "season": season}
+        format_type = infer_championship_format(ch_raw)
+        # BASE_DADOS is historical table data: season is treated as completed.
+        championship_root_id = get_or_create_championship_root(champ_name_display, format_type)
+        cid = get_or_create_season(
+            championship_root_id,
+            season,
+            status_value="completed",
+            championship_name=champ_name_display,
+            format_type=format_type,
         )
-        if existing_ch:
-            cid = existing_ch["_id"]
-            mark_championship_completed_from_data_import(db, cid)
-        else:
-            cid = create_championship(
-                db,
-                champ_name_display,
-                season,
-                titles_count=0,
-                status="completed",
-            )
 
         player_id = find_player_by_name(player_map, player_name)
         if not player_id:
@@ -891,20 +967,82 @@ def apply_base_dados_to_db(
         _update_player_stats_from_table(
             players_collection,
             player_id,
-            cid,
+            championship_root_id,
             champ_name_display,
             games,
             goals,
             assists,
             titles,
+            season,
         )
         enroll_sets.setdefault(cid, set()).add(player_id)
+        season_stats = per_season_player_stats.setdefault(cid, {})
+        prev = season_stats.get(player_id)
+        row_stats = {
+            "games": int(games),
+            "goals": int(goals),
+            "assists": int(assists),
+            "titles": int(titles),
+        }
+        if prev is None:
+            season_stats[player_id] = row_stats
+        else:
+            season_stats[player_id] = {
+                "games": max(prev["games"], row_stats["games"]),
+                "goals": max(prev["goals"], row_stats["goals"]),
+                "assists": max(prev["assists"], row_stats["assists"]),
+                "titles": max(prev["titles"], row_stats["titles"]),
+            }
         rows_applied += 1
+
+    def _season_table_leaders(
+        stats: Dict[ObjectId, Dict[str, int]],
+    ) -> Tuple[int, List[ObjectId], List[ObjectId], List[ObjectId], int]:
+        """Max titles (championship title depth), winners, top scorers/assisters, max games (proxy for matches)."""
+        if not stats:
+            return 0, [], [], [], 0
+        max_titles = max((s["titles"] for s in stats.values()), default=0)
+        winner_ids = [pid for pid, s in stats.items() if s["titles"] == max_titles and max_titles > 0]
+        max_goals = max((s["goals"] for s in stats.values()), default=0)
+        top_scorer_ids = [pid for pid, s in stats.items() if s["goals"] == max_goals and max_goals > 0]
+        max_assists = max((s["assists"] for s in stats.values()), default=0)
+        top_assister_ids = [pid for pid, s in stats.items() if s["assists"] == max_assists and max_assists > 0]
+        max_games = max((s["games"] for s in stats.values()), default=0)
+        return max_titles, winner_ids, top_scorer_ids, top_assister_ids, max_games
 
     now = datetime.now(timezone.utc)
     for cid, pids in enroll_sets.items():
-        championships_collection.update_one(
+        stats = per_season_player_stats.get(cid, {})
+        max_titles, winner_ids, top_scorer_ids, top_assister_ids, matches_count = _season_table_leaders(
+            stats
+        )
+        seasons_collection.update_one(
             {"_id": cid},
+            {
+                "$addToSet": {"enrolled-player-ids": {"$each": list(pids)}},
+                "$set": {
+                    "titles-count": int(max_titles),
+                    "titles-award-count": int(max_titles),
+                    "winner-player-ids": winner_ids,
+                    "top-scorer-ids": top_scorer_ids,
+                    "top-assister-ids": top_assister_ids,
+                    "matches-count": int(matches_count),
+                    "updated-at": now,
+                },
+            },
+        )
+
+    root_union: Dict[ObjectId, set] = {}
+    for season_id, pids in enroll_sets.items():
+        doc = seasons_collection.find_one({"_id": season_id}, {"championship-id": 1})
+        if doc and doc.get("championship-id"):
+            rid = doc["championship-id"]
+            root_union.setdefault(rid, set()).update(pids)
+    for rid, pids in root_union.items():
+        if not pids:
+            continue
+        championships_collection.update_one(
+            {"_id": rid},
             {
                 "$addToSet": {"enrolled-player-ids": {"$each": list(pids)}},
                 "$set": {"updated-at": now},
@@ -1276,6 +1414,7 @@ def process_csv_championship_file(
             acc["goals"],
             acc["assists"],
             acc["titles"],
+            DEFAULT_SEASON,
         )
 
     # After scanning rows, persist enrollments in championships
@@ -1507,6 +1646,7 @@ def clear_database(db, keep_admins: bool = False) -> None:
         "teams": "Teams",
         "players": "Players",
         "championships": "Championships",
+        "seasons": "Seasons",
         "matches": "Matches"
     }
     

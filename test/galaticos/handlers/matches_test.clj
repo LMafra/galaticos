@@ -5,6 +5,9 @@
             [galaticos.handlers.matches :as handlers]
             [galaticos.db.matches :as matches-db]
             [galaticos.db.championships :as championships-db]
+            [galaticos.db.players :as players-db]
+            [galaticos.db.seasons :as seasons-db]
+            [galaticos.db.teams :as teams-db]
             [galaticos.db.aggregations :as agg])
   (:import [org.bson.types ObjectId]))
 
@@ -53,10 +56,18 @@
           request {:json-body {:championship-id (str champ-id)
                                :player-statistics [{:player-id (str player-id) :team-id (str team-id)}]}}
           created {:_id (ObjectId.)}
-          result (with-redefs [championships-db/find-by-id (fn [x]
+          result (with-redefs [seasons-db/find-active-by-championship (fn [_] nil)
+                               championships-db/find-by-id (fn [x]
                                                              (when (or (= x (str champ-id))
                                                                        (= x champ-id))
                                                                {:enrolled-player-ids [player-id]}))
+                               players-db/find-by-ids
+                               (fn [_ids]
+                                 [{:_id player-id :name "P" :team-id team-id}])
+                               teams-db/find-by-id
+                               (fn [tid]
+                                 (when (= tid team-id)
+                                   {:_id team-id :name "T" :active-player-ids [player-id]}))
                                matches-db/create (fn [_ _] created)
                                agg/update-player-stats-for-match (fn [_] nil)]
                   (handlers/create-match request))

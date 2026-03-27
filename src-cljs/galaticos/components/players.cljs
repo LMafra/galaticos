@@ -49,6 +49,10 @@
      {:display-name "galaticos.player-list"
       :component-did-mount
       (fn [_]
+        (when-let [q (get-in @state/app-state [:route-match :query-params :q])]
+          (when-not (str/blank? (str q))
+            (reset! page 1)
+            (reset! search (str q))))
         (api/get-players {}
                          (fn [result]
                            (reset! position-catalog (api/coerce-player-list result)))
@@ -57,16 +61,16 @@
         (search-backend!))
       :reagent-render
       (fn [_]
-        (let [{:keys [players players-loading? players-error]} @state/app-state
+        (let [{:keys [authenticated players players-loading? players-error]} @state/app-state
               positions (position-options (if (seq @position-catalog) @position-catalog players))]
           [:div {:class "space-y-6"}
            [:div {:class "flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"}
             [:div
              [:p {:class "text-sm text-slate-500"} "Gestão do elenco"]
              [:h2 {:class "text-2xl font-semibold text-slate-900"} "Jogadores"]]
-            [:div {:class "flex flex-wrap gap-2"}
-             [common/button "Novo Jogador" #(rfe/push-state :player-new) :variant :primary]
-             [common/button "Atualizar" #(search-backend!) :variant :outline]]]
+            (when authenticated
+              [:div {:class "flex flex-wrap gap-2"}
+               [common/button "Novo Jogador" #(rfe/push-state :player-new) :variant :primary]])]
 
            [common/card
             [:div {:class "flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"}
@@ -212,7 +216,8 @@
                     [common/error-message @error]
                     [common/button "Tentar novamente" load-player! :variant :outline]])
           @loading? [common/loading-spinner]
-          @player (let [player-stats (get-in @player [:aggregated-stats :total] {})
+          @player (let [{:keys [authenticated]} @state/app-state
+                        player-stats (get-in @player [:aggregated-stats :total] {})
                         by-champ (get-in @player [:aggregated-stats :by-championship])]
                     [:div {:class "space-y-6"}
                      [:div {:class "flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"}
@@ -224,9 +229,10 @@
                         [:p {:class "text-sm text-slate-500"} "Jogador"]
                         [:h2 {:class "text-2xl font-semibold text-slate-900"} (:name @player)]
                         [common/badge (:position @player) :variant :info :class "mt-2"]]]
-                      [:div {:class "flex flex-wrap gap-2"}
-                       [common/button "Editar" #(rfe/push-state :player-edit {:id id}) :variant :outline]
-                       [common/button "Deletar" delete-player! :variant :danger :disabled @deleting?]]]
+                      (when authenticated
+                        [:div {:class "flex flex-wrap gap-2"}
+                         [common/button "Editar" #(rfe/push-state :player-edit {:id id}) :variant :outline]
+                         [common/button "Deletar" delete-player! :variant :danger :disabled @deleting?]])]
 
                      [:div {:class "grid gap-4 md:grid-cols-2 xl:grid-cols-4"}
                       [common/stat-card "Partidas" (get player-stats :games 0) :icon [:> ChartColumn {:size 18}]]

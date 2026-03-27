@@ -101,6 +101,7 @@
       (when (not= route-name :login)
         (ensure-auth!)
         (case route-name
+          :home (ensure-dashboard!)
           :dashboard (ensure-dashboard!)
           :stats (ensure-championships!)
           :players nil

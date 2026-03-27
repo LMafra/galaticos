@@ -73,6 +73,12 @@
 5. **Implementar middleware de autenticação**: Criar em `src/galaticos/middleware/auth.clj`
 6. **Implementar handlers**: Criar handlers para processar requisições HTTP
 
+## Seeds: BASE_DADOS vs smoke (E2E)
+
+- **`scripts/python/seed_mongodb.py`** — joga fora dados legados opcionais com `--reset`; campeonatos/temporadas vindos de `data/BASE_DADOS.csv` e planilha Base. Para um banco **só** com esse fluxo, use reset + este script e **não** rode o seed smoke depois.
+- **`galaticos.tasks.seed-smoke`** / `bin/galaticos db:seed-smoke` — conjunto mínimo para testes E2E (“Smoke Championship”, etc.). Se rodar no **mesmo** Mongo **sem** limpar coleções, a lista de campeonatos mistura smoke + dados do Python; isso não é o script Python “lendo” o smoke, é **acúmulo** no banco.
+- No frontend, rotas usam **hash**: ao testar manualmente, abra URLs como `/#/championships/<id>/seasons/<seasonId>` (e não só o path sem `#`).
+
 ## Notas de Implementação
 
 - Todas as datas usam `java.util.Date` no Clojure, convertidas para ISODate no MongoDB

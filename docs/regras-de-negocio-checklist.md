@@ -14,72 +14,68 @@ Status dos itens abaixo:
 ## 1. Regras BRM pendentes
 
 - **BRM-05 – Temporada Ativa por Campeonato**
-  - **Status**: Parcial
+  - **Status**: Concluído
   - **Implementação principal**: `src/galaticos/handlers/championships.clj`, `src/galaticos/db/championships.clj`, `scripts/python/seed_mongodb.py`, `src-cljs/galaticos/components/championships.cljs`
-  - **Notas**: Hoje cada documento de campeonato representa uma combinação `name+season` com um único `status` (`active/completed/...`). Não há entidade explícita de temporada nem restrição forte de "no máximo uma temporada ativa por campeonato" além de convenção de uso.
+  - **Notas**: Foi introduzida a entidade explícita `seasons` com constraint de unicidade `(championship-id, season)` e regra de **no máximo uma temporada ativa** por campeonato (via `seasons-db/activate!`).
   - **Tarefas**:
-    - Definir modelo de temporadas (entidade própria ou um-doc-por-temporada) como regra oficial.
-    - Considerar criação de índice/constraint de unicidade por `(name, season)` na coleção `championships`.
-    - Documentar claramente como representar temporadas passadas.
+    - Concluído: modelo de temporadas definido e implementado (coleção `seasons`).
+    - Concluído: unicidade `(championship-id, season)` aplicada (app-level + documentação de schema).
+    - Concluído: temporadas passadas representadas como `seasons` com `status` `"completed"`/`"inactive"`.
 
 - **BRM-06 – Gestão de Temporadas (adicionar e selecionar temporada ativa)**
-  - **Status**: Parcial
+  - **Status**: Concluído
   - **Implementação principal**: `src-cljs/galaticos/components/championships.cljs`, `src/galaticos/handlers/championships.clj`
-  - **Notas**: É possível criar/editar campeonatos com diferentes `season` e `status`, mas não há uma UI específica de "gestão de temporadas" ligada a um mesmo campeonato raiz.
+  - **Notas**: A tela de detalhe do campeonato passou a suportar **múltiplas temporadas** com criação e gestão, incluindo seleção/ativação da temporada ativa.
   - **Tarefas**:
-    - Definir se haverá uma tela de "campeonato" com múltiplas temporadas associadas.
-    - Implementar UI de seleção de temporada ativa por campeonato (caso se adote esse modelo).
+    - Concluído: UI de seleção de temporada ativa por campeonato.
+    - Concluído: listagem de temporadas (ano/status/inscritos/títulos) com ação de ativação.
 
 - **BRM-09 – Participação e Pertencimento ao Time**
-  - **Status**: Parcial
+  - **Status**: Concluído
   - **Implementação principal**: `src/galaticos/handlers/matches.clj`, `src/galaticos/db/matches.clj`, `src/galaticos/db/players.clj`, `src/galaticos/db/teams.clj`
   - **Notas**:
     - Validação garante que jogadores com estatísticas estejam inscritos no campeonato (`validate-players-enrolled`).
     - `team-id` é obrigatório nas estatísticas de jogador.
-    - Não há validação explícita de que `team-id` pertence ao time onde o jogador está como ativo (apenas convenção).
+    - Foi adicionada validação no backend garantindo coerência entre `player-statistics.team-id`, `players.team-id` e `teams.active-player-ids`.
   - **Tarefas**:
-    - Avaliar se é necessário validar, no backend, que `team-id` nas estatísticas coincide com o time do jogador (`players.team-id`) e/ou com a lista `active-player-ids` do time.
+    - Concluído: validação de coerência player/time ao salvar estatísticas de partida.
 
 - **BRM-10 – Visualização de Jogadores e Estatísticas da Partida**
-  - **Status**: Parcial
+  - **Status**: Concluído
   - **Implementação principal**: `src-cljs/galaticos/components/matches.cljs`, `src/galaticos/handlers/matches.clj`
   - **Notas**:
     - Ao editar uma partida, o formulário exibe a lista de jogadores inscritos com suas estatísticas (gols, assistências, minutos).
-    - Não existe uma tela de "detalhe de partida" somente leitura; a visualização acontece via tela de edição.
+    - Foi criada a rota/tela de detalhe de partida **somente leitura** (`:match-detail`).
   - **Tarefas**:
-    - (Opcional) Criar uma rota de detalhamento de partida somente leitura que reutilize o mesmo layout do formulário, mas sem edição.
+    - Concluído: rota `:match-detail` (`/matches/:id`) e componente read-only.
 
 - **BRM-12 – Navegação por Itens do Dashboard**
-  - **Status**: Não implementado
-  - **Implementação principal**: `src-cljs/galaticos/components/dashboard.cljs`, `src-cljs/galaticos/routes.cljs`
+  - **Status**: Concluído
+  - **Implementação principal**: `src-cljs/galaticos/components/dashboard.cljs`, `src-cljs/galaticos/routes.cljs`, `src/galaticos/handlers/aggregations.clj`
   - **Notas**:
-    - Dashboard exibe métricas e tabelas, mas os cards não são links de navegação para listas de jogadores/times/campeonatos/partidas.
-    - As rotas para essas telas existem em `routes.cljs`, mas não há "atalhos clicáveis" no dashboard.
+    - Os cards do dashboard são botões clicáveis e navegam para:
+      - `:players`, `:matches`, `:championships` e `:teams`
+    - Os cards “Top 5” passam a ter nomes clicáveis, navegando para `:player-detail`.
+    - O endpoint `dashboard-stats` expõe `teams-count` para suportar o card de Times.
   - **Tarefas**:
-    - Adicionar interações nos `stat-card` e/ou em novas seções do dashboard que naveguem para:
-      - Lista de jogadores (`:players`)
-      - Lista de times (`:teams`)
-      - Lista de campeonatos (`:championships`)
-      - Lista de partidas (`:matches`)
-      - Tela de estatísticas avançadas (`:stats`), se aplicável.
+    - Nenhuma pendência técnica.
 
 - **BRM-13 – Busca de Jogadores ao Inscrever em Campeonato**
-  - **Status**: Parcial
+  - **Status**: Concluído
   - **Implementação principal**: `src-cljs/galaticos/components/championships.cljs`, `src/galaticos/db/players.clj`
   - **Notas**:
-    - Ao inscrever jogadores em um campeonato, há um `select-field` preenchido com todos os jogadores carregados.
-    - Não há busca/autocomplete por nome; a seleção é por lista.
+    - A inscrição passou a oferecer **busca/autocomplete** por nome (com painel reutilizável) e criação rápida quando não há resultados.
   - **Tarefas**:
-    - Implementar busca/autocomplete de jogadores por nome na tela de inscrições do campeonato, utilizando `find-by-name` ou endpoint específico de busca.
+    - Concluído: busca/autocomplete na inscrição do campeonato.
 
 - **BRM-14 – Busca de Jogadores no Dashboard**
-  - **Status**: Parcial
+  - **Status**: Concluído
   - **Implementação principal**: `src-cljs/galaticos/components/players.cljs`, `src/galaticos/db/players.clj`, `src/galaticos/db/aggregations.clj`
   - **Notas**:
     - Há busca por nome e filtro por posição na lista de jogadores, mas não diretamente a partir do dashboard.
     - Backend oferece `search-players` com filtros avançados, mas o dashboard não expõe essa funcionalidade como busca global.
   - **Tarefas**:
-    - Adicionar no dashboard um campo de busca que navegue ou chame uma visualização de resultados (Players/Stats) usando os filtros avançados.
+    - Concluído: campo de busca no dashboard que navega para `:players` com `q` aplicado.
 
 - **BRM-15 – Inscrição Automática de Jogadores na Importação de Campeonatos**
   - **Status**: Concluído
@@ -92,13 +88,15 @@ Status dos itens abaixo:
     - Nenhuma pendência técnica; regra considerada atendida pelo fluxo atual de seed/importação.
 
 - **BRM-16 – Derivação de Posição Goleiro por "GK" no Nome**
-  - **Status**: Não implementado
-  - **Implementação principal**: (não encontrada)
-  - **Notas**: Não há lógica para inferir posição por presença de `"GK"` no nome em `seed_mongodb.py` nem em outros scripts.
+  - **Status**: Concluído (decisão + implementação no seed)
+  - **Implementação principal**: `scripts/python/seed_mongodb.py`
+  - **Notas**:
+    - Foi adicionada a função `infer_position_from_name` que aplica a regra:
+      - Se a posição explícita estiver presente e não vazia, ela prevalece.
+      - Se a posição estiver ausente/vazia e o nome contiver `"GK"` (case-insensitive), a posição é inferida como `"Goleiro"`.
+    - A função é usada no fluxo de criação/atualização de jogadores (`create_players` e `ensure_players_from_base_dados`).
   - **Tarefas**:
-    - Adicionar no fluxo de criação de jogadores (seed) uma função que:
-      - Se o nome contiver `"GK"` (case-insensitive) e a posição não estiver definida, defina a posição como `"Goleiro"`.
-      - Respeite precedência de posição explícita (ver Q-05).
+    - Nenhuma pendência técnica; regra atendida pelo seed atual.
 
 ---
 
@@ -153,15 +151,15 @@ Status dos itens abaixo:
 
 | ID       | Status              | Área principal                    |
 |----------|---------------------|-----------------------------------|
-| BRM-05   | Parcial             | Temporadas / campeonatos          |
-| BRM-06   | Parcial             | UI gestão de temporadas           |
-| BRM-09   | Parcial             | Validação time/jogador em partidas|
-| BRM-10   | Parcial             | Detalhe de partida (somente leitura) |
-| BRM-12   | Parcialmente coberto| Navegação dashboard → listas     |
-| BRM-13   | Parcial             | Busca/autocomplete na inscrição   |
-| BRM-14   | Parcial             | Busca de jogadores no dashboard  |
-| BRM-15   | Parcial             | Seed: enrolled-player-ids        |
-| BRM-16   | Parcial             | Derivação GK no seed              |
+| BRM-05   | Concluído           | Temporadas / campeonatos          |
+| BRM-06   | Concluído           | UI gestão de temporadas           |
+| BRM-09   | Concluído           | Validação time/jogador em partidas|
+| BRM-10   | Concluído           | Detalhe de partida (somente leitura) |
+| BRM-12   | Concluído           | Navegação dashboard → listas     |
+| BRM-13   | Concluído           | Busca/autocomplete na inscrição   |
+| BRM-14   | Concluído           | Busca de jogadores no dashboard  |
+| BRM-15   | Concluído           | Seed: enrolled-player-ids        |
+| BRM-16   | Concluído           | Derivação GK no seed              |
 | Q-03     | Concluído           | Busca acento/paginação            |
 | Q-04     | Concluído           | Conflitos na importação           |
 | Q-05     | Concluído           | Precedência posição GK            |

@@ -3,6 +3,7 @@
             [clojure.test :refer [deftest is testing]]
             [galaticos.handlers.championships :as handlers]
             [galaticos.db.championships :as championships-db]
+            [galaticos.db.seasons :as seasons-db]
             [galaticos.db.players :as players-db]
             [galaticos.util.response :as resp])
   (:import [org.bson.types ObjectId]))
@@ -95,7 +96,9 @@
 
 (deftest list-championships
   (let [request {:params {}}
-        result (with-redefs [championships-db/find-all (fn [] [{:name "C1"}])]
+        result (with-redefs [championships-db/find-all (fn [] [{:name "C1" :_id (ObjectId.)}])
+                             seasons-db/find-active-by-championship (fn [_] nil)
+                             seasons-db/find-all-by-championship (fn [_] [])]
                 (handlers/list-championships request))
         body (parse-body result)]
     (is (= 200 (:status result)))
@@ -104,16 +107,37 @@
 (deftest get-championship
   (testing "found"
     (let [id (str (ObjectId.))
+          oid (ObjectId. id)
           request {:params {:id id}}
-          champ {:_id (ObjectId. id) :name "Champ"}
-          result (with-redefs [championships-db/find-by-id (fn [x] (when (= x id) champ))]
+          champ {:_id oid :name "Champ"}
+          result (with-redefs [championships-db/find-by-id (fn [x] (when (= x id) champ))
+                               seasons-db/find-active-by-championship (fn [_] nil)
+                               seasons-db/find-all-by-championship (fn [cid]
+                                                                    (when (= cid oid)
+                                                                      [{:season "2024"
+                                                                        :status "completed"
+                                                                        :titles-count 2
+                                                                        :enrolled-player-ids []
+                                                                        :updated-at (java.util.Date. 1000)}
+                                                                       {:season "2025"
+                                                                        :status "completed"
+                                                                        :titles-count 3
+                                                                        :enrolled-player-ids []
+                                                                        :updated-at (java.util.Date. 2000)}]))]
                   (handlers/get-championship request))
           body (parse-body result)]
       (is (= 200 (:status result)))
-      (is (= "Champ" (get-in body [:data :name])))))
+      (is (= "Champ" (get-in body [:data :name])))
+      (is (= 5 (:total-titles-across-seasons (:data body))))
+      ;; No active season: fallback display uses latest season by year / updated-at
+      (is (= "2025" (:season (:data body))))
+      (is (= "completed" (:status (:data body))))
+      (is (= 3 (:titles-count (:data body))))))
   (testing "not found"
     (let [request {:params {:id (str (ObjectId.))}}
-          result (with-redefs [championships-db/find-by-id (fn [_] nil)]
+          result (with-redefs [championships-db/find-by-id (fn [_] nil)
+                               seasons-db/find-active-by-championship (fn [_] nil)
+                               seasons-db/find-all-by-championship (fn [_] [])]
                   (handlers/get-championship request))]
       (is (= 404 (:status result))))))
 
@@ -189,13 +213,36 @@
     (is (= "Player unenrolled" (get-in body [:data :message])))))
 
 (deftest get-championship-players
-  (let [champ-id (str (ObjectId.))
-        request {:params {:id champ-id}}
-        champ {:_id (ObjectId. champ-id) :enrolled-player-ids [(ObjectId.)]}
-        result (with-redefs [championships-db/find-by-id (fn [_] champ)
-                             players-db/find-by-ids (fn [_] [{:name "P1"}])]
-                (handlers/get-championship-players request))
-        body (parse-body result)]
-    (is (= 200 (:status result)))
-    (is (vector? (:data body)))
-    (is (= "P1" (get-in body [:data 0 :name])))))
+  (testing "fallback to root enrolled when no seasons"
+    (let [champ-id (str (ObjectId.))
+          request {:params {:id champ-id}}
+          champ {:_id (ObjectId. champ-id) :enrolled-player-ids [(ObjectId.)]}
+          result (with-redefs [seasons-db/find-active-by-championship (fn [_] nil)
+                               seasons-db/find-all-by-championship (fn [_] [])
+                               championships-db/find-by-id (fn [_] champ)
+                               players-db/find-by-ids (fn [_] [{:name "P1"}])]
+                  (handlers/get-championship-players request))
+          body (parse-body result)]
+      (is (= 200 (:status result)))
+      (is (vector? (:data body)))
+      (is (= "P1" (get-in body [:data 0 :name])))))
+  (testing "union of all seasons when no active season"
+    (let [champ-id (str (ObjectId.))
+          oid (ObjectId. champ-id)
+          p1 (ObjectId.)
+          p2 (ObjectId.)
+          request {:params {:id champ-id}}
+          champ {:_id oid :enrolled-player-ids []}
+          by-id {p1 {:name "Ana" :_id p1} p2 {:name "Beto" :_id p2}}
+          result (with-redefs [seasons-db/find-active-by-championship (fn [_] nil)
+                               seasons-db/find-all-by-championship (fn [_]
+                                                                     [{:enrolled-player-ids [p1]}
+                                                                      {:enrolled-player-ids [p2]}])
+                               championships-db/find-by-id (fn [_] champ)
+                               players-db/find-by-ids (fn [ids] (vec (keep by-id ids)))]
+                  (handlers/get-championship-players request))
+          body (parse-body result)
+          names (sort (map :name (:data body)))]
+      (is (= 200 (:status result)))
+      (is (= 2 (count (:data body))))
+      (is (= ["Ana" "Beto"] names)))))

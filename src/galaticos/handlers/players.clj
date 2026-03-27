@@ -1,6 +1,7 @@
 (ns galaticos.handlers.players
   "Request handlers for player operations"
   (:require [galaticos.db.players :as players-db]
+            [galaticos.db.teams :as teams-db]
             [galaticos.util.response :as resp]
             [clojure.tools.logging :as log]
             [clojure.string :as str]))
@@ -29,7 +30,9 @@
 
 (defn- handle-exception [e user-message]
   (if (= 400 (-> e ex-data :status))
-    (resp/error (or user-message (.getMessage e)) 400)
+    (let [raw (.getMessage e)
+          msg (when-not (str/blank? raw) (str/trim raw))]
+      (resp/error (or msg user-message) 400))
     (do
       (log/error e user-message)
       (resp/server-error user-message))))
@@ -69,8 +72,14 @@
           {:keys [error data]} (validate-player-body player-data)]
       (if error
         (resp/error error 400)
-        (let [created (players-db/create data)]
-          (resp/success created 201))))
+        (do
+          (when-let [tid (:team-id data)]
+            (when-not (teams-db/exists? tid)
+              (throw (ex-info "Team not found" {:status 400}))))
+          (let [created (players-db/create data)]
+            (when-let [tid (:team-id created)]
+              (teams-db/add-player tid (:_id created)))
+            (resp/success created 201)))))
     (catch Exception e
       (handle-exception e "Failed to create player"))))
 

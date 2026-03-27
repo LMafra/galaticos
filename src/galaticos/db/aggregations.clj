@@ -24,16 +24,18 @@
   [existing-entry match-entry]
   (let [match-games (safe-int (:games match-entry))
         match-goals (safe-int (:goals match-entry))
-        match-assists (safe-int (:assists match-entry))]
-    {:championship-id (:championship-id existing-entry)
-     :championship-name (or (:championship-name match-entry)
-                            (:championship-name existing-entry)
-                            "")
-     :games (if (pos? match-games) match-games (safe-int (:games existing-entry)))
-     :goals (if (pos? match-goals) match-goals (safe-int (:goals existing-entry)))
-     ;; Matches may not have full assist data in legacy imports; keep existing in that case.
-     :assists (if (pos? match-assists) match-assists (safe-int (:assists existing-entry)))
-     :titles (safe-int (:titles existing-entry))}))
+        match-assists (safe-int (:assists match-entry))
+        base {:championship-id (:championship-id existing-entry)
+              :championship-name (or (:championship-name match-entry)
+                                     (:championship-name existing-entry)
+                                     "")
+              :games (if (pos? match-games) match-games (safe-int (:games existing-entry)))
+              :goals (if (pos? match-goals) match-goals (safe-int (:goals existing-entry)))
+              ;; Matches may not have full assist data in legacy imports; keep existing in that case.
+              :assists (if (pos? match-assists) match-assists (safe-int (:assists existing-entry)))
+              :titles (safe-int (:titles existing-entry))}]
+    (cond-> base
+      (:season existing-entry) (assoc :season (:season existing-entry)))))
 
 (defn- merge-aggregated-stats
   [existing match-derived]
@@ -44,14 +46,15 @@
                                 (when-let [championship-id (:championship-id entry)]
                                   [championship-id entry])))
                         match-derived)
-        existing-ids (set (keep :championship-id existing-by))
+        existing-champ-ids (set (keep :championship-id existing-by))
         merged-existing (mapv (fn [entry]
-                                (if-let [match-entry (get match-map (:championship-id entry))]
-                                  (merge-championship-entry entry match-entry)
+                                (if (and (nil? (:season entry))
+                                         (contains? match-map (:championship-id entry)))
+                                  (merge-championship-entry entry (get match-map (:championship-id entry)))
                                   (update entry :titles safe-int)))
                               existing-by)
         match-only (for [[championship-id entry] match-map
-                         :when (not (contains? existing-ids championship-id))]
+                         :when (not (contains? existing-champ-ids championship-id))]
                      {:championship-id championship-id
                       :championship-name (or (:championship-name entry) "")
                       :games (safe-int (:games entry))
@@ -315,14 +318,38 @@
                               {:$group {:_id "$aggregated-stats.by-championship.championship-id"
                                         :total-goals {:$sum "$aggregated-stats.by-championship.goals"}
                                         :total-assists {:$sum "$aggregated-stats.by-championship.assists"}
-                                        :total-games {:$sum "$aggregated-stats.by-championship.games"}
+                                        ;; "games" in aggregated-stats.by-championship is per-player.
+                                        ;; Summing it inflates championship matches-count by player multiplicity.
+                                        :max-games {:$max "$aggregated-stats.by-championship.games"}
                                         :unique-players {:$addToSet "$_id"}}}
                               {:$project {:_id 0
                                           :championship-id "$_id"
-                                          :matches-count "$total-games"
+                                          :matches-count "$max-games"
                                           :players-count {:$size "$unique-players"}
                                           :total-goals 1
                                           :total-assists 1}}])]
+    (into {}
+          (map (fn [entry] [(:championship-id entry) entry]))
+          result)))
+
+(defn- championship-season-metrics
+  []
+  (let [result (mc/aggregate (db) "seasons"
+                             [{:$match {:championship-id {:$exists true :$ne nil}}}
+                              {:$group {:_id "$championship-id"
+                                        :matches-count {:$sum {:$ifNull ["$matches-count" 0]}}
+                                        :player-ids-buckets {:$addToSet {:$ifNull ["$enrolled-player-ids" []]}}}}
+                              {:$unwind {:path "$player-ids-buckets"
+                                         :preserveNullAndEmptyArrays true}}
+                              {:$unwind {:path "$player-ids-buckets"
+                                         :preserveNullAndEmptyArrays true}}
+                              {:$group {:_id "$_id"
+                                        :matches-count {:$first "$matches-count"}
+                                        :unique-player-ids {:$addToSet "$player-ids-buckets"}}}
+                              {:$project {:_id 0
+                                          :championship-id "$_id"
+                                          :matches-count 1
+                                          :players-count {:$size "$unique-player-ids"}}}])]
     (into {}
           (map (fn [entry] [(:championship-id entry) entry]))
           result)))
@@ -333,17 +360,23 @@
   (try
     (let [championships (mc/find-maps (db) "championships" {})
           match-metrics (championship-match-metrics)
+          season-metrics (championship-season-metrics)
           player-metrics (championship-player-metrics)
           result (->> championships
                       (map (fn [championship]
                              (let [championship-id (:_id championship)
                                    match-stats (get match-metrics championship-id)
+                                   season-stats (get season-metrics championship-id)
                                    player-stats (get player-metrics championship-id)
                                    baseline-stats (or match-stats player-stats)
-                                   matches-count (safe-int (:matches-count baseline-stats))
+                                   matches-count (safe-int (or (:matches-count match-stats)
+                                                               (:matches-count season-stats)
+                                                               (:matches-count player-stats)))
                                    total-goals (safe-int (:total-goals baseline-stats))
                                    total-assists (safe-int (:total-assists baseline-stats))
-                                   players-count (safe-int (:players-count baseline-stats))]
+                                   players-count (safe-int (or (:players-count match-stats)
+                                                               (:players-count season-stats)
+                                                               (:players-count player-stats)))]
                                {:championship-id championship-id
                                 :championship-name (:name championship)
                                 :championship-format (:format championship)
@@ -414,3 +447,63 @@
       (log/error e (str "Error getting top players by metric: " metric))
       (throw e))))
 
+(defn championship-table-leaderboards
+  "Top 5 players per metric from aggregated-stats.by-championship for a championship root
+  (sums games, goals, assists, titles across all season rows for that championship-id)."
+  [championship-id]
+  (try
+    (let [cid (->object-id championship-id)
+          pipeline [{:$match {:active true
+                             "aggregated-stats.by-championship" {:$exists true :$ne []}}}
+                    {:$unwind "$aggregated-stats.by-championship"}
+                    {:$match {"aggregated-stats.by-championship.championship-id" cid}}
+                    {:$group
+                     {:_id "$_id"
+                      :name {:$first "$name"}
+                      :goals {:$sum {:$ifNull ["$aggregated-stats.by-championship.goals" 0]}}
+                      :assists {:$sum {:$ifNull ["$aggregated-stats.by-championship.assists" 0]}}
+                      :games {:$sum {:$ifNull ["$aggregated-stats.by-championship.games" 0]}}
+                      :titles {:$sum {:$ifNull ["$aggregated-stats.by-championship.titles" 0]}}}}
+                    {:$facet
+                     {:top-goals [{:$sort {:goals -1 :assists -1}}
+                            {:$limit 5}
+                            {:$project {:player-id "$_id"
+                                       :name 1
+                                       :goals 1
+                                       :assists 1
+                                       :games 1
+                                       :titles 1
+                                       :_id 0}}]
+                      :top-assists [{:$sort {:assists -1 :goals -1}}
+                              {:$limit 5}
+                              {:$project {:player-id "$_id"
+                                         :name 1
+                                         :goals 1
+                                         :assists 1
+                                         :games 1
+                                         :titles 1
+                                         :_id 0}}]
+                      :top-games [{:$sort {:games -1 :goals -1}}
+                          {:$limit 5}
+                          {:$project {:player-id "$_id"
+                                     :name 1
+                                     :goals 1
+                                     :assists 1
+                                     :games 1
+                                     :titles 1
+                                     :_id 0}}]
+                      :top-titles [{:$sort {:titles -1 :goals -1}}
+                           {:$limit 5}
+                           {:$project {:player-id "$_id"
+                                      :name 1
+                                      :goals 1
+                                      :assists 1
+                                      :games 1
+                                      :titles 1
+                                      :_id 0}}]}}]
+          out (first (mc/aggregate (db) "players" pipeline))
+          out (merge {:top-goals [] :top-assists [] :top-games [] :top-titles []} out)]
+      (select-keys out [:top-goals :top-assists :top-games :top-titles]))
+    (catch Exception e
+      (log/error e "Error building championship table leaderboards")
+      (throw e))))

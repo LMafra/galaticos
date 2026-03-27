@@ -4,8 +4,10 @@
             [reitit.frontend.easy :as rfe]))
 
 (def routes
-  [["/" {:name :login
-         :title "Login"}]
+  [["/" {:name :home
+         :title "Dashboard"}]
+   ["/login" {:name :login
+              :title "Login"}]
    ["/dashboard" {:name :dashboard
                   :title "Dashboard"}]
    ["/stats" {:name :stats
@@ -27,10 +29,15 @@
                                                      :title "New Match"}]
    ["/matches/:id/edit" {:name :match-edit
                          :title "Edit Match"}]
+   ["/matches/:id" {:name :match-detail
+                    :title "Match Details"}]
    ["/championships" {:name :championships
                       :title "Championships"}]
    ["/championships/new" {:name :championship-new
                           :title "New Championship"}]
+   ;; More specific paths before `/championships/:id` so Reitit matches season detail reliably.
+   ["/championships/:id/seasons/:season-id" {:name :championship-season-detail
+                                            :title "Temporada"}]
    ["/championships/:id/edit" {:name :championship-edit
                                :title "Edit Championship"}]
    ["/championships/:id" {:name :championship-detail

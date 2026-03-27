@@ -52,10 +52,11 @@ test('invalid credentials show error message', { tag: '@auth' }, async ({ page }
   }
 });
 
-test('unauthenticated user redirected to login when accessing dashboard', { tag: '@auth' }, async ({ page }, testInfo) => {
+test('unauthenticated user can access dashboard in read-only mode', { tag: '@auth' }, async ({ page }, testInfo) => {
   try {
     await page.goto('/#/dashboard');
-    await expect(page.getByRole('heading', { name: 'Login - Galáticos' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Entrar' })).toBeVisible();
   } finally {
     await saveCoverage(page, testInfo);
   }

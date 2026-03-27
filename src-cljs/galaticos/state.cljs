@@ -2,14 +2,38 @@
   "Application state management"
   (:require [reagent.core :as r]))
 
+(defn- system-prefers-dark? []
+  (try
+    (boolean (.. js/window
+                 (matchMedia "(prefers-color-scheme: dark)")
+                 -matches))
+    (catch :default _ false)))
+
+(defn- initial-theme []
+  (let [stored-theme (some-> js/window .-localStorage (.getItem "galaticos.theme"))]
+    (cond
+      (#{"light" "dark"} stored-theme) stored-theme
+      (system-prefers-dark?) "dark"
+      :else "light")))
+
+(defn- apply-theme! [theme]
+  (when-let [root (.-documentElement js/document)]
+    (.toggle (.-classList root) "dark" (= theme "dark"))))
+
+(defn- persist-theme! [theme]
+  (try
+    (some-> js/window .-localStorage (.setItem "galaticos.theme" theme))
+    (catch :default _ nil)))
+
 (defonce app-state
   (r/atom {:user nil
            :token nil
            :authenticated false
            :auth-loading? false
            :auth-checked? false
+           :route-match nil
            :ui {:sidebar-open? false
-                :theme "light"}
+                :theme (initial-theme)}
            :players []
            :players-loaded? false
            :players-loading? false
@@ -40,7 +64,12 @@
   (swap! app-state assoc-in [:ui :sidebar-open?] false))
 
 (defn set-theme! [theme]
-  (swap! app-state assoc-in [:ui :theme] theme))
+  (when (#{"light" "dark"} theme)
+    (apply-theme! theme)
+    (persist-theme! theme)
+    (swap! app-state assoc-in [:ui :theme] theme)))
+
+(apply-theme! (get-in @app-state [:ui :theme]))
 
 (defn set-user! [user token]
   (swap! app-state assoc :user user :token token :authenticated (some? user) :auth-loading? false :auth-checked? true))
