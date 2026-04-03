@@ -26,7 +26,9 @@ log_step "Running Cloverage (threshold: min(% lines, % forms) ≥ 70; see deps.e
 echo ""
 
 if ! run_clojure -M:coverage; then
-    log_error "Coverage failed: min(% lines covered, % forms covered) is below --fail-threshold (70)"
+    log_error "Cloverage exited with failure. Common causes:"
+    log_error "  • Test failures (see FAIL / errors above)"
+    log_error "  • Coverage below deps.edn :coverage --fail-threshold (min of % lines and % forms vs project total)"
     echo ""
     log_info "Coverage report available at: target/coverage/index.html"
     exit 1

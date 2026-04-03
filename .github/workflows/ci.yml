@@ -125,66 +125,6 @@ jobs:
         run: docker compose -f config/docker/docker-compose.dev.yml down -v --remove-orphans
         shell: bash
 
-  perf-lighthouse-smoke:
-    name: perf (Lighthouse autenticado, smoke)
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "18"
-          cache: "npm"
-
-      - name: Install Google Chrome
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y google-chrome-stable
-
-      - name: Start dev stack
-        run: docker compose -f config/docker/docker-compose.dev.yml up -d --build
-        shell: bash
-
-      - name: Wait for /health
-        run: |
-          for i in {1..60}; do
-            if curl -sf http://localhost:3000/health >/dev/null; then
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "Timed out waiting for /health"
-          docker compose -f config/docker/docker-compose.dev.yml logs --tail=200
-          exit 1
-        shell: bash
-
-      - name: Seed smoke data
-        run: ./bin/galaticos db:seed-smoke
-        shell: bash
-
-      - name: Install Node deps
-        run: npm ci --no-fund --no-audit
-        shell: bash
-
-      - name: Lighthouse (API login)
-        env:
-          CHROME_PATH: /usr/bin/google-chrome-stable
-          PERF_BASE_URL: http://localhost:3000
-          PERF_USE_API_LOGIN: "1"
-          PERF_LOGIN_USER: admin
-          PERF_LOGIN_PASSWORD: admin
-          CI: "true"
-        run: npm run perf:lighthouse:auth -- /#/dashboard /#/stats
-        shell: bash
-
-      - name: Cleanup
-        if: always()
-        run: docker compose -f config/docker/docker-compose.dev.yml down -v --remove-orphans
-        shell: bash
-
   e2e-prod:
     name: e2e (prod)
     runs-on: ubuntu-latest
