@@ -47,16 +47,6 @@
         (catch :default _ nil))
       ""))
 
-(when (or (nil? api-base-url) (= "" api-base-url))
-  (js/console.warn "GALATICOS_API_URL não definido; usando mesma origem para chamadas da API."))
-
-(defonce _api-base-url-logged (atom false))
-(when (and (some? js/goog) (.-DEBUG js/goog) (compare-and-set! _api-base-url-logged false true))
-  (let [display-url (if (or (nil? api-base-url) (= "" api-base-url))
-                      (str (.-origin js/window.location))
-                      (try (.-host (js/URL. api-base-url)) (catch :default _ api-base-url)))]
-    (js/console.info "API base URL:" display-url)))
-
 (def success-statuses #{200 201 202 203 204})
 
 (defn- extract-error [response]
@@ -201,7 +191,9 @@
                (fn [data]
                  (when-let [token (:token data)]
                    (set-token! token))
-                 (on-success (or (:user data) data)))
+                 (if (true? (:authenticated data))
+                   (on-success (:user data))
+                   (on-success nil)))
                on-error))
 
 ;; Players API
@@ -210,6 +202,9 @@
 
 (defn get-player [id on-success on-error]
   (get-request (str "/api/players/" id) {} on-success on-error))
+
+(defn get-player-detail-bundle [id on-success on-error]
+  (get-request (str "/api/players/" id "/detail") {} on-success on-error))
 
 (defn create-player [data on-success on-error]
   (post-request "/api/players" data on-success on-error))
@@ -325,6 +320,10 @@
 
 (defn get-player-stats-by-championship [championship-id on-success on-error]
   (get-request (str "/api/aggregations/players/stats/" championship-id) {} on-success on-error))
+
+(defn get-championship-tab-stats [championship-id on-success on-error]
+  (get-request (str "/api/aggregations/championships/" championship-id "/tab-stats")
+               {} on-success on-error))
 
 (defn get-top-players [params on-success on-error]
   (get-request "/api/aggregations/players/top" params on-success on-error))

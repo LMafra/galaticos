@@ -65,10 +65,11 @@
       (is (= 200 (:status result)))
       (is (= true (:authenticated data)))
       (is (= "admin" (:user data)))))
-  (testing "unauthenticated returns 401"
+  (testing "unauthenticated returns 200 with authenticated false"
     (let [request {}
           result (handlers/check-auth request)
-          body (json/read-str (:body result) :key-fn keyword)]
-      (is (= 401 (:status result)))
-      (is (= false (:success body)))
-      (is (= "Not authenticated" (:error body))))))
+          body (json/read-str (:body result) :key-fn keyword)
+          data (:data body)]
+      (is (= 200 (:status result)))
+      (is (= true (:success body)))
+      (is (= false (:authenticated data))))))

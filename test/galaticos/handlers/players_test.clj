@@ -5,6 +5,7 @@
             [galaticos.handlers.players :as handlers]
             [galaticos.db.players :as players-db]
             [galaticos.db.teams :as teams-db]
+            [galaticos.db.aggregations :as agg]
             [galaticos.util.response :as resp])
   (:import [org.bson.types ObjectId]))
 
@@ -48,6 +49,20 @@
                   (handlers/get-player request))]
       (is (= 404 (:status result)))
       (is (= "Player not found" (:error (parse-body result)))))))
+
+(deftest get-player-detail-bundle
+  (testing "found includes evolution"
+    (let [id (str (ObjectId.))
+          request {:params {:id id}}
+          player {:_id (ObjectId. id) :name "Bundled"}
+          evo [{:year 2024}]
+          result (with-redefs [players-db/find-by-id (fn [x] (when (= x id) player))
+                              agg/player-performance-evolution (fn [x] (when (= x id) evo))]
+                  (handlers/get-player-detail-bundle request))
+          body (parse-body result)]
+      (is (= 200 (:status result)))
+      (is (= "Bundled" (get-in body [:data :player :name])))
+      (is (= 2024 (get-in body [:data :evolution 0 :year]))))))
 
 (deftest create-player
   (testing "success"

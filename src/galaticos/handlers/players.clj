@@ -2,6 +2,7 @@
   "Request handlers for player operations"
   (:require [galaticos.db.players :as players-db]
             [galaticos.db.teams :as teams-db]
+            [galaticos.db.aggregations :as agg]
             [galaticos.util.response :as resp]
             [clojure.tools.logging :as log]
             [clojure.string :as str]))
@@ -63,6 +64,18 @@
         (resp/not-found "Player not found")))
     (catch Exception e
       (handle-exception e "Failed to get player"))))
+
+(defn get-player-detail-bundle
+  "Player document + performance evolution in one response (fewer round-trips for the detail page)."
+  [request]
+  (try
+    (let [id (get-in request [:params :id])]
+      (if-let [player (players-db/find-by-id id)]
+        (resp/success {:player player
+                       :evolution (agg/player-performance-evolution id)})
+        (resp/not-found "Player not found")))
+    (catch Exception e
+      (handle-exception e "Failed to get player detail"))))
 
 (defn create-player
   "Create a new player"

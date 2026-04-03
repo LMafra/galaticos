@@ -94,6 +94,9 @@
                      ", Players with aggregated-stats: " players-with-stats)))
     ;; Fetch the stats directly - the aggregation functions handle empty data gracefully
     (let [total-teams (mc/count (db) "teams")
+          players-total (agg/total-registered-players)
+          seasons-count (agg/total-seasons)
+          player-goals-total (agg/total-player-goals-tallied)
           championships (try
                           (log/info "Fetching championship comparison...")
                           (let [result (agg/championship-comparison)]
@@ -154,14 +157,20 @@
                            :top-assists top-assists
                            :top-matches top-matches
                            :top-titles top-titles
-                           :teams-count total-teams}]
+                           :teams-count total-teams
+                           :players-total players-total
+                           :player-goals-total player-goals-total
+                           :seasons-count seasons-count}]
         (log/info (str "Dashboard stats response data: " (pr-str response-data)))
         (log/info (str "Response structure - Championships count: " (count championships)
                        ", Top goals count: " (count top-goals)
                        ", Top assists count: " (count top-assists)
                        ", Top matches count: " (count top-matches)
                        ", Top titles count: " (count top-titles)
-                       ", Teams count: " total-teams))
+                       ", Teams count: " total-teams
+                       ", Players total: " players-total
+                       ", Player goals total: " player-goals-total
+                       ", Seasons count: " seasons-count))
         (when (seq championships)
           (log/info (str "Sample championship data (first): " (pr-str (first championships)))))
         (when (seq top-goals)
@@ -194,6 +203,19 @@
     (catch Exception e
       (log/error e "Error getting avg goals by position")
       (resp/server-error "Failed to get average goals by position"))))
+
+(defn championship-tab-stats
+  "Single round-trip for stats page: player rows + position averages for a championship."
+  [request]
+  (try
+    (let [championship-id (get-in request [:params :championship-id])]
+      (if championship-id
+        (resp/success {:player-stats (agg/player-stats-by-championship championship-id)
+                       :position-stats (agg/avg-goals-by-position championship-id)})
+        (resp/error "Championship ID required")))
+    (catch Exception e
+      (log/error e "Error getting championship tab stats")
+      (resp/server-error "Failed to get championship tab stats"))))
 
 (defn player-performance-evolution
   "Get player performance evolution"

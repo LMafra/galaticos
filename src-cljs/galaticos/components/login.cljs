@@ -13,9 +13,9 @@
         loading (r/atom false)]
     (fn []
       (let [{:keys [authenticated]} @state/app-state]
-        ;; Redirect if already authenticated
+        ;; Redirect after paint to avoid blocking first frame
         (when authenticated
-          (rfe/push-state :dashboard))
+          (js/requestAnimationFrame #(rfe/push-state :dashboard)))
         [:main#main-content {:class "flex min-h-screen items-center justify-center bg-slate-50 px-4"}
          [common/card
           [:div {:class "w-full max-w-md space-y-6"}

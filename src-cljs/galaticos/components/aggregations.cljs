@@ -138,20 +138,21 @@
          (seq @data)
          [common/card
           [:h3 {:class "app-section-title"} "Comparação de Campeonatos"]
-          [common/table
-           ["Campeonato" "Formato" "Partidas" "Jogadores" "Gols" "Gols/Partida"]
-           (mapv (fn [ch]
-                   [(:championship-name ch)
-                    (or (:championship-format ch) "-")
-                    (:matches-count ch)
-                    (:players-count ch)
-                    (:total-goals ch)
-                    (if (number? (:avg-goals-per-match ch))
-                      (.toFixed (:avg-goals-per-match ch) 2)
-                      (avg-goals (:total-goals ch) (:matches-count ch)))])
-                 @data)
-           :sortable? true
-           :dense? true]]
+          [:div {:class "max-h-[min(70vh,32rem)] overflow-y-auto"}
+           [common/table
+            ["Campeonato" "Formato" "Partidas" "Jogadores" "Gols" "Gols/Partida"]
+            (mapv (fn [ch]
+                    [(:championship-name ch)
+                     (or (:championship-format ch) "-")
+                     (:matches-count ch)
+                     (:players-count ch)
+                     (:total-goals ch)
+                     (if (number? (:avg-goals-per-match ch))
+                       (.toFixed (:avg-goals-per-match ch) 2)
+                       (avg-goals (:total-goals ch) (:matches-count ch)))])
+                  @data)
+            :sortable? true
+            :dense? true]]]
 
          @data
          [common/card
@@ -180,18 +181,12 @@
                             (do
                               (reset! error nil)
                               (reset! loading? true)
-                              (api/get-player-stats-by-championship
+                              (api/get-championship-tab-stats
                                @championship-id
-                               (fn [players]
-                                 (reset! player-stats players)
-                                 (api/get-avg-goals-by-position
-                                  @championship-id
-                                  (fn [positions]
-                                    (reset! position-stats positions)
-                                    (reset! loading? false))
-                                  (fn [_]
-                                    (reset! position-stats [])
-                                    (reset! loading? false))))
+                               (fn [payload]
+                                 (reset! player-stats (:player-stats payload))
+                                 (reset! position-stats (:position-stats payload))
+                                 (reset! loading? false))
                                on-error))))]
     (fn []
       (let [championships (:championships @state/app-state)

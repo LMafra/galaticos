@@ -87,7 +87,7 @@ open target/coverage-report/index.html
 3. Adicione testes para cobrir essas áreas
 4. Repita até atingir 80/70
 
-**Importante:** PRs que não atingirem os thresholds de cobertura serão bloqueados automaticamente pelo CI. Veja [docs/testing-coverage.md](docs/testing-coverage.md) para mais detalhes.
+**Importante:** PRs que não atingirem os thresholds de cobertura serão bloqueados automaticamente pelo CI. Veja [docs/informacao/dominio/testing-coverage.md](docs/informacao/dominio/testing-coverage.md) para mais detalhes.
 
 ## Ambiente de Desenvolvimento
 

@@ -12,7 +12,10 @@
     "cljs:watch": "shadow-cljs watch app",
     "cljs:dev": "shadow-cljs compile app",
     "cljs:release": "shadow-cljs release app",
-    "cljs:clean": "rm -rf resources/public/js/compiled && shadow-cljs stop"
+    "cljs:clean": "rm -rf resources/public/js/compiled && shadow-cljs stop",
+    "perf:lighthouse:login": "sh -c 'test -n \"$CHROME_PATH\" || { echo \"Set CHROME_PATH to Linux Chrome (see docs/informacao/performance/metodologia.md)\"; exit 1; }; npx lighthouse \"http://localhost:3000/\" --chrome-path=\"$CHROME_PATH\" --chrome-flags=\"--headless=new --no-sandbox --disable-gpu --disable-dev-shm-usage\" --only-categories=performance --output=json --output-path=./docs/perf-output/lighthouse-login.json --quiet'",
+    "perf:lighthouse:auth": "node scripts/performance/lighthouse-authenticated.cjs",
+    "perf:bundle-report": "sh -c 'mkdir -p target && npx shadow-cljs release app --config-merge \"{:builds {:app {:release {:bundle-report \\\"target/shadow-bundle-report.html\\\"}}}}\"'"
   },
   "dependencies": {
     "autoprefixer": "^10.4.20",
@@ -27,7 +30,9 @@
   "devDependencies": {
     "@playwright/test": "^1.58.0",
     "istanbul-lib-coverage": "^3.2.2",
+    "lighthouse": "^13.0.3",
     "nyc": "^17.1.0",
+    "puppeteer-core": "^24.4.0",
     "shadow-cljs": "^2.28.21"
   },
   "engines": {

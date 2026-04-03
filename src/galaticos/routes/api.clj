@@ -22,6 +22,8 @@
   (GET "/api/aggregations/stats" request (agg-handlers/dashboard-stats request))
    (GET "/api/aggregations/players/stats/:championship-id" [championship-id :as request]
        (agg-handlers/player-stats-by-championship (assoc request :params {:championship-id championship-id})))
+   (GET "/api/aggregations/championships/:championship-id/tab-stats" [championship-id :as request]
+        (agg-handlers/championship-tab-stats (assoc request :params {:championship-id championship-id})))
    (GET "/api/aggregations/championships/:id/leaderboards" [id :as request]
         (agg-handlers/championship-table-leaderboards (assoc request :params {:id id})))
    (GET "/api/aggregations/positions/:championship-id" [championship-id :as request]

@@ -52,15 +52,9 @@
                 [(api-get ch :name)
                  (api-get ch :season)
                  (api-get ch :format)
-                 (let [raw-status (or (api-get ch :status) "indefinido")
-                       status (if (= raw-status "finished") "completed" raw-status)
-                       variant (case status
-                                 "active" :success
-                                 "completed" :info
-                                 "inactive" :warning
-                                 "cancelled" :danger
-                                 :info)]
-                   [common/badge status :variant variant])
+                 (let [raw-status (or (api-get ch :status) "indefinido")]
+                   [common/badge (common/status-label raw-status)
+                    :variant (common/status-variant raw-status)])
                  (or (api-get ch :titles-count) 0)])
               championships)
          :on-row-click (fn [ch]
@@ -140,14 +134,6 @@
       (fn []
         (let [ch @championship
               raw-status (or (api-get ch :status) "indefinido")
-              status (if (= raw-status "finished") "completed" raw-status)
-              status-variant (fn [v]
-                               (case (or v "inactive")
-                                 "active" :success
-                                 "completed" :info
-                                 "inactive" :warning
-                                 "cancelled" :danger
-                                 :info))
               winner-ids (set (map str (or (api-get ch :winner-player-ids) [])))
               winner-names (->> @enrolled-players
                                 (filter #(contains? winner-ids (str (:_id %))))
@@ -159,7 +145,8 @@
               active-season-id (api-get ch :active-season-id)
               season-options (map (fn [s]
                                     [(str (:_id s))
-                                     (str (:season s) " (" (or (:status s) "active") ")")])
+                                     (str (:season s) " ("
+                                          (common/status-label (or (:status s) "active")) ")")])
                                   @seasons)]
           [:div {:class "space-y-6"}
            (cond
@@ -171,7 +158,8 @@
                 [common/button "Tentar novamente" load! :variant :outline]])
 
              @loading?
-             [common/loading-spinner]
+             [:div {:class "min-h-[20rem] flex items-center justify-center"}
+              [common/loading-spinner]]
 
              @championship
              [:<>
@@ -182,7 +170,8 @@
                 [:div
                  [:p {:class "text-sm text-slate-500"} "Campeonato"]
                  [:h2 {:class "text-2xl font-semibold text-slate-900"} (api-get ch :name)]
-                 [common/badge status :variant :info :class "mt-2"]]]
+                 [common/badge (common/status-label raw-status)
+                  :variant (common/status-variant raw-status) :class "mt-2"]]]
                [:div {:class "flex flex-wrap gap-2"}
                 [common/button "Editar" #(rfe/push-state :championship-edit {:id id}) :variant :outline]
                 [common/button "Exportar CSV"
@@ -272,7 +261,8 @@
                                 [:span {:class "text-xs text-slate-600"} (if (seq detail-parts)
                                                                            (str/join " · " detail-parts)
                                                                            "—")]
-                                [common/badge s-status :variant (status-variant s-status)]
+                                [common/badge (common/status-label s-status)
+                                 :variant (common/status-variant s-status)]
                                 enrolled-count
                                 match-n
                                 titles
@@ -389,7 +379,7 @@
                [:div {:class "mt-4 border-t border-slate-200 pt-4"}
                 [:h4 {:class "text-sm font-semibold text-slate-800"} "Finalização do campeonato"]
                 (cond
-                  (not= status "active")
+                  (not (common/status-active? (api-get ch :status)))
                   [:p {:class "mt-2 text-xs text-slate-500"} "Apenas campeonatos ativos podem ser finalizados."]
 
                   (seq winner-ids)
@@ -450,13 +440,6 @@
         error (r/atom nil)
         cid (:id params)
         sid (:season-id params)
-        status-variant (fn [v]
-                         (case (or v "inactive")
-                           "active" :success
-                           "completed" :info
-                           "inactive" :warning
-                           "cancelled" :danger
-                           :info))
         load! (fn []
                 (reset! error nil)
                 (reset! loading? true)
@@ -487,7 +470,6 @@
       (fn []
         (let [s-status (or (when @season (:status @season)) "inactive")
               raw (or (when @season (:status @season)) "indefinido")
-              disp-status (if (= raw "finished") "completed" raw)
               enrolled-sorted (sort-by #(str/lower-case (str (:name %))) @players)]
           [:div {:class "space-y-6"}
            [common/button "Voltar ao campeonato"
@@ -507,7 +489,8 @@
                [:p {:class "text-sm text-slate-500"} "Temporada"]
                [:h2 {:class "text-2xl font-semibold text-slate-900"}
                 (str (:championship-name @season) " · " (:season @season))]
-               [common/badge disp-status :variant (status-variant s-status) :class "mt-2"]]
+               [common/badge (common/status-label raw)
+                :variant (common/status-variant s-status) :class "mt-2"]]
               [common/card
                [:h3 {:class "app-section-title"} "Detalhes"]
                [:div {:class "mt-3 space-y-2 text-sm text-slate-600"}

@@ -396,6 +396,30 @@
       (log/error "Exception details: " (with-out-str (.printStackTrace e)))
       [])))
 
+(defn total-registered-players
+  "Active player documents (elenco cadastrado — alinha com o seed e exclui inativos)."
+  []
+  (mc/count (db) "players" {:active true}))
+
+(defn total-seasons
+  "All season documents across championships."
+  []
+  (mc/count (db) "seasons" {}))
+
+(defn total-player-goals-tallied
+  "Sum of aggregated-stats.total.goals over active players (totais nas fichas, não por campeonato)."
+  []
+  (try
+    (let [rows (mc/aggregate (db) "players"
+                             [{:$match {:active true}}
+                              {:$group {:_id nil
+                                        :total {:$sum {:$ifNull ["$aggregated-stats.total.goals" 0]}}}}])
+          row (first rows)]
+      (long (or (:total row) 0)))
+    (catch Exception e
+      (log/error e "Error summing aggregated player goals")
+      0)))
+
 (defn top-players-by-metric
   "Get top players by a specific metric"
   [metric limit & {:keys [championship-id]}]

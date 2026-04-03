@@ -76,6 +76,46 @@
     [:span {:class (merge-classes "rounded-full px-2.5 py-1 text-xs font-medium" styles class)}
      text]))
 
+(defn- normalize-status-code
+  [raw]
+  (let [s (-> (str raw) str/trim str/lower-case)]
+    (cond
+      (str/blank? s) ""
+      (= s "finished") "completed"
+      :else s)))
+
+(defn status-label
+  "Rótulo em português para valores de status da API (chaves em inglês no banco)."
+  [raw]
+  (let [n (normalize-status-code raw)]
+    (case n
+      "" "-"
+      "active" "Ativo"
+      "inactive" "Inativo"
+      "completed" "Concluído"
+      "cancelled" "Cancelado"
+      "indefinido" "Indefinido"
+      "pending" "Pendente"
+      "scheduled" "Agendado"
+      (if (str/blank? (str raw))
+        "-"
+        (str raw)))))
+
+(defn status-variant
+  "Variante visual do badge para o status (inglês normalizado)."
+  [raw]
+  (case (normalize-status-code raw)
+    "active" :success
+    "completed" :info
+    "inactive" :warning
+    "cancelled" :danger
+    :info))
+
+(defn status-active?
+  "True se o status da entidade é active (após normalizar finished → completed)."
+  [raw]
+  (= "active" (normalize-status-code raw)))
+
 (defn format-match-result
   "Format match result for display. result can be a map with :our-score/:opponent-score
    (or :result.our-score from API) or nil. Returns e.g. \"3 x 1\" or \"-\"."

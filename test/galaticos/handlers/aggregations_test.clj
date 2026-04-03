@@ -40,6 +40,22 @@
           result (handlers/avg-goals-by-position request)]
       (is (= 400 (:status result))))))
 
+(deftest championship-tab-stats-handler
+  (testing "success bundles player + position stats"
+    (let [champ-id (str (ObjectId.))
+          request {:params {:championship-id champ-id}}
+          result (with-redefs [agg/player-stats-by-championship (fn [_] [{:player-name "A"}])
+                              agg/avg-goals-by-position (fn [_] [{:position "GK"}])]
+                  (handlers/championship-tab-stats request))
+          body (parse-body result)]
+      (is (= 200 (:status result)))
+      (is (= "A" (get-in body [:data :player-stats 0 :player-name])))
+      (is (= "GK" (get-in body [:data :position-stats 0 :position])))))
+  (testing "missing championship-id"
+    (let [result (handlers/championship-tab-stats {:params {}})
+          body (parse-body result)]
+      (is (= 400 (:status result))))))
+
 (deftest player-performance-evolution
   (testing "success with player-id"
     (let [player-id (str (ObjectId.))
