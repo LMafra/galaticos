@@ -70,6 +70,8 @@ jobs:
       - name: Run backend coverage
         env:
           MONGO_URI: mongodb://admin:admin123@localhost:27017/galaticos-test?authSource=admin
+          DATABASE_URL: mongodb://admin:admin123@localhost:27017/galaticos-test?authSource=admin
+          DATABASE_NAME: galaticos-test
         run: ./bin/galaticos coverage
         continue-on-error: false
 
@@ -84,6 +86,8 @@ jobs:
       - name: Run E2E tests (start app, seed, run tests)
         env:
           MONGO_URI: mongodb://admin:admin123@localhost:27017/galaticos-test?authSource=admin
+          DATABASE_URL: mongodb://admin:admin123@localhost:27017/galaticos-test?authSource=admin
+          DATABASE_NAME: galaticos-test
           PORT: 3000
           E2E_BASE_URL: http://localhost:3000
         run: |
