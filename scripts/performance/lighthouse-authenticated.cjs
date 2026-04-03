@@ -17,7 +17,6 @@ const path = require('path');
 const fs = require('fs');
 const http = require('http');
 const https = require('https');
-const chromeLauncher = require('chrome-launcher');
 const puppeteer = require('puppeteer-core');
 const lighthouse = require('lighthouse').default;
 const { generateReport } = require('lighthouse');
@@ -158,7 +157,8 @@ async function main() {
     process.exit(1);
   }
 
-  const chrome = await chromeLauncher.launch({
+  const { launch } = await import('chrome-launcher');
+  const chrome = await launch({
     chromePath: CHROME_PATH,
     chromeFlags: ['--headless=new', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage'],
   });

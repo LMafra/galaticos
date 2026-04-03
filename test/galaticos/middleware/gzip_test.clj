@@ -45,8 +45,19 @@
       (is (= r (gzip/gzip-response req r))))))
 
 (deftest wrap-gzip-test
-  (let [handler (fn [_] {:status 200 :headers {} :body (big-string)})
-        wrapped (gzip/wrap-gzip handler)
-        resp (wrapped {:headers {"accept-encoding" "gzip"}})]
-    (is (= 200 (:status resp)))
-    (is (= "gzip" (get-in resp [:headers "Content-Encoding"])))))
+  (testing "sync handler"
+    (let [handler (fn [_] {:status 200 :headers {} :body (big-string)})
+          wrapped (gzip/wrap-gzip handler)
+          resp (wrapped {:headers {"accept-encoding" "gzip"}})]
+      (is (= 200 (:status resp)))
+      (is (= "gzip" (get-in resp [:headers "Content-Encoding"])))))
+  (testing "async 3-arity handler gzips in respond callback"
+    (let [handler (fn [_req respond _raise]
+                    (respond {:status 200 :headers {} :body (big-string)}))
+          wrapped (gzip/wrap-gzip handler)
+          result (atom nil)]
+      (wrapped {:headers {"accept-encoding" "gzip"}}
+               (fn [resp] (reset! result resp))
+               (fn [_] (is false "raise should not run")))
+      (is (= 200 (:status @result)))
+      (is (= "gzip" (get-in @result [:headers "Content-Encoding"]))))))
