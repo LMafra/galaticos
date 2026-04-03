@@ -30,6 +30,33 @@
         }
     </style>
     <link rel="stylesheet" href="/css/app.css">
+    <!-- Dev-only: reduz ruído no console (React DevTools, shadow-cljs ready). Não altera produção em host real. -->
+    <script>
+      (function () {
+        var h = location.hostname;
+        if (h !== 'localhost' && h !== '127.0.0.1') return;
+        function skipNoise(args) {
+          var a0 = args[0];
+          if (typeof a0 !== 'string') return false;
+          if (a0.indexOf('shadow-cljs:') === 0) return true;
+          if (a0.indexOf('Download the React DevTools') !== -1) return true;
+          /* xhr.io costuma logar GET … 401 no console.error */
+          if (a0.indexOf('/api/auth/check') !== -1 && a0.indexOf('401') !== -1) return true;
+          return false;
+        }
+        function wrap(method) {
+          var orig = console[method];
+          if (typeof orig !== 'function') return;
+          console[method] = function () {
+            if (skipNoise(arguments)) return;
+            return orig.apply(console, arguments);
+          };
+        }
+        wrap('log');
+        wrap('info');
+        wrap('error');
+      })();
+    </script>
 </head>
 <body>
     <a href="#main-content" class="skip-link">Pular para o conteúdo</a>

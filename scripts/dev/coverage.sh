@@ -21,12 +21,14 @@ if [[ ! -d "test" ]]; then
     exit 0
 fi
 
-# Run coverage with Cloverage
-log_step "Running Cloverage (80% lines, 70% branches threshold)..."
+# Run coverage with Cloverage (--fail-threshold in deps.edn; gate is min of % lines and % forms)
+log_step "Running Cloverage (threshold: min(% lines, % forms) ≥ 70; see deps.edn :coverage)..."
 echo ""
 
 if ! run_clojure -M:coverage; then
-    log_error "Coverage failed to meet thresholds (80% lines, 70% branches)"
+    log_error "Cloverage exited with failure. Common causes:"
+    log_error "  • Test failures (see FAIL / errors above)"
+    log_error "  • Coverage below deps.edn :coverage --fail-threshold (min of % lines and % forms vs project total)"
     echo ""
     log_info "Coverage report available at: target/coverage/index.html"
     exit 1

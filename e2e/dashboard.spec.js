@@ -50,11 +50,11 @@ test.describe('Dashboard card navigation', { tag: '@navigation' }, () => {
     }
   });
 
-  test('clicking Campeonatos card navigates to championships list', async ({ page }, testInfo) => {
+  test('clicking Temporadas card navigates to championships list', async ({ page }, testInfo) => {
     try {
       await page.goto('/#/dashboard');
       await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible();
-      await page.locator('main').getByRole('button').filter({ hasText: 'Campeonatos' }).first().click();
+      await page.locator('main').getByRole('button').filter({ hasText: 'Temporadas' }).first().click();
       await expect(page.getByRole('heading', { name: 'Campeonatos', level: 1 })).toBeVisible();
     } finally {
       await saveCoverage(page, testInfo);

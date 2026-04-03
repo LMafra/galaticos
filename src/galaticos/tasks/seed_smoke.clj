@@ -24,6 +24,13 @@
 
 (def ^:private match-opponent "Smoke Opponent")
 
+(defn- clear-database! []
+  ;; Remove all documents from seed-related collections so smoke data does not accumulate
+  ;; with production or previous runs.
+  (doseq [coll ["teams" "players" "championships" "seasons" "matches" "admins"]]
+    (mc/remove (db/db) coll {}))
+  (log/info "Database cleared before smoke seed"))
+
 (defn- ensure-admin! []
   (if (admins/exists? admin-username)
     (do
@@ -111,6 +118,7 @@
         (System/exit 1))
       (try
         (log/info "Seeding smoke dataset...")
+        (clear-database!)
         (ensure-admin!)
         (let [team (ensure-team!)
               championship (ensure-championship!)

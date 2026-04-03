@@ -44,7 +44,7 @@ show_help() {
     echo "    run              Start the application"
     echo "    console          Start Clojure REPL"
     echo "    test             Run tests"
-    echo "    coverage         Run backend test coverage (80% lines, 70% branches)"
+    echo "    coverage         Run backend Cloverage (min % lines / % forms ≥ threshold in deps.edn)"
     echo "    coverage:e2e     Run E2E test coverage"
     echo "    coverage:all     Run all test coverage (backend + E2E)"
     echo "    validate         Validate application is running correctly"

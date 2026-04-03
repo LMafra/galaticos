@@ -31,6 +31,11 @@
 (def ^:private disable-auth?
   (= "true" (env :disable-auth)))
 
+(defn authentication-disabled?
+  "True when DISABLE_AUTH is set (dev/test only). Exposed for handlers that need parity with wrap-auth."
+  []
+  (true? disable-auth?))
+
 (def ^:private disable-auth-allowed?
   (dev-envs (app-env)))
 

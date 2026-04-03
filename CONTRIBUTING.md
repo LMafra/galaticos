@@ -54,7 +54,7 @@ Antes de enviar um PR, certifique-se de:
 
 - [ ] O código compila sem erros
 - [ ] Todos os testes passam: `./bin/galaticos test`
-- [ ] **Cobertura atinge os requisitos mínimos (80% linhas, 70% branches)**
+- [ ] **Cobertura backend atinge o Cloverage** (`min(% linhas, % forms)` ≥ `--fail-threshold` em `deps.edn`; veja [testing-coverage.md](docs/informacao/dominio/testing-coverage.md))
 - [ ] Novos recursos incluem testes adequados
 - [ ] As dependências estão atualizadas
 - [ ] Não há warnings do compilador
@@ -62,10 +62,7 @@ Antes de enviar um PR, certifique-se de:
 
 #### Requisitos de Cobertura
 
-O projeto mantém os seguintes requisitos de cobertura de código:
-
-- **Cobertura de Linhas**: ≥ 80%
-- **Cobertura de Branches**: ≥ 70%
+No backend, o Cloverage (alias `:coverage` em `deps.edn`) falha quando o **menor** entre **% de linhas** e **% de forms** cobertas fica abaixo de `--fail-threshold` (hoje 70). Isso não equivale a “branch coverage” de ferramentas JavaScript.
 
 **Validar cobertura localmente:**
 
@@ -85,9 +82,9 @@ open target/coverage-report/index.html
 1. Execute `./bin/galaticos coverage` para ver o relatório
 2. Identifique áreas não cobertas (linhas vermelhas no relatório HTML)
 3. Adicione testes para cobrir essas áreas
-4. Repita até atingir 80/70
+4. Repita até o relatório indicar que os thresholds do Cloverage foram atingidos
 
-**Importante:** PRs que não atingirem os thresholds de cobertura serão bloqueados automaticamente pelo CI. Veja [docs/testing-coverage.md](docs/testing-coverage.md) para mais detalhes.
+**Importante:** PRs que não atingirem os thresholds de cobertura serão bloqueados automaticamente pelo CI. Veja [docs/informacao/dominio/testing-coverage.md](docs/informacao/dominio/testing-coverage.md) para mais detalhes.
 
 ## Ambiente de Desenvolvimento
 

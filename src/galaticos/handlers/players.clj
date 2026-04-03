@@ -1,6 +1,8 @@
 (ns galaticos.handlers.players
   "Request handlers for player operations"
   (:require [galaticos.db.players :as players-db]
+            [galaticos.db.teams :as teams-db]
+            [galaticos.db.aggregations :as agg]
             [galaticos.util.response :as resp]
             [clojure.tools.logging :as log]
             [clojure.string :as str]))
@@ -29,7 +31,9 @@
 
 (defn- handle-exception [e user-message]
   (if (= 400 (-> e ex-data :status))
-    (resp/error (or user-message (.getMessage e)) 400)
+    (let [raw (.getMessage e)
+          msg (when-not (str/blank? raw) (str/trim raw))]
+      (resp/error (or msg user-message) 400))
     (do
       (log/error e user-message)
       (resp/server-error user-message))))
@@ -61,6 +65,18 @@
     (catch Exception e
       (handle-exception e "Failed to get player"))))
 
+(defn get-player-detail-bundle
+  "Player document + performance evolution in one response (fewer round-trips for the detail page)."
+  [request]
+  (try
+    (let [id (get-in request [:params :id])]
+      (if-let [player (players-db/find-by-id id)]
+        (resp/success {:player player
+                       :evolution (agg/player-performance-evolution id)})
+        (resp/not-found "Player not found")))
+    (catch Exception e
+      (handle-exception e "Failed to get player detail"))))
+
 (defn create-player
   "Create a new player"
   [request]
@@ -69,8 +85,14 @@
           {:keys [error data]} (validate-player-body player-data)]
       (if error
         (resp/error error 400)
-        (let [created (players-db/create data)]
-          (resp/success created 201))))
+        (do
+          (when-let [tid (:team-id data)]
+            (when-not (teams-db/exists? tid)
+              (throw (ex-info "Team not found" {:status 400}))))
+          (let [created (players-db/create data)]
+            (when-let [tid (:team-id created)]
+              (teams-db/add-player tid (:_id created)))
+            (resp/success created 201)))))
     (catch Exception e
       (handle-exception e "Failed to create player"))))
 

@@ -4,6 +4,8 @@
             [clojure.test :refer [deftest is testing]]
             [galaticos.handlers.players :as handlers]
             [galaticos.db.players :as players-db]
+            [galaticos.db.teams :as teams-db]
+            [galaticos.db.aggregations :as agg]
             [galaticos.util.response :as resp])
   (:import [org.bson.types ObjectId]))
 
@@ -48,6 +50,20 @@
       (is (= 404 (:status result)))
       (is (= "Player not found" (:error (parse-body result)))))))
 
+(deftest get-player-detail-bundle
+  (testing "found includes evolution"
+    (let [id (str (ObjectId.))
+          request {:params {:id id}}
+          player {:_id (ObjectId. id) :name "Bundled"}
+          evo [{:year 2024}]
+          result (with-redefs [players-db/find-by-id (fn [x] (when (= x id) player))
+                              agg/player-performance-evolution (fn [x] (when (= x id) evo))]
+                  (handlers/get-player-detail-bundle request))
+          body (parse-body result)]
+      (is (= 200 (:status result)))
+      (is (= "Bundled" (get-in body [:data :player :name])))
+      (is (= 2024 (get-in body [:data :evolution 0 :year]))))))
+
 (deftest create-player
   (testing "success"
     (let [request {:json-body {:name "New" :position "FW"}}
@@ -57,6 +73,27 @@
           body (parse-body result)]
       (is (= 201 (:status result)))
       (is (= "New" (get-in body [:data :name])))))
+  (testing "success with team-id calls add-player"
+    (let [tid (ObjectId.)
+          pid (ObjectId.)
+          request {:json-body {:name "New" :position "FW" :team-id (str tid)}}
+          created {:_id pid :name "New" :position "FW" :team-id tid}
+          added (atom nil)
+          result (with-redefs [teams-db/exists? (fn [id] (= id tid))
+                               teams-db/add-player (fn [team-id player-id]
+                                                     (reset! added [team-id player-id]))
+                               players-db/create (fn [_] created)]
+                  (handlers/create-player request))]
+      (is (= 201 (:status result)))
+      (is (= [tid pid] @added))))
+  (testing "team-id not found"
+    (let [tid (str (ObjectId.))
+          request {:json-body {:name "New" :position "FW" :team-id tid}}
+          result (with-redefs [teams-db/exists? (fn [_] false)]
+                  (handlers/create-player request))
+          body (parse-body result)]
+      (is (= 400 (:status result)))
+      (is (str/includes? (:error body) "Team not found"))))
   (testing "missing required fields"
     (let [request {:json-body {:name "Only"}}
           result (handlers/create-player request)

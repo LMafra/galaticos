@@ -12,34 +12,43 @@
 
 (defn- quick-create-player-for-match!
   [championship-id stat-idx enrolled-players-atom form-data-atom form-error-atom name ok err]
-  (api/create-player
-   {:name name :position player-picker/quick-create-position}
-   (fn [created]
-     (if-let [pid (player-picker/player-id created)]
-       (api/enroll-player-in-championship
-        championship-id
-        pid
-        (fn [_result]
-          (api/get-championship-players
-           championship-id
-           (fn [rows]
-             (reset! enrolled-players-atom rows)
-             (swap! form-data-atom assoc-in [:player-statistics stat-idx :player-id] pid)
-             (ok created))
-           (fn [e]
-             (reset! form-error-atom (str "Erro ao carregar inscritos: " e))
-             (err (str "Erro ao carregar inscritos: " e)))))
-        (fn [e]
-          (reset! form-error-atom (str "Erro ao inscrever jogador: " e))
-          (err (str "Erro ao inscrever jogador: " e))))
-       (err "Jogador criado sem ID retornado.")))
-   (fn [e]
-     (err (str "Erro ao criar jogador: " e)))))
+  (let [team-id (str/trim (str (:home-team-id @form-data-atom)))]
+    (if (str/blank? team-id)
+      (err "Selecione o time mandante antes de criar jogador.")
+      (api/create-player
+       {:name name :position player-picker/quick-create-position :team-id team-id}
+       (fn [created]
+         (if-let [pid (player-picker/player-id created)]
+           (api/enroll-player-in-championship
+            championship-id
+            pid
+            (fn [_result]
+              (api/get-championship-players
+               championship-id
+               (fn [rows]
+                 (reset! enrolled-players-atom rows)
+                 (swap! form-data-atom assoc-in [:player-statistics stat-idx :player-id] pid)
+                 (ok created))
+               (fn [e]
+                 (reset! form-error-atom (str "Erro ao carregar inscritos: " e))
+                 (err (str "Erro ao carregar inscritos: " e)))))
+            (fn [e]
+              (reset! form-error-atom (str "Erro ao inscrever jogador: " e))
+              (err (str "Erro ao inscrever jogador: " e))))
+           (err "Jogador criado sem ID retornado.")))
+       (fn [e]
+         (err (str "Erro ao criar jogador: " e)))))))
 
 (defn- match-row
-  [match delete-match!]
+  [match delete-match! authenticated?]
   (let [match-id (:_id match)]
-    [:div {:class "flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:flex-row lg:items-center lg:justify-between"}
+    [:div {:class "flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:bg-slate-50 lg:flex-row lg:items-center lg:justify-between"
+           :role "button"
+           :tab-index 0
+           :on-click #(rfe/push-state :match-detail {:id match-id})
+           :on-key-down (fn [e]
+                          (when (= "Enter" (.-key e))
+                            (rfe/push-state :match-detail {:id match-id})))}
      [:div {:class "flex items-center gap-3"}
       [:div {:class "rounded-xl bg-brand-maroon/10 p-2 text-brand-maroon"}
        [:> CalendarPlus {:size 18}]]
@@ -48,17 +57,102 @@
        [:p {:class "text-xs text-slate-500"} (str (.toLocaleDateString (js/Date. (:date match))) " • " (or (:venue match) "-"))]]]
      [:div {:class "flex items-center gap-3"}
       [common/badge (common/format-match-result (:result match)) :variant :info]
-      [:button {:class "rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-100"
-                :on-click #(rfe/push-state :match-edit {:id match-id})}
-       [:> Pencil {:size 16}]]
-      [:button {:class "rounded-lg border border-slate-200 p-2 text-rose-600 hover:bg-rose-50"
-                :on-click #(delete-match! match-id)}
-       [:> Trash2 {:size 16}]]]]))
+      (when authenticated?
+        [:<>
+         [:button {:class "rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-100"
+                   :on-click (fn [e]
+                               (.stopPropagation e)
+                               (rfe/push-state :match-edit {:id match-id}))}
+          [:> Pencil {:size 16}]]
+         [:button {:class "rounded-lg border border-slate-200 p-2 text-rose-600 hover:bg-rose-50"
+                   :on-click (fn [e]
+                               (.stopPropagation e)
+                               (delete-match! match-id))}
+          [:> Trash2 {:size 16}]]])]]))
+
+(defn match-detail
+  "Read-only match detail page (BRM-10)."
+  [params]
+  (let [id (:id params)
+        match (r/atom nil)
+        loading? (r/atom true)
+        error (r/atom nil)
+        load! (fn []
+                (reset! error nil)
+                (reset! loading? true)
+                (api/get-match
+                 id
+                 (fn [result]
+                   (reset! match result)
+                   (reset! loading? false))
+                 (fn [err]
+                   (reset! error (str "Erro ao carregar partida: " err))
+                   (reset! loading? false))))]
+    (r/create-class
+     {:component-did-mount (fn [] (load!))
+      :reagent-render
+      (fn []
+        (let [{:keys [authenticated championships]} @state/app-state
+              ch-id (some-> @match :championship-id str)
+              ch-name (some->> championships (filter #(= (str (:_id %)) ch-id)) first :name)
+              stats (or (:player-statistics @match) [])
+              to-int (fn [v]
+                       (let [parsed (js/parseInt (or (some-> v str) "0") 10)]
+                         (if (js/isNaN parsed) 0 parsed)))
+              total-goals (reduce + 0 (map #(to-int (:goals %)) stats))
+              total-assists (reduce + 0 (map #(to-int (:assists %)) stats))]
+          [:div {:class "space-y-6"}
+           [:div {:class "flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"}
+            [:div
+             [:p {:class "text-sm text-slate-500"} "Partida"]
+             [:h2 {:class "text-2xl font-semibold text-slate-900"} (or (:opponent @match) "Detalhe da partida")]]
+            [:div {:class "flex flex-wrap gap-2"}
+             [common/button "Voltar" #(rfe/push-state :matches) :variant :outline]
+             (when authenticated
+               [common/button "Editar" #(rfe/push-state :match-edit {:id id}) :variant :primary])]]
+
+           (cond
+             @error [common/error-message @error]
+             @loading? [common/loading-spinner]
+             @match
+             [:div {:class "grid gap-4 md:grid-cols-2"}
+              [common/card
+               [:h3 {:class "app-section-title"} "Resumo"]
+               [:div {:class "mt-3 space-y-2 text-sm text-slate-600"}
+                (when ch-name
+                  [:p [:span {:class "font-medium text-slate-800"} "Campeonato: "] ch-name])
+                [:p [:span {:class "font-medium text-slate-800"} "Data: "]
+                 (if-let [d (:date @match)]
+                   (.toLocaleDateString (js/Date. d))
+                   "-")]
+                [:p [:span {:class "font-medium text-slate-800"} "Local: "] (or (:venue @match) "-")]
+                [:p [:span {:class "font-medium text-slate-800"} "Resultado: "]
+                 (common/format-match-result (:result @match))]
+                [:p [:span {:class "font-medium text-slate-800"} "Gols (jogadores): "] total-goals]
+                [:p [:span {:class "font-medium text-slate-800"} "Assistências: "] total-assists]]]
+
+              [common/card
+               [:h3 {:class "app-section-title"} "Estatísticas dos jogadores"]
+               (if (seq stats)
+                 [common/table
+                  ["Jogador" "Time" "Gols" "Assists" "Min"]
+                  (map (fn [row]
+                         [(or (:player-name row) (some-> (:player-id row) str) "—")
+                          (some-> (:team-id row) str)
+                          (to-int (:goals row))
+                          (to-int (:assists row))
+                          (to-int (:minutes-played row))])
+                       stats)
+                  :dense? true
+                  :show-search? false]
+                 [:p {:class "app-muted"} "Sem estatísticas registradas."])]] 
+             :else
+             [:p {:class "app-muted"} "Partida não encontrada."])]))})))
 
 (defn match-list []
   (let [search (r/atom "")]
     (fn []
-      (let [{:keys [matches matches-loading? matches-error championships]} @state/app-state
+      (let [{:keys [authenticated matches matches-loading? matches-error championships]} @state/app-state
             delete-match! (fn [match-id]
                             (when (js/confirm "Tem certeza que deseja deletar esta partida?")
                               (api/delete-match match-id
@@ -86,12 +180,9 @@
           [:div
            [:p {:class "text-sm text-slate-500"} "Calendário"]
            [:h2 {:class "text-2xl font-semibold text-slate-900"} "Partidas"]]
-          [:div {:class "flex flex-wrap gap-2"}
-           [common/button "Nova Partida" #(rfe/push-state :match-new) :variant :primary]
-           [common/button "Atualizar"
-            #(do (effects/ensure-championships! {:force? true})
-                 (effects/ensure-matches! {:force? true}))
-            :variant :outline]]]
+          (when authenticated
+            [:div {:class "flex flex-wrap gap-2"}
+             [common/button "Nova Partida" #(rfe/push-state :match-new) :variant :primary]])]
 
          [common/card
           [:div {:class "flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"}
@@ -118,14 +209,15 @@
                    [:div {:class "min-w-0"}
                     [:h3 {:class "text-lg font-semibold text-slate-900"} (:name ch)]
                     [:p {:class "text-xs text-slate-500"} (str (count ms) " partida(s)")]]
-                   [common/button "Nova partida"
-                    #(rfe/push-state :match-new-in-championship {:championship-id cid})
-                    :variant :outline]]
+                   (when authenticated
+                     [common/button "Nova partida"
+                      #(rfe/push-state :match-new-in-championship {:championship-id cid})
+                      :variant :outline])]
                   (if (seq ms)
                     [:div {:class "mt-4 space-y-3"}
                      (for [m ms]
                        ^{:key (:_id m)}
-                       [match-row m delete-match!])]
+                       [match-row m delete-match! authenticated])]
                     [:p {:class "app-muted mt-3"} "Nenhuma partida neste campeonato."])]))
              (for [oid orphan-ids]
                (let [ms (sort-ms (get by-champ oid []))]
@@ -139,7 +231,7 @@
                   [:div {:class "mt-4 space-y-3"}
                    (for [m ms]
                      ^{:key (:_id m)}
-                     [match-row m delete-match!])]]))
+                     [match-row m delete-match! authenticated])]]))
              (when (seq no-champ-ms)
                ^{:key "no-championship"}
                [common/card
@@ -150,7 +242,7 @@
                 [:div {:class "mt-4 space-y-3"}
                  (for [m no-champ-ms]
                    ^{:key (:_id m)}
-                   [match-row m delete-match!])]])])]]))))
+                   [match-row m delete-match! authenticated])]])])]]))))
 
 (defn match-form [params]
   (let [id (:id params)

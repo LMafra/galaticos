@@ -60,7 +60,7 @@ if [[ -d "playwright-coverage" ]]; then
             fi
         else
             log_warning "No coverage data collected. Ensure your application serves instrumented code."
-            log_info "See docs/testing-coverage.md for setup instructions."
+            log_info "See docs/informacao/dominio/testing-coverage.md for setup instructions."
         fi
     fi
 else
@@ -70,7 +70,7 @@ else
     log_info "  2. Serve instrumented code in test environment"
     log_info "  3. Use playwright coverage helpers to collect data"
     log_info ""
-    log_info "See docs/testing-coverage.md for detailed setup instructions."
+    log_info "See docs/informacao/dominio/testing-coverage.md for detailed setup instructions."
 fi
 
 echo ""

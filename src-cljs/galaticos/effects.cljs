@@ -62,11 +62,13 @@
                     state/set-matches!)))
 
 (defn ensure-teams! [& [{:keys [force?]}]]
-  (let [{:keys [teams-loaded?]} @state/app-state
-        loaded? (and teams-loaded? (not force?))]
-    (guarded-fetch! :teams loaded?
-                    #(api/get-teams %1 %2)
-                    state/set-teams!)))
+  ;; GET /api/teams requires Bearer auth; skip when logged out to avoid 401 noise in the console.
+  (when (some? (api/current-token))
+    (let [{:keys [teams-loaded?]} @state/app-state
+          loaded? (and teams-loaded? (not force?))]
+      (guarded-fetch! :teams loaded?
+                      #(api/get-teams %1 %2)
+                      state/set-teams!))))
 
 (defn ensure-auth! []
   (let [{:keys [auth-checked? auth-loading? authenticated]} @state/app-state
@@ -85,7 +87,10 @@
           (mark-in-flight! :auth)
           (api/check-auth
            (fn [user]
-             (state/set-user! user (api/current-token))
+             (if (some? user)
+               (state/set-user! user (api/current-token))
+               (do (state/clear-auth!)
+                   (api/clear-token!)))
              (clear-in-flight! :auth))
            (fn [_error]
              (state/clear-auth!)
@@ -101,6 +106,7 @@
       (when (not= route-name :login)
         (ensure-auth!)
         (case route-name
+          :home (ensure-dashboard!)
           :dashboard (ensure-dashboard!)
           :stats (ensure-championships!)
           :players nil

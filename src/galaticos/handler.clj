@@ -3,6 +3,7 @@
   (:require [compojure.core :refer [defroutes GET]]
             [compojure.route :as route]
             [ring.middleware.defaults :refer [wrap-defaults site-defaults]]
+            [galaticos.middleware.gzip :refer [wrap-gzip]]
             [ring.util.response :refer [response content-type]]
             [galaticos.routes.api :refer [api-routes]]
             [galaticos.middleware.cors :refer [wrap-cors]]
@@ -137,13 +138,15 @@
 
 (def app
   "Main application handler with middleware stack"
+  ;; wrap-gzip last so it sees the final response (incl. from site-defaults).
   (let [wrapped (-> app-routes
                     wrap-request-id
                     wrap-errors
                     wrap-cors
                     wrap-json-body
                     wrap-static-cache
-                    (wrap-defaults (assoc-in site-defaults [:security :anti-forgery] false)))]
+                    (wrap-defaults (assoc-in site-defaults [:security :anti-forgery] false))
+                    wrap-gzip)]
     (fn [request]
       (wrapped request))))
 

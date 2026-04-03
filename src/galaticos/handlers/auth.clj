@@ -33,9 +33,11 @@
       (resp/server-error "Failed to process logout"))))
 
 (defn check-auth
-  "Check if user is authenticated"
+  "Check if user is authenticated. Always returns 200 so clients and browsers do not log a failed resource for a normal 'not logged in' or invalid-token probe."
   [request]
   (if (auth/authenticated? request)
-    (resp/success {:authenticated true :user (auth/current-user request)})
-    (resp/unauthorized "Not authenticated")))
+    (resp/success {:authenticated true
+                   :user (or (some-> (auth/current-user request) str not-empty)
+                             (when (auth/authentication-disabled?) "dev"))})
+    (resp/success {:authenticated false})))
 

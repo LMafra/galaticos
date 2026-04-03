@@ -47,16 +47,6 @@
         (catch :default _ nil))
       ""))
 
-(when (or (nil? api-base-url) (= "" api-base-url))
-  (js/console.warn "GALATICOS_API_URL não definido; usando mesma origem para chamadas da API."))
-
-(defonce _api-base-url-logged (atom false))
-(when (and (some? js/goog) (.-DEBUG js/goog) (compare-and-set! _api-base-url-logged false true))
-  (let [display-url (if (or (nil? api-base-url) (= "" api-base-url))
-                      (str (.-origin js/window.location))
-                      (try (.-host (js/URL. api-base-url)) (catch :default _ api-base-url)))]
-    (js/console.info "API base URL:" display-url)))
-
 (def success-statuses #{200 201 202 203 204})
 
 (defn- extract-error [response]
@@ -201,7 +191,9 @@
                (fn [data]
                  (when-let [token (:token data)]
                    (set-token! token))
-                 (on-success (or (:user data) data)))
+                 (if (true? (:authenticated data))
+                   (on-success (:user data))
+                   (on-success nil)))
                on-error))
 
 ;; Players API
@@ -210,6 +202,9 @@
 
 (defn get-player [id on-success on-error]
   (get-request (str "/api/players/" id) {} on-success on-error))
+
+(defn get-player-detail-bundle [id on-success on-error]
+  (get-request (str "/api/players/" id "/detail") {} on-success on-error))
 
 (defn create-player [data on-success on-error]
   (post-request "/api/players" data on-success on-error))
@@ -247,6 +242,35 @@
 
 (defn finalize-championship [championship-id winner-player-ids titles-award-count on-success on-error]
   (post-request (str "/api/championships/" championship-id "/finalize")
+                {:winner-player-ids winner-player-ids
+                 :titles-award-count (if (number? titles-award-count) titles-award-count (js/parseInt (str titles-award-count) 10))}
+                on-success
+                on-error))
+
+;; Seasons API
+(defn get-championship-seasons [championship-id on-success on-error]
+  (get-request (str "/api/championships/" championship-id "/seasons") {} on-success on-error))
+
+(defn create-season [championship-id data on-success on-error]
+  (post-request (str "/api/championships/" championship-id "/seasons") data on-success on-error))
+
+(defn get-season [season-id on-success on-error]
+  (get-request (str "/api/seasons/" season-id) {} on-success on-error))
+
+(defn get-season-players [season-id on-success on-error]
+  (get-request (str "/api/seasons/" season-id "/players") {} on-success on-error))
+
+(defn activate-season [season-id on-success on-error]
+  (post-request (str "/api/seasons/" season-id "/activate") {} on-success on-error))
+
+(defn enroll-player-in-season [season-id player-id on-success on-error]
+  (post-request (str "/api/seasons/" season-id "/enroll/" player-id) {} on-success on-error))
+
+(defn unenroll-player-from-season [season-id player-id on-success on-error]
+  (delete-request (str "/api/seasons/" season-id "/unenroll/" player-id) on-success on-error))
+
+(defn finalize-season [season-id winner-player-ids titles-award-count on-success on-error]
+  (post-request (str "/api/seasons/" season-id "/finalize")
                 {:winner-player-ids winner-player-ids
                  :titles-award-count (if (number? titles-award-count) titles-award-count (js/parseInt (str titles-award-count) 10))}
                 on-success
@@ -294,11 +318,12 @@
 (defn get-dashboard-stats [on-success on-error]
   (get-request "/api/aggregations/stats" {} on-success on-error))
 
-(defn reconcile-stats [on-success on-error]
-  (post-request "/api/aggregations/stats/reconcile" {} on-success on-error))
-
 (defn get-player-stats-by-championship [championship-id on-success on-error]
   (get-request (str "/api/aggregations/players/stats/" championship-id) {} on-success on-error))
+
+(defn get-championship-tab-stats [championship-id on-success on-error]
+  (get-request (str "/api/aggregations/championships/" championship-id "/tab-stats")
+               {} on-success on-error))
 
 (defn get-top-players [params on-success on-error]
   (get-request "/api/aggregations/players/top" params on-success on-error))
@@ -308,6 +333,10 @@
 
 (defn get-championship-comparison [on-success on-error]
   (get-request "/api/aggregations/championships/comparison" {} on-success on-error))
+
+(defn get-championship-leaderboards [championship-id on-success on-error]
+  (get-request (str "/api/aggregations/championships/" championship-id "/leaderboards")
+               {} on-success on-error))
 
 (defn get-player-evolution [player-id on-success on-error]
   (get-request (str "/api/aggregations/players/" player-id "/evolution") {} on-success on-error))

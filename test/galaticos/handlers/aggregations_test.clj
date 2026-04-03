@@ -40,6 +40,22 @@
           result (handlers/avg-goals-by-position request)]
       (is (= 400 (:status result))))))
 
+(deftest championship-tab-stats-handler
+  (testing "success bundles player + position stats"
+    (let [champ-id (str (ObjectId.))
+          request {:params {:championship-id champ-id}}
+          result (with-redefs [agg/player-stats-by-championship (fn [_] [{:player-name "A"}])
+                              agg/avg-goals-by-position (fn [_] [{:position "GK"}])]
+                  (handlers/championship-tab-stats request))
+          body (parse-body result)]
+      (is (= 200 (:status result)))
+      (is (= "A" (get-in body [:data :player-stats 0 :player-name])))
+      (is (= "GK" (get-in body [:data :position-stats 0 :position])))))
+  (testing "missing championship-id"
+    (let [result (handlers/championship-tab-stats {:params {}})
+          body (parse-body result)]
+      (is (= 400 (:status result))))))
+
 (deftest player-performance-evolution
   (testing "success with player-id"
     (let [player-id (str (ObjectId.))
@@ -90,6 +106,25 @@
           body (parse-body result)]
       (is (= 200 (:status result)))
       (is (= 3 (get-in body [:data :updated]))))))
+
+(deftest championship-table-leaderboards-handler
+  (testing "success"
+    (let [cid (str (ObjectId.))
+          request {:params {:id cid}}
+          payload {:top-goals [{:name "A" :goals 3}]
+                   :top-assists []
+                   :top-games []
+                   :top-titles []}
+          result (with-redefs [agg/championship-table-leaderboards (fn [_] payload)]
+                  (handlers/championship-table-leaderboards request))
+          body (parse-body result)]
+      (is (= 200 (:status result)))
+      (is (= 3 (get-in body [:data :top-goals 0 :goals])))))
+  (testing "missing id"
+    (let [request {:params {:id ""}}
+          result (handlers/championship-table-leaderboards request)
+          body (parse-body result)]
+      (is (= 400 (:status result))))))
 
 ;; dashboard-stats omitted: requires real DB or complex stubs (mc/count/mc/find-maps
 ;; interact with Mongo Java driver and stub fns cause ClassCastException)

@@ -42,6 +42,17 @@ log_step() {
     echo -e "${CYAN}→${NC} $*" >&2
 }
 
+# Section header (stderr, like other log_* helpers)
+log_header() {
+    local title="$1"
+    local width="${2:-60}"
+    echo "" >&2
+    echo "=$(printf '=%.0s' $(seq 1 "$width"))" >&2
+    echo "$title" >&2
+    echo "=$(printf '=%.0s' $(seq 1 "$width"))" >&2
+    echo "" >&2
+}
+
 # Get project root directory (cached)
 get_project_root() {
     if [[ -z "${PROJECT_ROOT:-}" ]]; then

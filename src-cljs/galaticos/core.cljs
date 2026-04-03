@@ -6,12 +6,7 @@
             [galaticos.routes :as routes]
             [galaticos.components.layout :as layout]
             [galaticos.components.login :as login]
-            [galaticos.components.dashboard :as dashboard]
-            [galaticos.components.aggregations :as aggregations]
-            [galaticos.components.players :as players]
-            [galaticos.components.matches :as matches]
-            [galaticos.components.championships :as championships]
-            [galaticos.components.teams :as teams]
+            [galaticos.lazy-pages :as lazy-p]
             [galaticos.effects :as effects]
             [galaticos.state :as state]))
 
@@ -28,6 +23,12 @@
   [:div
    [:h2 "Não autenticado"]
    [:p "Sua sessão não está ativa. Faça login para continuar."]])
+
+(def ^:private protected-routes
+  #{:player-new :player-edit
+    :match-new :match-new-in-championship :match-edit
+    :championship-new :championship-edit
+    :teams :team-detail :team-new :team-edit})
 
 (defn current-page
   "Determine which page to render based on current route"
@@ -46,34 +47,38 @@
       (nil? match) [not-found-page]
       
       ;; Protected routes - require authentication
-      (and auth-checked? (not authenticated))
+      (and auth-checked? (not authenticated) (contains? protected-routes route-name))
       (do
-        ;; Redirect to login if trying to access protected route
-        (when (not= route-name :login)
-          (rfe/push-state :login))
-        [login/login-page])
+        (rfe/push-state :dashboard)
+        [:div {:style {:text-align "center" :padding "40px"}} "Redirecionando..."])
       
-      ;; Authenticated routes
+      ;; Authenticated routes (heavy pages load async via shadow.lazy / :pages chunk)
       match (case route-name
-              :dashboard [dashboard/dashboard]
-              :stats [aggregations/aggregations-page]
-              :players [players/player-list]
-              :player-new [players/player-form {}]
-              :player-detail [players/player-detail path-params]
-              :player-edit [players/player-form path-params]
-              :matches [matches/match-list]
-              :match-new [matches/match-form]
+              :home [lazy-p/loadable-route lazy-p/dashboard]
+              :dashboard [lazy-p/loadable-route lazy-p/dashboard]
+              :stats [lazy-p/loadable-route lazy-p/aggregations-page]
+              :players [lazy-p/loadable-route lazy-p/player-list]
+              :player-new [lazy-p/loadable-route lazy-p/player-form {}]
+              :player-detail [lazy-p/loadable-route lazy-p/player-detail path-params]
+              :player-edit [lazy-p/loadable-route lazy-p/player-form path-params]
+              :matches [lazy-p/loadable-route lazy-p/match-list]
+              :match-new [lazy-p/loadable-route lazy-p/match-form]
               :match-new-in-championship ^{:key (str "match-new-" (:championship-id path-params))}
-              [matches/match-form path-params]
-              :match-edit [matches/match-form path-params]
-              :championships [championships/championship-list]
-              :championship-new [championships/championship-form {}]
-              :championship-edit [championships/championship-form path-params]
-              :championship-detail ^{:key (:id path-params)} [championships/championship-detail path-params]
-              :teams [teams/team-list]
-              :team-new [teams/team-form {}]
-              :team-edit [teams/team-form path-params]
-              :team-detail [teams/team-detail path-params]
+              [lazy-p/loadable-route lazy-p/match-form path-params]
+              :match-edit [lazy-p/loadable-route lazy-p/match-form path-params]
+              :match-detail [lazy-p/loadable-route lazy-p/match-detail path-params]
+              :championships [lazy-p/loadable-route lazy-p/championship-list]
+              :championship-new [lazy-p/loadable-route lazy-p/championship-form {}]
+              :championship-edit [lazy-p/loadable-route lazy-p/championship-form path-params]
+              :championship-detail ^{:key (:id path-params)}
+              [lazy-p/loadable-route lazy-p/championship-detail path-params]
+              :championship-season-detail
+              ^{:key (str (:id path-params) "-" (:season-id path-params))}
+              [lazy-p/loadable-route lazy-p/championship-season-detail path-params]
+              :teams [lazy-p/loadable-route lazy-p/team-list]
+              :team-new [lazy-p/loadable-route lazy-p/team-form {}]
+              :team-edit [lazy-p/loadable-route lazy-p/team-form path-params]
+              :team-detail [lazy-p/loadable-route lazy-p/team-detail path-params]
               [not-found-page])
       
       :else [:div {:style {:text-align "center" :padding "40px"}} "Loading..."])))
@@ -82,7 +87,6 @@
   "Main application component"
   []
   (let [route-name (when @current-match (get-in @current-match [:data :name]))]
-    ;; Don't show layout for login page
     (if (= route-name :login)
       (when @current-match
         [current-page @current-match])
@@ -104,19 +108,23 @@
   "Initialize the application (called from shadow-cljs init-fn)."
   []
   (when (compare-and-set! app-started? false true)
-    (effects/ensure-auth!)
+    ;; Yield one tick so the shell can paint before auth + router work.
+    (js/setTimeout (fn [] (effects/ensure-auth!)) 0)
     (rfe/start!
      routes/router
      (fn [m _]
        (reset! current-match m)
-       (let [route-name (when m (get-in m [:data :name]))
+       (swap! state/app-state assoc :route-match m)
+        (let [route-name (when m (get-in m [:data :name]))
              {:keys [authenticated auth-checked?]} @state/app-state]
-         ;; Redirect to login if not authenticated and trying to access protected route
-         (when (and auth-checked? (not authenticated) (not= route-name :login))
-           (rfe/push-state :login))
+         ;; Redirect to login only for write routes.
+         (when (and auth-checked?
+                    (not authenticated)
+                    (contains? protected-routes route-name))
+           (rfe/push-state :dashboard))
          (effects/on-route! m)))
      {:use-fragment true
-      :default :login})  ; Default route is login
+      :default :dashboard})
     (mount-root)))
 
 (defn ^:dev/after-load reload []

@@ -13,13 +13,30 @@
   [championship-data]
   (let [now (java.util.Date.)
         id (ObjectId.)
-        doc (merge {:enrolled-player-ids []}
+        doc (merge {:enrolled-player-ids []
+                     :season-ids []}
                    championship-data
                    {:_id id
                     :created-at now
                     :updated-at now})]
     (mc/insert (db) collection-name doc)
     doc))
+
+(defn add-season-id
+  "Append a season reference to the championship.season-ids array."
+  [championship-id season-id]
+  (mc/update (db) collection-name
+             {:_id (->object-id championship-id)}
+             {:$addToSet {:season-ids (->object-id season-id)}
+              :$set {:updated-at (java.util.Date.)}}))
+
+(defn remove-season-id
+  "Remove a season reference from the championship.season-ids array."
+  [championship-id season-id]
+  (mc/update (db) collection-name
+             {:_id (->object-id championship-id)}
+             {:$pull {:season-ids (->object-id season-id)}
+              :$set {:updated-at (java.util.Date.)}}))
 
 (defn find-by-id
   "Find championship by ID"

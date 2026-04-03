@@ -7,13 +7,13 @@ Sistema web para gestão de elenco esportivo com dashboard analítico, desenvolv
 O projeto passa a manter uma trilha de documentação dedicada a sports data analytics para orientar evolução técnica e de produto.
 
 - Hub de documentação: `docs/README.md`
-- Estratégia analítica: `docs/analytics/strategy.md`
-- Arquitetura analítica: `docs/analytics/architecture.md`
-- Catálogo de métricas: `docs/analytics/metrics-catalog.md`
-- Contratos de dados: `docs/analytics/data-contracts.md`
-- Qualidade de dados: `docs/analytics/data-quality.md`
-- Modelo operacional: `docs/analytics/operating-model.md`
-- Roadmap de evolução: `docs/analytics/roadmap.md`
+- Estratégia analítica: `docs/informacao/analytics/strategy.md`
+- Arquitetura analítica: `docs/informacao/analytics/architecture.md`
+- Catálogo de métricas: `docs/informacao/analytics/metrics-catalog.md`
+- Contratos de dados: `docs/informacao/analytics/data-contracts.md`
+- Qualidade de dados: `docs/informacao/analytics/data-quality.md`
+- Modelo operacional: `docs/informacao/analytics/operating-model.md`
+- Roadmap de evolução: `docs/informacao/analytics/roadmap.md`
 
 ## Stack Tecnológico
 
@@ -43,12 +43,13 @@ galaticos/
 ├── data/                          # Dados do projeto
 │   ├── raw/                       # Arquivos de dados originais (Excel, etc.)
 │   └── processed/                # Dados processados
-├── docs/                          # Documentação
-│   ├── mongodb-schema.md          # Documentação do schema
-│   ├── backend-gap-report.md
-│   ├── build-gap-report.md
-│   ├── frontend-gap-report.md
-│   └── IMPLEMENTATION.md          # Documentação de implementação
+├── docs/                          # Documentação (por status + tema)
+│   ├── README.md                  # Índice mestre
+│   ├── perf-output/               # Saídas Lighthouse locais (gitignored)
+│   ├── informacao/                # Referência e processos
+│   ├── concluido/                 # Snapshots de entregas
+│   ├── parcial/                   # Planos em andamento
+│   └── a-fazer/                   # Backlogs e pendências
 ├── resources/                     # Recursos estáticos e configurações
 │   ├── config.edn                 # Configurações da aplicação
 │   └── templates/
@@ -461,7 +462,7 @@ docker compose -f config/docker/docker-compose.dev.yml run --rm app clj -M:front
 
 ### Cobertura de Código
 
-O projeto mantém requisitos de cobertura de **80% de linhas** e **70% de branches**. Use os comandos abaixo (que chamam `scripts/dev/coverage.sh`, `scripts/e2e/coverage.sh` e `scripts/dev/coverage-all.sh`):
+No **backend (Cloverage)**, o CI usa `--fail-threshold` em `deps.edn` (hoje **70**). O Cloverage compara o threshold ao **menor** entre **% de linhas** e **% de forms** instrumentadas — não há um critério separado de “branches” como em ferramentas JS; **forms** aproxima expressões condicionais, mas não é o mesmo que branch coverage do front. Use os comandos abaixo (que chamam `scripts/dev/coverage.sh`, `scripts/e2e/coverage.sh` e `scripts/dev/coverage-all.sh`):
 
 ```bash
 # Cobertura backend (Clojure) — scripts/dev/coverage.sh
@@ -485,12 +486,12 @@ open target/coverage/index.html
 
 ### CI/CD
 
-A cobertura é validada automaticamente no GitHub Actions para todos os Pull Requests. PRs que não atingirem os thresholds de 80/70 terão o merge bloqueado.
+A cobertura backend é validada automaticamente no GitHub Actions para todos os Pull Requests. PRs em que o **mínimo** entre cobertura de linhas e de forms ficar abaixo do `--fail-threshold` configurado terão o merge bloqueado.
 
 **Badges:**
-[![Test Coverage](https://img.shields.io/badge/coverage-80%25-brightgreen)]()
+[![Backend coverage](https://img.shields.io/badge/backend%20coverage-min(lines,forms)%20≥70%25-brightgreen)]()
 
-Para mais detalhes, consulte a [documentação completa de cobertura](docs/testing-coverage.md).
+Para mais detalhes, consulte a [documentação completa de cobertura](docs/informacao/dominio/testing-coverage.md).
 
 ## Uso
 
@@ -598,7 +599,7 @@ Para mais detalhes, consulte a [documentação completa de cobertura](docs/testi
 
 ## Schema MongoDB
 
-Consulte `docs/mongodb-schema.md` para documentação completa do schema, incluindo:
+Consulte `docs/informacao/dominio/mongodb-schema.md` para documentação completa do schema, incluindo:
 - Estrutura de coleções
 - Schemas JSON de exemplo
 - Relacionamentos

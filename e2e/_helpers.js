@@ -39,7 +39,13 @@ async function saveCoverage(page, testInfo) {
   if (!coverageEnabled()) {
     return;
   }
-  const coverage = await page.evaluate(() => window.__coverage__ || null);
+  let coverage;
+  try {
+    coverage = await page.evaluate(() => window.__coverage__ || null);
+  } catch {
+    // Page/context may already be closed after a timeout or failure.
+    return;
+  }
   if (!coverage) {
     return;
   }

@@ -1,57 +1,91 @@
-# Galáticos - Hub de Documentação
+# Galáticos — Hub de documentação
 
-Documentação central do projeto Galáticos, agora organizada para suportar evolução contínua em sports data analytics.
+Documentação central do projeto, organizada por **status** (Informação, Concluído, Parcial, A Fazer) e por **tema** dentro de cada status.
 
 ## Como navegar
 
-- `README.md` (raiz): visão geral do projeto, setup e execução.
-- `docs/README.md` (este arquivo): índice mestre de documentação.
-- `docs/analytics/*`: trilha estratégica e operacional de analytics.
+- `README.md` (raiz do repositório): visão geral do projeto, setup e execução.
+- `docs/README.md` (este arquivo): índice por status.
+- Saídas locais do Lighthouse (JSON): `docs/perf-output/` (gitignored; ver documentação em Informação / performance).
 
-## Trilha Sports Data Analytics
+## Informação
 
-- `docs/analytics/strategy.md`: visão, objetivos e casos de uso analíticos.
-- `docs/analytics/architecture.md`: arquitetura de dados e fluxo analítico fim a fim.
-- `docs/analytics/metrics-catalog.md`: catálogo oficial de métricas e KPIs.
-- `docs/analytics/data-contracts.md`: contratos de dados versionados e governança de schema.
-- `docs/analytics/data-quality.md`: regras de qualidade, reconciliação e incidentes.
-- `docs/analytics/reconciliation-runbook.md`: rotina operacional de reconciliação e resposta a incidentes.
-- `docs/analytics/operating-model.md`: papéis, cadência e gestão de mudanças analíticas.
-- `docs/analytics/roadmap.md`: roadmap evolutivo em fases.
-- `docs/analytics/technical-evolution.md`: plano de desacoplamento da recomputação analítica e observabilidade.
-- `docs/analytics/advanced-analytics-backlog.md`: priorização de métricas derivadas e camada preditiva.
+Referência estável: visão, processos, modelos e como medir.
 
-## Documentação funcional e técnica existente
+### Analytics (`docs/informacao/analytics/`)
 
-- `docs/regras-de-negocio.md`: regras funcionais e técnicas do domínio.
-- `docs/regras-de-negocio-checklist.md`: checklist de implementação de regras.
-- `docs/mongodb-schema.md`: modelagem das coleções MongoDB.
-- `docs/testing-coverage.md`: cobertura de testes e estratégia de qualidade.
-- `docs/IMPLEMENTATION.md`: visão de implementação inicial.
+- [strategy.md](informacao/analytics/strategy.md) — visão, objetivos e casos de uso analíticos.
+- [architecture.md](informacao/analytics/architecture.md) — arquitetura de dados e fluxo analítico fim a fim.
+- [metrics-catalog.md](informacao/analytics/metrics-catalog.md) — catálogo oficial de métricas e KPIs.
+- [data-contracts.md](informacao/analytics/data-contracts.md) — contratos de dados versionados e governança de schema.
+- [data-quality.md](informacao/analytics/data-quality.md) — regras de qualidade, reconciliação e incidentes.
+- [reconciliation-runbook.md](informacao/analytics/reconciliation-runbook.md) — rotina operacional de reconciliação e resposta a incidentes.
+- [operating-model.md](informacao/analytics/operating-model.md) — papéis, cadência e gestão de mudanças analíticas.
+- [roadmap.md](informacao/analytics/roadmap.md) — roadmap evolutivo em fases.
 
-## Performance frontend
+### Performance (`docs/informacao/performance/`)
 
-- `docs/performance/README.md`: objetivos, interpretação dev vs release, limitações de auditoria com JWT em `localStorage`.
-- `docs/performance/metodologia.md`: Lighthouse (DevTools e CLI), WSL/Chrome, rotas públicas e autenticadas.
-- `docs/performance/inventario-paginas.md`: inventário de rotas e componentes para medição por página.
-- `docs/performance/backlog-acoes.md`: baseline, oportunidades e checklist de tarefas por tela ou grupo.
+- [README.md](informacao/performance/README.md) — objetivos, interpretação dev vs release, limitações de auditoria com JWT em `localStorage`.
+- [metodologia.md](informacao/performance/metodologia.md) — Lighthouse (DevTools e CLI), WSL/Chrome, rotas públicas e autenticadas.
+- [inventario-paginas.md](informacao/performance/inventario-paginas.md) — inventário de rotas e componentes para medição por página.
 
-## Materiais de apoio (NotebookLM)
+### Domínio (`docs/informacao/dominio/`)
 
-- `docs/notebookLM/design-and-db-improvements.md`
-- `docs/notebookLM/improvement-checklist.md`
-- `docs/notebookLM/notebooklm-prompts.md`
-- `docs/notebookLM/notebooklm-response.md`
+- [regras-de-negocio.md](informacao/dominio/regras-de-negocio.md) — regras funcionais e técnicas do domínio.
+- [mongodb-schema.md](informacao/dominio/mongodb-schema.md) — modelagem das coleções MongoDB.
+- [testing-coverage.md](informacao/dominio/testing-coverage.md) — cobertura de testes e estratégia de qualidade.
 
-## Referências externas usadas na trilha de analytics
+### NotebookLM (`docs/informacao/notebookLM/`)
+
+- [notebooklm-prompts.md](informacao/notebookLM/notebooklm-prompts.md)
+- [notebooklm-response.md](informacao/notebookLM/notebooklm-response.md)
+
+## Concluído
+
+Registros de entregas ou fases encerradas (snapshot).
+
+### Domínio (`docs/concluido/dominio/`)
+
+- [IMPLEMENTATION.md](concluido/dominio/IMPLEMENTATION.md) — visão da implementação inicial do schema e módulos (histórico).
+
+## Parcial
+
+Planos ou trabalhos em curso, ainda não totalmente aplicados.
+
+### Analytics (`docs/parcial/analytics/`)
+
+- [technical-evolution.md](parcial/analytics/technical-evolution.md) — desacoplamento da recomputação analítica e observabilidade.
+
+## A Fazer
+
+Backlogs, checklists de pendências e melhorias a executar.
+
+### Analytics (`docs/a-fazer/analytics/`)
+
+- [advanced-analytics-backlog.md](a-fazer/analytics/advanced-analytics-backlog.md)
+
+### Performance (`docs/a-fazer/performance/`)
+
+- [backlog-acoes.md](a-fazer/performance/backlog-acoes.md)
+
+### Domínio (`docs/a-fazer/dominio/`)
+
+- [regras-de-negocio-checklist.md](a-fazer/dominio/regras-de-negocio-checklist.md)
+
+### NotebookLM (`docs/a-fazer/notebookLM/`)
+
+- [design-and-db-improvements.md](a-fazer/notebookLM/design-and-db-improvements.md)
+- [improvement-checklist.md](a-fazer/notebookLM/improvement-checklist.md)
+
+## Referências externas (trilha de analytics)
 
 - [Sports analytics - Wikipedia](https://en.wikipedia.org/wiki/Sports_analytics)
 - [What Is Sports Data Analytics? | Teradata](https://www.teradata.com/insights/data-analytics/what-is-sports-data-analytics)
 - [Data Literacy Toolkit](https://data-literacy-toolkit.github.io)
 
-## Diretriz de manutenção da documentação
+## Manutenção
 
-- Sempre atualizar o `docs/README.md` quando um novo documento for criado.
-- Evitar duplicação de definição de métricas entre `regras-de-negocio.md` e `analytics/metrics-catalog.md`.
-- Tratar `analytics/metrics-catalog.md` como fonte de verdade semântica para indicadores analíticos.
-
+- Ao criar um documento novo, coloque-o em **uma** pasta de status; se o trabalho evoluir (ex.: checklist concluído), **mova** o arquivo e atualize este `README.md`.
+- Evitar duplicar o mesmo conteúdo em duas categorias.
+- Evitar duplicação de definição de métricas entre `informacao/dominio/regras-de-negocio.md` e `informacao/analytics/metrics-catalog.md`.
+- Tratar `informacao/analytics/metrics-catalog.md` como fonte de verdade semântica para indicadores analíticos.
