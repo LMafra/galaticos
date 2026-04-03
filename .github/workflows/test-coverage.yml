@@ -8,7 +8,7 @@ on:
 
 jobs:
   coverage:
-    name: Test Coverage (80% lines, 70% branches)
+    name: Test Coverage (Cloverage min lines/forms)
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -141,8 +141,7 @@ jobs:
           fi
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Requirements" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Line Coverage: **≥80%**" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Branch Coverage: **≥70%**" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Backend: Cloverage **min(% lines, % forms)** ≥ **\`--fail-threshold\`** in \`deps.edn\` (\`:coverage\`)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "📁 [View detailed reports in artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
 
@@ -151,7 +150,7 @@ jobs:
           echo "Verifying coverage thresholds..."
           if [ -f "target/coverage/coverage.txt" ]; then
             echo "✅ Backend coverage check completed"
-            echo "Coverage requirements enforced by Cloverage (80% lines, 70% branches)"
+            echo "Coverage requirements enforced by Cloverage (min of % lines and % forms vs. --fail-threshold in deps.edn)"
           else
             echo "❌ Coverage validation failed"
             exit 1

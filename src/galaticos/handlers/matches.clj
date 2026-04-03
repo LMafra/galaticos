@@ -227,12 +227,11 @@
       (if (matches-db/exists? id)
         (let [existing (matches-db/find-by-id id)
               season-id (:season-id existing)]
-          (do
-            (matches-db/delete-by-id id)
-            (when season-id
-              (seasons-db/remove-match season-id (:_id existing)))
-            (agg/update-all-player-stats)
-            (resp/success {:message "Match deleted"})))
+          (matches-db/delete-by-id id)
+          (when season-id
+            (seasons-db/remove-match season-id (:_id existing)))
+          (agg/update-all-player-stats)
+          (resp/success {:message "Match deleted"}))
         (resp/not-found "Match not found")))
     (catch Exception e
       (handle-exception e "Failed to delete match"))))

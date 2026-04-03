@@ -21,12 +21,12 @@ if [[ ! -d "test" ]]; then
     exit 0
 fi
 
-# Run coverage with Cloverage
-log_step "Running Cloverage (80% lines, 70% branches threshold)..."
+# Run coverage with Cloverage (--fail-threshold in deps.edn; gate is min of % lines and % forms)
+log_step "Running Cloverage (threshold: min(% lines, % forms) ≥ 70; see deps.edn :coverage)..."
 echo ""
 
 if ! run_clojure -M:coverage; then
-    log_error "Coverage failed to meet thresholds (80% lines, 70% branches)"
+    log_error "Coverage failed: min(% lines covered, % forms covered) is below --fail-threshold (70)"
     echo ""
     log_info "Coverage report available at: target/coverage/index.html"
     exit 1

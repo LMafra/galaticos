@@ -462,7 +462,7 @@ docker compose -f config/docker/docker-compose.dev.yml run --rm app clj -M:front
 
 ### Cobertura de Código
 
-O projeto mantém requisitos de cobertura de **80% de linhas** e **70% de branches**. Use os comandos abaixo (que chamam `scripts/dev/coverage.sh`, `scripts/e2e/coverage.sh` e `scripts/dev/coverage-all.sh`):
+No **backend (Cloverage)**, o CI usa `--fail-threshold` em `deps.edn` (hoje **70**). O Cloverage compara o threshold ao **menor** entre **% de linhas** e **% de forms** instrumentadas — não há um critério separado de “branches” como em ferramentas JS; **forms** aproxima expressões condicionais, mas não é o mesmo que branch coverage do front. Use os comandos abaixo (que chamam `scripts/dev/coverage.sh`, `scripts/e2e/coverage.sh` e `scripts/dev/coverage-all.sh`):
 
 ```bash
 # Cobertura backend (Clojure) — scripts/dev/coverage.sh
@@ -486,10 +486,10 @@ open target/coverage/index.html
 
 ### CI/CD
 
-A cobertura é validada automaticamente no GitHub Actions para todos os Pull Requests. PRs que não atingirem os thresholds de 80/70 terão o merge bloqueado.
+A cobertura backend é validada automaticamente no GitHub Actions para todos os Pull Requests. PRs em que o **mínimo** entre cobertura de linhas e de forms ficar abaixo do `--fail-threshold` configurado terão o merge bloqueado.
 
 **Badges:**
-[![Test Coverage](https://img.shields.io/badge/coverage-80%25-brightgreen)]()
+[![Backend coverage](https://img.shields.io/badge/backend%20coverage-min(lines,forms)%20≥70%25-brightgreen)]()
 
 Para mais detalhes, consulte a [documentação completa de cobertura](docs/informacao/dominio/testing-coverage.md).
 

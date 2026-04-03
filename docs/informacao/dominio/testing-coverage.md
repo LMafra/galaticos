@@ -2,14 +2,18 @@
 
 Este documento descreve como executar, interpretar e manter a cobertura de testes do projeto Galáticos.
 
-## 📊 Requisitos de Cobertura
+## 📊 Requisitos de Cobertura (backend — Cloverage)
 
-O projeto Galáticos mantém os seguintes requisitos de cobertura de código:
+O backend usa [Cloverage](https://github.com/cloverage/cloverage) com `--fail-threshold` definido em `deps.edn` (alias `:coverage`; hoje **70**).
 
-- **Cobertura de Linhas**: ≥ 80%
-- **Cobertura de Branches**: ≥ 70%
+Na versão em uso, o gate de falha compara o threshold ao **mínimo** entre:
 
-Estes thresholds são validados automaticamente no CI/CD e bloqueiam merges de Pull Requests que não atendam aos requisitos.
+- **% Lines covered** (linhas instrumentadas executadas)
+- **% Forms covered** (forms Clojure instrumentadas cobertas)
+
+Ou seja, **os dois números importam**: se forms estiver baixo, o build falha mesmo com linhas altas. Isso **não** é o mesmo que “branch coverage” de Istanbul/Playwright; no relatório HTML, amarelo/vermelho ajuda a ver ramos parciais, mas o critério de CI é linhas + forms conforme acima.
+
+Estes thresholds são validados automaticamente no CI/CD e bloqueiam merges de Pull Requests que não atendam ao requisito.
 
 ## ✅ Estratégia de testes para Sports Data Analytics
 
@@ -65,9 +69,9 @@ Execute a cobertura do backend com:
 Este comando:
 - Executa todos os testes backend
 - Coleta dados de cobertura usando Cloverage
-- Valida os thresholds (80% linhas, 70% branches)
+- Valida o `--fail-threshold` do alias `:coverage` em `deps.edn` (mínimo entre % linhas e % forms)
 - Gera relatório HTML em `target/coverage/index.html`
-- **Falha** se os thresholds não forem atingidos
+- **Falha** se o mínimo (linhas, forms) ficar abaixo do threshold
 
 **Visualizar relatório:**
 ```bash
@@ -129,16 +133,16 @@ O relatório HTML mostra:
 
 #### Métricas importantes:
 
-- **Lines**: Porcentagem de linhas executadas
-- **Branches**: Porcentagem de branches (if/else, case, etc.) testados
-- **Forms**: Porcentagem de expressões Clojure cobertas
+- **Lines**: Porcentagem de linhas instrumentadas executadas
+- **Forms**: Porcentagem de forms instrumentadas cobertas (usada no gate junto com linhas — vale o **menor** dos dois vs. `--fail-threshold`)
+- **Branches** (no HTML): indicação de ramos parciais no relatório; não confundir com o critério único “70% branches” de outras stacks
 
 #### Exemplo de interpretação:
 
 ```
-Lines: 85.3% (240/281)     ✅ Acima de 80%
-Branches: 72.1% (49/68)    ✅ Acima de 70%
-Forms: 88.9% (320/360)     ℹ️  Informativo
+Lines: 82.3%                 ✅
+Forms: 70.6%                 ✅ (se threshold for 70, o gate usa o mínimo entre estes dois)
+ALL FILES (resumo Cloverage) ✅ se min(lines, forms) ≥ threshold
 ```
 
 ### Relatório E2E
@@ -155,9 +159,9 @@ O relatório E2E (quando disponível) mostra a cobertura do código JavaScript c
 ### 1. Identifique áreas não cobertas
 
 Abra o relatório HTML e procure por:
-- Arquivos com baixa cobertura (< 80%)
+- Arquivos com baixa cobertura de **linhas** ou **forms** (abaixo do threshold configurado)
 - Funções completamente não testadas (0%)
-- Branches não cobertos (if/else faltando)
+- Ramos parciais ou não cobertos (if/else, `cond`, etc.)
 
 ### 2. Priorize por importância
 
@@ -258,7 +262,7 @@ Se você precisa excluir um arquivo específico da cobertura, edite `deps.edn`:
 
 1. **Pull Request é aberto**
 2. **GitHub Actions executa** workflow `test-coverage.yml`
-3. **Backend coverage é validado** (80/70)
+3. **Backend coverage é validado** (Cloverage: mínimo entre % linhas e % forms vs. `--fail-threshold`)
 4. **E2E tests são executados**
 5. **Relatórios são gerados** e salvos como artifacts
 6. **Check passa ou falha** baseado nos thresholds
@@ -392,7 +396,7 @@ test('user login flow', async ({ page }) => {
 2. Abra: `target/coverage/index.html`
 3. Identifique áreas vermelhas
 4. Adicione testes
-5. Repita até atingir 80/70
+5. Repita até `min(% linhas, % forms)` ≥ threshold em `deps.edn`
 
 ### "No coverage data found"
 

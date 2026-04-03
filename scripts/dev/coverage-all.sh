@@ -14,7 +14,7 @@ cd_project_root
 
 log_info "Running complete test coverage for Galáticos..."
 echo ""
-log_info "Target: 80% line coverage, 70% branch coverage"
+log_info "Backend: Cloverage min(% lines, % forms) ≥ threshold in deps.edn (:coverage --fail-threshold)"
 echo ""
 
 # Track overall success
@@ -34,7 +34,7 @@ echo ""
 
 if [[ -d "test" ]]; then
     if "$SCRIPT_DIR/coverage.sh"; then
-        log_success "✅ Backend coverage passed (80% lines, 70% branches)"
+        log_success "✅ Backend coverage passed (Cloverage thresholds met)"
         BACKEND_COVERAGE_MET=true
         
         # Copy backend coverage report
@@ -199,13 +199,10 @@ cat > target/coverage-report/index.html <<'EOF'
     <div class="requirements">
         <h2>📊 Coverage Requirements</h2>
         <div class="requirement">
-            <strong>Line Coverage:</strong> Minimum 80%
+            <strong>Backend (Cloverage):</strong> min(% lines, % forms) ≥ <code>--fail-threshold</code> in <code>deps.edn</code> (<code>:coverage</code>)
         </div>
         <div class="requirement">
-            <strong>Branch Coverage:</strong> Minimum 70%
-        </div>
-        <div class="requirement">
-            <strong>Enforcement:</strong> CI/CD blocks PRs below thresholds
+            <strong>Enforcement:</strong> CI/CD blocks PRs when Cloverage fails the configured threshold
         </div>
     </div>
 
@@ -221,7 +218,7 @@ echo ""
 
 # Print summary
 if $BACKEND_COVERAGE_MET; then
-    echo "  ✅ Backend: Coverage thresholds met (80% lines, 70% branches)"
+    echo "  ✅ Backend: Coverage thresholds met (Cloverage)"
 else
     echo "  ❌ Backend: Coverage thresholds NOT met"
 fi

@@ -20,6 +20,8 @@
   []
   (proxy [PipedInputStream] []))
 
+;; clj-kondo: `do-copy` is private in clojure.java.io; extending it is intentional (same as ring-gzip-middleware).
+#_{:clj-kondo/ignore [:private-call]}
 (defmethod @#'io/do-copy [(class (piped-gzipped-input-stream*)) OutputStream]
   [^InputStream input ^OutputStream output opts]
   (let [buffer (make-array Byte/TYPE (or (:buffer-size opts) 1024))]
