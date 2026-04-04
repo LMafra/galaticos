@@ -79,5 +79,6 @@ else
     clj -M:dev -m galaticos.tasks.seed-smoke
 fi
 log_success "Smoke seed completed"
+log_info "Official Excel seed on this DB later: use db:seed --reset (same DB_NAME), or a separate DB for E2E."
 
 

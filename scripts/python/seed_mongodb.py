@@ -22,6 +22,10 @@ Env DEFAULT_SEASON (default 2025) is used for championships from BASE_DADOS and,
 when legacy CSV import is on, as the single stored season for those CSVs.
 
 Env EXCEL_FILE (or CLI --excel) overrides the default Excel path (default data/galaticos.xlsm).
+
+If the database contains the smoke/E2E dataset (galaticos.tasks.seed-smoke), official seed
+without --reset is refused so test data is not mixed with Excel data. Use --reset to replace
+everything, or --ignore-smoke-dataset to force (not recommended).
 """
 
 import argparse
@@ -65,8 +69,27 @@ SKIP_SHEETS = ["Base de dados", "PLACAS"]
 # CSV files under data/ that are not processed as row-layout championship exports
 SKIP_CSV_FILENAMES = frozenset({"galaticos.csv", "base_dados.csv"})
 
+# Fingerprints of galaticos.tasks.seed-smoke — keep in sync with src/galaticos/tasks/seed_smoke.clj
+SMOKE_PLAYER_NAME = "Smoke Player"
+SMOKE_CHAMPIONSHIP_NAME = "Smoke Championship"
+SMOKE_MATCH_OPPONENT = "Smoke Opponent"
+
 # Position mapping (if needed)
 POSITION_OPTIONS = ["Goleiro", "Zagueiro", "Lateral", "Volante", "Meia", "Atacante"]
+
+
+def database_contains_smoke_dataset(db) -> bool:
+    """
+    True if the DB still has E2E/smoke seed data. Official Excel seed without --reset
+    would merge with it; refuse unless the user resets or explicitly overrides.
+    """
+    if db.players.find_one({"name": SMOKE_PLAYER_NAME}, {"_id": 1}):
+        return True
+    if db.championships.find_one({"name": SMOKE_CHAMPIONSHIP_NAME}, {"_id": 1}):
+        return True
+    if db.matches.find_one({"opponent": SMOKE_MATCH_OPPONENT}, {"_id": 1}):
+        return True
+    return False
 
 
 def infer_position_from_name(name: str, explicit_position: Optional[str] = None) -> Optional[str]:
@@ -1864,6 +1887,11 @@ Examples:
         help="Path to .xlsm (default: env EXCEL_FILE or data/galaticos.xlsm)",
     )
     parser.add_argument(
+        "--ignore-smoke-dataset",
+        action="store_true",
+        help="Allow official seed without --reset even if smoke/E2E data is present (risk of mixed datasets)",
+    )
+    parser.add_argument(
         "--import-excel-championships",
         action="store_true",
         help="Legacy: import championship data from all Excel sheets except Base de dados / PLACAS",
@@ -1905,6 +1933,28 @@ Examples:
     db = client[DB_NAME]
     
     print(f"\n✓ Using database: {DB_NAME}")
+
+    if (
+        not args.reset
+        and not args.ignore_smoke_dataset
+        and database_contains_smoke_dataset(db)
+    ):
+        print(
+            "\n✗ Refusing official seed: this database still contains smoke/E2E test data "
+            "(seed-smoke).",
+            file=sys.stderr,
+        )
+        print(
+            "  Run with --reset to load only official Excel data, or use a separate DB_NAME "
+            "for tests.",
+            file=sys.stderr,
+        )
+        print(
+            "  Override only if you accept mixed datasets: --ignore-smoke-dataset",
+            file=sys.stderr,
+        )
+        client.close()
+        sys.exit(1)
     
     # Clear database if --reset flag is set
     if args.reset:
