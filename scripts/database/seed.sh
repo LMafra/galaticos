@@ -37,6 +37,9 @@ print_admin_credentials() {
 log_info "Seeding MongoDB database..."
 log_info "Database: $DB_NAME"
 log_info "MongoDB URI: $MONGO_URI"
+if [[ -n "${EXCEL_FILE:-}" ]]; then
+    log_info "Excel path (EXCEL_FILE): $EXCEL_FILE"
+fi
 
 # Parse arguments and pass them to Python script
 SEED_ARGS=("$@")
