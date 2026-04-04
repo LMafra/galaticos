@@ -3,6 +3,8 @@ services:
     image: mongo:7.0
     container_name: galaticos-mongodb-prod
     restart: unless-stopped
+    ports:
+      - "127.0.0.1:27017:27017"
     environment:
       MONGO_INITDB_DATABASE: galaticos
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-galaticos}

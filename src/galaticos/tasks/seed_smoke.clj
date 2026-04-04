@@ -1,6 +1,10 @@
 (ns galaticos.tasks.seed-smoke
   "Deterministic, minimal seed for smoke/E2E tests.
 
+  Clears seed-related collections first. To load official Excel data on the same Mongo
+  database afterward, run scripts/database/seed.sh with --reset (the Python seed refuses
+  to merge with smoke data without --reset).
+
   Creates/ensures:
   - admin/admin user
   - a single team, championship, player, and match with non-empty stats"

@@ -5,6 +5,9 @@
 #   ./seed.sh              # Normal seed (idempotent - won't create duplicates)
 #   ./seed.sh --reset      # Clear all data and reseed
 #   ./seed.sh --reset --keep-admins  # Clear data but keep admin users
+#
+# After db:seed-smoke: do not run this without --reset on the same DB — the Python seed
+# refuses to merge official Excel data with smoke/E2E data (use --reset or another DB_NAME).
 
 set -euo pipefail
 
@@ -13,8 +16,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=utils/common.sh
 source "$SCRIPT_DIR/../utils/common.sh"
 
-# Configuration
-readonly EXCEL_FILE="data/galaticos.xlsm"
+# Configuration (EXCEL_FILE may be set in the environment, same as seed_mongodb.py)
+EXCEL_FILE="${EXCEL_FILE:-data/galaticos.xlsm}"
 readonly SEED_SCRIPT="scripts/python/seed_mongodb.py"
 # Default admin credentials (must match seed_mongodb.py create_admin defaults)
 readonly ADMIN_USER="admin"
@@ -37,6 +40,7 @@ print_admin_credentials() {
 log_info "Seeding MongoDB database..."
 log_info "Database: $DB_NAME"
 log_info "MongoDB URI: $MONGO_URI"
+log_info "Excel file (EXCEL_FILE): $EXCEL_FILE"
 
 # Parse arguments and pass them to Python script
 SEED_ARGS=("$@")
@@ -101,7 +105,7 @@ except Exception as e:
 
     # Run seed script locally
     log_step "Running seed script..."
-    if MONGO_URI="$MONGO_URI" DB_NAME="$DB_NAME" python3 "$SEED_SCRIPT" "${SEED_ARGS[@]}"; then
+    if MONGO_URI="$MONGO_URI" DB_NAME="$DB_NAME" EXCEL_FILE="$EXCEL_FILE" python3 "$SEED_SCRIPT" "${SEED_ARGS[@]}"; then
         echo ""
         log_success "Seed script completed successfully!"
         log_step "Verifying data insertion..."
@@ -121,7 +125,7 @@ elif command_exists docker; then
     echo ""
 
     log_step "Running seed script (Docker)..."
-    if ! MONGO_URI="$MONGO_URI" DB_NAME="$DB_NAME" run_python_in_docker "$SEED_SCRIPT" "${SEED_ARGS[@]}"; then
+    if ! MONGO_URI="$MONGO_URI" DB_NAME="$DB_NAME" EXCEL_FILE="$EXCEL_FILE" run_python_in_docker "$SEED_SCRIPT" "${SEED_ARGS[@]}"; then
         log_error "Seed script failed"
         exit 1
     fi

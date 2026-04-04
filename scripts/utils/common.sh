@@ -166,6 +166,7 @@ run_python_in_docker() {
         --network host \
         -e MONGO_URI="${MONGO_URI:-mongodb://localhost:27017}" \
         -e DB_NAME="${DB_NAME:-galaticos}" \
+        -e EXCEL_FILE="${EXCEL_FILE:-}" \
         -v "$project_root:/app" \
         -w /app \
         python:3.11-slim \

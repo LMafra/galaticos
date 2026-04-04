@@ -4,8 +4,11 @@ MongoDB Seed Script for Galáticos
 Reads data from Excel .xlsm and seeds MongoDB.
 
 Default seed path (no legacy flags):
-- Players: Excel sheet "Base de dados" plus any names only in BASE_DADOS.csv.
-- Championships and per-championship table stats: BASE_DADOS.csv only (apply step).
+- Players: Excel sheet "Base de dados" (summary one-row-per-player, or long format
+  atleta+campeonato per row). Extra names only in the canonical BASE_DADOS source.
+- Championships and per-championship table stats: canonical BASE_DADOS — first the
+  Excel sheet "Base de dados" if it has long-format rows (atleta + campeonato), else
+  data/BASE_DADOS.csv.
 - Other Excel championship sheets and other data/*.csv files are not used by the default
   seed (ignored unless legacy import flags are set).
 
@@ -17,6 +20,12 @@ Championship names from BASE_DADOS use canonical_championship_name(): a trailing
 
 Env DEFAULT_SEASON (default 2025) is used for championships from BASE_DADOS and,
 when legacy CSV import is on, as the single stored season for those CSVs.
+
+Env EXCEL_FILE (or CLI --excel) overrides the default Excel path (default data/galaticos.xlsm).
+
+If the database contains the smoke/E2E dataset (galaticos.tasks.seed-smoke), official seed
+without --reset is refused so test data is not mixed with Excel data. Use --reset to replace
+everything, or --ignore-smoke-dataset to force (not recommended).
 """
 
 import argparse
@@ -60,8 +69,27 @@ SKIP_SHEETS = ["Base de dados", "PLACAS"]
 # CSV files under data/ that are not processed as row-layout championship exports
 SKIP_CSV_FILENAMES = frozenset({"galaticos.csv", "base_dados.csv"})
 
+# Fingerprints of galaticos.tasks.seed-smoke — keep in sync with src/galaticos/tasks/seed_smoke.clj
+SMOKE_PLAYER_NAME = "Smoke Player"
+SMOKE_CHAMPIONSHIP_NAME = "Smoke Championship"
+SMOKE_MATCH_OPPONENT = "Smoke Opponent"
+
 # Position mapping (if needed)
 POSITION_OPTIONS = ["Goleiro", "Zagueiro", "Lateral", "Volante", "Meia", "Atacante"]
+
+
+def database_contains_smoke_dataset(db) -> bool:
+    """
+    True if the DB still has E2E/smoke seed data. Official Excel seed without --reset
+    would merge with it; refuse unless the user resets or explicitly overrides.
+    """
+    if db.players.find_one({"name": SMOKE_PLAYER_NAME}, {"_id": 1}):
+        return True
+    if db.championships.find_one({"name": SMOKE_CHAMPIONSHIP_NAME}, {"_id": 1}):
+        return True
+    if db.matches.find_one({"opponent": SMOKE_MATCH_OPPONENT}, {"_id": 1}):
+        return True
+    return False
 
 
 def infer_position_from_name(name: str, explicit_position: Optional[str] = None) -> Optional[str]:
@@ -337,6 +365,80 @@ def create_players(db, players_df: pd.DataFrame, team_id: ObjectId) -> Dict[str,
             print(f"  ✗ Error creating player {player_name}: {e}")
     
     print(f"\n✓ Processed {len(player_map)} players")
+    return player_map
+
+
+def create_players_from_long_base_dados_sheet(
+    db,
+    players_df: pd.DataFrame,
+    df_norm: pd.DataFrame,
+    team_id: ObjectId,
+) -> Dict[str, ObjectId]:
+    """
+    One row per (atleta, campeonato): create each distinct atleta once with zero totals.
+    Does not overwrite stats for players that already exist (Step 3.7 fills aggregates).
+    """
+    players_collection = db.players
+    player_map: Dict[str, ObjectId] = {}
+    now = datetime.now(timezone.utc)
+    existing_players = {
+        p["name"]: p
+        for p in players_collection.find(
+            {}, {"name": 1, "position": 1, "team-id": 1, "aggregated-stats": 1}
+        )
+    }
+
+    ordered_unique: List[str] = []
+    seen = set()
+    for _, row in df_norm.iterrows():
+        n = normalize_player_name(row.get("atleta", ""))
+        if not n:
+            continue
+        if n.lower() == "atleta" and safe_int(row.get("jogos", 0), 0) == 0:
+            continue
+        if n not in seen:
+            seen.add(n)
+            ordered_unique.append(n)
+
+    created = 0
+    for player_name in ordered_unique:
+        existing = existing_players.get(player_name)
+        if existing:
+            player_map[player_name] = existing["_id"]
+            continue
+
+        pos_explicit = None
+        for idx, row in df_norm.iterrows():
+            if normalize_player_name(row.get("atleta", "")) != player_name:
+                continue
+            if idx in players_df.index and "Posição" in players_df.columns:
+                raw = players_df.loc[idx, "Posição"]
+                if raw is not None and not pd.isna(raw):
+                    s = str(raw).strip()
+                    pos_explicit = s if s else None
+            break
+
+        inferred = infer_position_from_name(player_name, pos_explicit)
+        player_doc = {
+            "name": player_name,
+            "nickname": None,
+            "position": inferred or "Atacante",
+            "team-id": team_id,
+            "active": True,
+            "aggregated-stats": {
+                "total": {"games": 0, "goals": 0, "assists": 0, "titles": 0},
+                "by-championship": [],
+            },
+            "created-at": now,
+            "updated-at": now,
+        }
+        result = players_collection.insert_one(player_doc)
+        player_map[player_name] = result.inserted_id
+        existing_players[player_name] = {"_id": result.inserted_id}
+        created += 1
+        print(f"  ✓ Created player (long-format sheet): {player_name}")
+
+    print(f"\n✓ Long-format sheet: {len(player_map)} player(s) in map ({created} newly created)")
     return player_map
 
 
@@ -786,21 +888,84 @@ def read_base_dados_dataframe(csv_path: Path) -> Optional[pd.DataFrame]:
                 if df.shape[1] < 3:
                     continue
                 df = _normalize_base_dados_columns(df)
-                if "atleta" in df.columns and "campeonato" in df.columns:
+                if is_valid_base_dados_dataframe(df):
                     return df
             except (UnicodeDecodeError, pd.errors.ParserError, ValueError, TypeError):
                 continue
     return None
 
 
+def is_valid_base_dados_dataframe(df: pd.DataFrame) -> bool:
+    """True if normalized frame has atleta + campeonato and at least one data row."""
+    if df is None or df.empty or df.shape[1] < 3:
+        return False
+    if "atleta" not in df.columns or "campeonato" not in df.columns:
+        return False
+    for _, row in df.iterrows():
+        player_name = normalize_player_name(row.get("atleta", ""))
+        ch_raw = str(row.get("campeonato", "")).strip()
+        if not player_name or not ch_raw or ch_raw.lower() == "time":
+            continue
+        return True
+    return False
+
+
+def read_base_dados_from_excel_sheet(excel_path: Path) -> Optional[pd.DataFrame]:
+    """Read long-format BASE_DADOS from sheet 'Base de dados' if structure is valid."""
+    if not excel_path.exists():
+        return None
+    try:
+        df = pd.read_excel(excel_path, sheet_name="Base de dados", engine="openpyxl")
+    except ValueError:
+        return None
+    if df.empty or df.shape[1] < 3:
+        return None
+    df = _normalize_base_dados_columns(df)
+    if not is_valid_base_dados_dataframe(df):
+        return None
+    return df
+
+
+def load_canonical_base_dados(excel_path: Path, csv_path: Path) -> Tuple[Optional[pd.DataFrame], str]:
+    """
+    Prefer Excel sheet 'Base de dados' (long format); fallback to BASE_DADOS.csv.
+    Returns (dataframe_or_none, human-readable source label for logs).
+    """
+    df_xl = read_base_dados_from_excel_sheet(excel_path)
+    if df_xl is not None:
+        return df_xl, "Excel sheet 'Base de dados'"
+    df_csv = read_base_dados_dataframe(csv_path)
+    if df_csv is not None and not df_csv.empty:
+        return df_csv, f"data/{BASE_DADOS_FILENAME}"
+    return None, ""
+
+
+def is_long_format_base_dados_sheet(df_norm: pd.DataFrame) -> bool:
+    """Whether the normalized 'Base de dados' sheet is long-format (same as canonical BASE_DADOS)."""
+    return is_valid_base_dados_dataframe(df_norm)
+
+
+def resolve_excel_path(cli_excel: Optional[str]) -> Path:
+    """Path to .xlsm: --excel, then env EXCEL_FILE, then default; try data/<name> if missing."""
+    raw = (cli_excel or os.getenv("EXCEL_FILE") or EXCEL_FILE).strip()
+    p = Path(raw).expanduser()
+    if p.exists():
+        return p.resolve()
+    if not p.is_absolute():
+        alt = Path("data") / p.name
+        if alt.exists():
+            return alt.resolve()
+    return p
+
+
 def ensure_players_from_base_dados(
     db,
     team_id: ObjectId,
     player_map: Dict[str, ObjectId],
-    base_path: Path,
+    base_df: Optional[pd.DataFrame],
 ) -> None:
-    """Insert any players that appear in BASE_DADOS but not yet in player_map."""
-    df = read_base_dados_dataframe(base_path)
+    """Insert any players that appear in canonical BASE_DADOS but not yet in player_map."""
+    df = base_df
     if df is None or df.empty:
         return
     players_collection = db.players
@@ -837,20 +1002,24 @@ def apply_base_dados_to_db(
     player_map: Dict[str, ObjectId],
     team_id: ObjectId,
     season: str,
-    base_path: Path,
+    base_df: Optional[pd.DataFrame],
+    source_label: str,
 ) -> int:
     """
-    Overwrite per-championship table stats from BASE_DADOS (canonical).
+    Overwrite per-championship table stats from canonical BASE_DADOS (Excel or CSV).
     Championships are created or marked completed for this season.
     """
     _ = team_id  # reserved for future team checks
-    df = read_base_dados_dataframe(base_path)
+    df = base_df
     if df is None or df.empty:
-        print("\n⚠ BASE_DADOS.csv not found or empty; skipping apply step")
+        print(
+            "\n⚠ No canonical BASE_DADOS data (Excel long-format 'Base de dados' or "
+            f"data/{BASE_DADOS_FILENAME}); skipping apply step"
+        )
         return 0
 
     print("\n" + "=" * 60)
-    print("Step 3.7: Applying BASE_DADOS.csv (canonical table stats)")
+    print(f"Step 3.7: Applying canonical table stats ({source_label})")
     print("=" * 60)
 
     players_collection = db.players
@@ -1049,7 +1218,7 @@ def apply_base_dados_to_db(
             },
         )
 
-    print(f"✓ BASE_DADOS applied: {rows_applied} row(s)")
+    print(f"✓ Canonical BASE_DADOS applied ({source_label}): {rows_applied} row(s)")
     return rows_applied
 
 
@@ -1668,8 +1837,9 @@ def main() -> None:
     """
     Main seed function.
 
-    Default: players from Excel "Base de dados" + BASE_DADOS; championships/stats from
-    BASE_DADOS only; other Excel sheets and data CSVs are ignored unless legacy flags are set.
+    Default: players from Excel "Base de dados"; championships/stats from the same sheet
+    (long format) when present, else data/BASE_DADOS.csv. Other Excel sheets and data CSVs
+    are ignored unless legacy flags are set.
 
     By default, the script is idempotent. Use --reset to clear existing data before seeding.
 
@@ -1678,8 +1848,9 @@ def main() -> None:
     """
     parser = argparse.ArgumentParser(
         description=(
-            "Seed MongoDB: players from Excel + BASE_DADOS; championships from BASE_DADOS. "
-            "Other sheets/CSVs are ignored unless legacy import flags are set."
+            "Seed MongoDB from Excel (and optional BASE_DADOS.csv). "
+            "Canonical per-championship stats: Excel 'Base de dados' long format first, "
+            f"then data/{BASE_DADOS_FILENAME}. Other sheets/CSVs ignored unless legacy flags."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
@@ -1692,6 +1863,9 @@ Examples:
   
   # Clear data but keep admin users
   python seed_mongodb.py --reset --keep-admins
+
+  # Custom Excel path (overrides env EXCEL_FILE)
+  python seed_mongodb.py --excel /path/to/galaticos.xlsm
 
   # Re-enable old imports from Excel championship tabs and/or data/*.csv
   python seed_mongodb.py --import-excel-championships --import-data-csv
@@ -1706,6 +1880,16 @@ Examples:
         "--keep-admins",
         action="store_true",
         help="When using --reset, keep existing admin users (only works with --reset)"
+    )
+    parser.add_argument(
+        "--excel",
+        metavar="PATH",
+        help="Path to .xlsm (default: env EXCEL_FILE or data/galaticos.xlsm)",
+    )
+    parser.add_argument(
+        "--ignore-smoke-dataset",
+        action="store_true",
+        help="Allow official seed without --reset even if smoke/E2E data is present (risk of mixed datasets)",
     )
     parser.add_argument(
         "--import-excel-championships",
@@ -1737,23 +1921,40 @@ Examples:
             print("⚠ Admin users will be preserved.")
         print()
     
-    # Check if Excel file exists
-    excel_path = Path(EXCEL_FILE)
+    # Resolve Excel path: --excel, env EXCEL_FILE, default; try data/<basename>
+    excel_path = resolve_excel_path(args.excel)
     if not excel_path.exists():
-        # Try alternative path
-        alt_path = Path("data") / excel_path.name
-        if alt_path.exists():
-            excel_path = alt_path
-        else:
-            print(f"✗ Error: Excel file '{EXCEL_FILE}' not found!", file=sys.stderr)
-            print(f"  Also checked: {alt_path}", file=sys.stderr)
-            sys.exit(1)
+        print(f"✗ Error: Excel file not found: {excel_path}", file=sys.stderr)
+        print("  Set --excel, env EXCEL_FILE, or place data/galaticos.xlsm", file=sys.stderr)
+        sys.exit(1)
     
     # Connect to MongoDB
     client = get_mongo_client()
     db = client[DB_NAME]
     
     print(f"\n✓ Using database: {DB_NAME}")
+
+    if (
+        not args.reset
+        and not args.ignore_smoke_dataset
+        and database_contains_smoke_dataset(db)
+    ):
+        print(
+            "\n✗ Refusing official seed: this database still contains smoke/E2E test data "
+            "(seed-smoke).",
+            file=sys.stderr,
+        )
+        print(
+            "  Run with --reset to load only official Excel data, or use a separate DB_NAME "
+            "for tests.",
+            file=sys.stderr,
+        )
+        print(
+            "  Override only if you accept mixed datasets: --ignore-smoke-dataset",
+            file=sys.stderr,
+        )
+        client.close()
+        sys.exit(1)
     
     # Clear database if --reset flag is set
     if args.reset:
@@ -1761,7 +1962,7 @@ Examples:
         print()
     
     # Load Excel file
-    print(f"\n📖 Reading Excel file: {EXCEL_FILE}")
+    print(f"\n📖 Reading Excel file: {excel_path}")
     wb = openpyxl.load_workbook(excel_path, data_only=True)
     sheet_names = wb.sheetnames
     print(f"✓ Found {len(sheet_names)} sheets")
@@ -1788,13 +1989,24 @@ Examples:
         sys.exit(1)
     
     players_df = pd.read_excel(excel_path, sheet_name="Base de dados", engine="openpyxl")
-    player_map = create_players(db, players_df, team_id)
+    df_norm = _normalize_base_dados_columns(players_df.copy())
+    long_format = is_long_format_base_dados_sheet(df_norm)
+    if long_format:
+        print("  Detected long-format sheet (atleta + campeonato); stats applied in Step 3.7.")
+        player_map = create_players_from_long_base_dados_sheet(
+            db, players_df, df_norm, team_id
+        )
+        canonical_df = df_norm.copy()
+        canonical_source = "Excel sheet 'Base de dados'"
+    else:
+        player_map = create_players(db, players_df, team_id)
+        base_csv_path = Path("data") / BASE_DADOS_FILENAME
+        canonical_df, canonical_source = load_canonical_base_dados(excel_path, base_csv_path)
 
-    base_csv_path = Path("data") / BASE_DADOS_FILENAME
     print("\n" + "=" * 60)
-    print("Step 2.5: Ensure players from BASE_DADOS.csv (if present)")
+    print("Step 2.5: Ensure players from canonical BASE_DADOS (Excel first, else CSV)")
     print("=" * 60)
-    ensure_players_from_base_dados(db, team_id, player_map, base_csv_path)
+    ensure_players_from_base_dados(db, team_id, player_map, canonical_df)
 
     # Step 3: Excel championship sheets (skipped by default)
     print("\n" + "=" * 60)
@@ -1839,7 +2051,8 @@ Examples:
         process_all_csv_championships(db, player_map, team_id)
     else:
         print(
-            "  Skipped (not writing to Mongo). Only BASE_DADOS.csv is used for championship stats."
+            "  Skipped (not writing to Mongo). Default championship stats use Excel "
+            f"'Base de dados' (long format) or data/{BASE_DADOS_FILENAME}."
         )
         print("  Use --import-data-csv for legacy import.")
 
@@ -1851,8 +2064,10 @@ Examples:
             "  Note: no documents in matches; rebuild only affects players that already had match-derived stats."
         )
 
-    # Step 3.7: BASE_DADOS canonical table stats (overwrites merged table fields)
-    apply_base_dados_to_db(db, player_map, team_id, DEFAULT_SEASON, base_csv_path)
+    # Step 3.7: canonical BASE_DADOS table stats (overwrites merged table fields)
+    apply_base_dados_to_db(
+        db, player_map, team_id, DEFAULT_SEASON, canonical_df, canonical_source
+    )
 
     # Step 4: Update team with active player IDs
     print("\n" + "=" * 60)
