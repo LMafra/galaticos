@@ -6,6 +6,7 @@
             [galaticos.routes :as routes]
             [galaticos.components.layout :as layout]
             [galaticos.components.login :as login]
+            [galaticos.components.toast :as toast]
             [galaticos.lazy-pages :as lazy-p]
             [galaticos.effects :as effects]
             [galaticos.state :as state]))
@@ -89,7 +90,8 @@
   (let [route-name (when @current-match (get-in @current-match [:data :name]))]
     (if (= route-name :login)
       (when @current-match
-        [current-page @current-match])
+        ;; Login is rendered outside `layout` (no chrome); still mount toasts for API errors.
+        [:<> [current-page @current-match] [toast/toast-container]])
       [layout/layout route-name
        (when @current-match
          [current-page @current-match])])))
