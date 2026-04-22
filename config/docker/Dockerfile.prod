@@ -21,6 +21,9 @@ COPY src-cljs ./src-cljs
 COPY resources ./resources
 COPY build.clj ./build.clj
 
+# Build Tailwind CSS (must run before uberjar so resources/public/css/app.css is fresh).
+RUN npm run css:build
+
 # Build frontend assets (advanced) and uberjar
 RUN clj -M:build:frontend prod
 RUN mkdir -p target && clj -X:uberjar

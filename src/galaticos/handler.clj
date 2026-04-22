@@ -121,20 +121,25 @@
               (resp/error "Invalid request body" 400))))))))
 
 (defn wrap-static-cache
-  "Middleware to add cache headers for static assets"
+  "Cache headers for static assets.
+  `/js` e `/css` não usam filename com hash: `max-age=1y` faz o browser
+  manter app.js antigo após deploy/restart — só o HTML revalida com no-cache."
   [handler]
   (fn [request]
     (let [response (handler request)
-          uri (:uri request)]
-      (if (and (map? response)
-               (or (.startsWith uri "/js/")
-                   (.startsWith uri "/css/")
-                   (.startsWith uri "/images/")
-                   (.startsWith uri "/fonts/")))
-        (-> response
-            (assoc-in [:headers "Cache-Control"] "public, max-age=31536000")
-            (assoc-in [:headers "Expires"] (str (java.util.Date. (+ (System/currentTimeMillis) (* 365 24 60 60 1000))))))
-        response))))
+          uri (:uri request)
+          static-asset? (or (.startsWith uri "/js/") (.startsWith uri "/css/")
+                            (.startsWith uri "/images/") (.startsWith uri "/fonts/"))]
+      (if-not (and (map? response) static-asset?)
+        response
+        (cond
+          (or (.startsWith uri "/js/") (.startsWith uri "/css/"))
+          (assoc-in response [:headers "Cache-Control"] "public, max-age=0, must-revalidate")
+
+          :else
+          (-> response
+              (assoc-in [:headers "Cache-Control"] "public, max-age=31536000")
+              (assoc-in [:headers "Expires"] (str (java.util.Date. (+ (System/currentTimeMillis) (* 365 24 60 60 1000)))))))))))
 
 (def app
   "Main application handler with middleware stack"

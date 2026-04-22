@@ -47,7 +47,7 @@
 (defn- match-row
   [match delete-match! authenticated?]
   (let [match-id (:_id match)]
-    [:div {:class "flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:bg-slate-50 lg:flex-row lg:items-center lg:justify-between"
+    [:div {:class "flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900/90 dark:hover:bg-slate-800 lg:flex-row lg:items-center lg:justify-between"
            :role "button"
            :tab-index 0
            :on-click #(rfe/push-state :match-detail {:id match-id})
@@ -58,18 +58,18 @@
       [:div {:class "rounded-xl bg-brand-maroon/10 p-2 text-brand-maroon"}
        [:> CalendarPlus {:size 18}]]
       [:div
-       [:p {:class "text-sm font-semibold text-slate-900"} (:opponent match)]
-       [:p {:class "text-xs text-slate-500"} (str (.toLocaleDateString (js/Date. (:date match))) " • " (or (:venue match) "-"))]]]
+       [:p {:class "text-sm font-semibold text-slate-900 dark:text-slate-100"} (:opponent match)]
+       [:p {:class "text-xs text-slate-500 dark:text-slate-400"} (str (.toLocaleDateString (js/Date. (:date match))) " • " (or (:venue match) "-"))]]]
      [:div {:class "flex items-center gap-3"}
       [common/badge (common/format-match-result (:result match)) :variant :info]
       (when authenticated?
         [:<>
-         [:button {:class "rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-100"
+         [:button {:class "rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
                    :on-click (fn [e]
                                (.stopPropagation e)
                                (rfe/push-state :match-edit {:id match-id}))}
           [:> Pencil {:size 16}]]
-         [:button {:class "rounded-lg border border-slate-200 p-2 text-rose-600 hover:bg-rose-50"
+         [:button {:class "rounded-lg border border-slate-200 p-2 text-rose-600 hover:bg-rose-50 dark:border-slate-600 dark:hover:bg-rose-950/50"
                    :on-click (fn [e]
                                (.stopPropagation e)
                                (delete-match! match-id))}
@@ -117,7 +117,7 @@
            [:div {:class "flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"}
             [:div
              [:p {:class "text-sm text-slate-500"} "Partida"]
-             [:h2 {:class "text-2xl font-semibold text-slate-900"} (or (:opponent @match) "Detalhe da partida")]]
+             [:h2 {:class "text-2xl font-semibold text-slate-900 dark:text-slate-100"} (or (:opponent @match) "Detalhe da partida")]]
             [:div {:class "flex flex-wrap gap-2"}
              [common/button "Voltar" #(rfe/push-state :matches) :variant :outline]
              (when authenticated
@@ -199,7 +199,7 @@
          [:div {:class "flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"}
           [:div
            [:p {:class "text-sm text-slate-500"} "Calendário"]
-           [:h2 {:class "text-2xl font-semibold text-slate-900"} "Partidas"]]
+           [:h2 {:class "text-2xl font-semibold text-slate-900 dark:text-slate-100"} "Partidas"]]
           (when authenticated
             [:div {:class "flex flex-wrap gap-2"}
              [common/button "Nova Partida" #(rfe/push-state :match-new) :variant :primary]])]
@@ -210,8 +210,8 @@
                     :value @search
                     :placeholder "Buscar adversário..."
                     :on-change #(reset! search (-> % .-target .-value))
-                    :class "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-brand-maroon focus:outline-none focus:ring-2 focus:ring-brand-maroon/20 sm:w-64"}]
-           [:div {:class "text-xs text-slate-500"} (str "Total: " (count filtered) " partidas")]]
+                    :class "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-brand-maroon focus:outline-none focus:ring-2 focus:ring-brand-maroon/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 sm:w-64"}]
+           [:div {:class "text-xs text-slate-500 dark:text-slate-400"} (str "Total: " (count filtered) " partidas")]]
 
           (cond
             matches-loading? [common/loading-spinner]
@@ -226,7 +226,7 @@
                  [common/card
                   [:div {:class "flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"}
                    [:div {:class "min-w-0"}
-                    [:h3 {:class "text-lg font-semibold text-slate-900"} (:name ch)]
+                    [:h3 {:class "text-lg font-semibold text-slate-900 dark:text-slate-100"} (:name ch)]
                     [:p {:class "text-xs text-slate-500"} (str (count ms) " partida(s)")]]
                    (when authenticated
                      [common/button "Nova partida"
@@ -244,7 +244,7 @@
                  [common/card
                   [:div {:class "flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"}
                    [:div {:class "min-w-0"}
-                    [:h3 {:class "text-lg font-semibold text-slate-900"} "Outro campeonato"]
+                    [:h3 {:class "text-lg font-semibold text-slate-900 dark:text-slate-100"} "Outro campeonato"]
                     [:p {:class "text-xs text-slate-400 truncate"} oid]
                     [:p {:class "text-xs text-slate-500"} (str (count ms) " partida(s)")]]]
                   [:div {:class "mt-4 space-y-3"}
@@ -256,7 +256,7 @@
                [common/card
                 [:div {:class "flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"}
                  [:div {:class "min-w-0"}
-                  [:h3 {:class "text-lg font-semibold text-slate-900"} "Sem campeonato"]
+                  [:h3 {:class "text-lg font-semibold text-slate-900 dark:text-slate-100"} "Sem campeonato"]
                   [:p {:class "text-xs text-slate-500"} (str (count no-champ-ms) " partida(s)")]]]
                 [:div {:class "mt-4 space-y-3"}
                  (for [m no-champ-ms]
@@ -374,7 +374,7 @@
           [:div {:class "space-y-6"}
            [:div
             [:p {:class "text-sm text-slate-500"} "Cadastro"]
-            [:h2 {:class "text-2xl font-semibold text-slate-900"} (if is-edit? "Editar Partida" "Nova Partida")]]
+            [:h2 {:class "text-2xl font-semibold text-slate-900 dark:text-slate-100"} (if is-edit? "Editar Partida" "Nova Partida")]]
            (if @match-loading?
              [common/loading-spinner]
              [:form {:class "space-y-6"
@@ -440,7 +440,7 @@
                   (doall
                    (for [[idx stat] (map-indexed vector (:player-statistics @form-data))]
                      ^{:key idx}
-                     [:div {:class "space-y-3 rounded-xl border border-slate-200 bg-white p-4"}
+                     [:div {:class "space-y-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900/80"}
                       [player-picker/player-search-add-panel
                        {:compact? true
                         :label "Jogador"

@@ -16,7 +16,7 @@
      [:div {:class "flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"}
       [:div
        [:p {:class "text-sm text-slate-500"} "Gestão de equipes"]
-       [:h2 {:class "text-2xl font-semibold text-slate-900"} "Times"]]
+       [:h2 {:class "text-2xl font-semibold text-slate-900 dark:text-slate-100"} "Times"]]
       (when authenticated
         [:div {:class "flex flex-wrap gap-2"}
          [common/button "Novo Time" #(rfe/push-state :team-new) :variant :primary]])]
@@ -100,7 +100,7 @@
         [:div {:class "space-y-6"}
          [:div
           [:p {:class "text-sm text-slate-500"} "Cadastro"]
-          [:h2 {:class "text-2xl font-semibold text-slate-900"} (if is-edit? "Editar Time" "Novo Time")]]
+          [:h2 {:class "text-2xl font-semibold text-slate-900 dark:text-slate-100"} (if is-edit? "Editar Time" "Novo Time")]]
          (if @team-loading?
            [common/loading-spinner]
            [:form {:class "space-y-6"
@@ -242,7 +242,7 @@
                      [:> Shield {:size 20}]]
                     [:div
                      [:p {:class "text-sm text-slate-500"} "Time"]
-                     [:h2 {:class "text-2xl font-semibold text-slate-900"} (:name @team)]]]
+                     [:h2 {:class "text-2xl font-semibold text-slate-900 dark:text-slate-100"} (:name @team)]]]
                    (when authenticated
                      [:div {:class "flex flex-wrap gap-2"}
                       [common/button "Editar" #(rfe/push-state :team-edit {:id id}) :variant :outline]

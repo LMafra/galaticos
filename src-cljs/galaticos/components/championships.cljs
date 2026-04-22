@@ -37,7 +37,7 @@
      [:div {:class "flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"}
       [:div
        [:p {:class "text-sm text-slate-500"} "Gestão de competições"]
-       [:h2 {:class "text-2xl font-semibold text-slate-900"} "Campeonatos"]]
+       [:h2 {:class "text-2xl font-semibold text-slate-900 dark:text-slate-100"} "Campeonatos"]]
       [:div {:class "flex flex-wrap gap-2"}
        [common/button "Novo Campeonato" #(rfe/push-state :championship-new) :variant :primary]
        [common/button "Atualizar" #(effects/ensure-championships! {:force? true}) :variant :outline]]]
@@ -177,7 +177,7 @@
                  [:> Trophy {:size 20}]]
                 [:div
                  [:p {:class "text-sm text-slate-500"} "Campeonato"]
-                 [:h2 {:class "text-2xl font-semibold text-slate-900"} (api-get ch :name)]
+                 [:h2 {:class "text-2xl font-semibold text-slate-900 dark:text-slate-100"} (api-get ch :name)]
                  [common/badge (common/status-label raw-status)
                   :variant (common/status-variant raw-status) :class "mt-2"]]]
                [:div {:class "flex flex-wrap gap-2"}
@@ -232,7 +232,7 @@
                    [:p [:span {:class "font-medium text-slate-800"} "Local: "] location])
                  (when-let [notes (api-get ch :notes)]
                    [:p [:span {:class "font-medium text-slate-800"} "Notas: "] notes])
-                 [:div {:class "mt-4 space-y-3 border-t border-slate-200 pt-4"}
+                 [:div {:class "mt-4 space-y-3 border-t border-slate-200 pt-4 dark:border-slate-700"}
                   [:h4 {:class "text-sm font-semibold text-slate-800"} "Temporadas"]
                   [common/input-field
                    "Nova Temporada"
@@ -385,7 +385,7 @@
                   [:div {:class "space-y-2"}
                    (for [player enrolled-sorted]
                      ^{:key (:_id player)}
-                     [:div {:class "flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"}
+                     [:div {:class "flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900/80"}
                       [:div {:class "text-slate-700"} (:name player)]
                       [common/button "Remover"
                        (fn []
@@ -405,7 +405,7 @@
                               (state/toast-error! msg)))))
                        :variant :danger]])]
                   [:p {:class "app-muted"} "Nenhum jogador inscrito"])]
-               [:div {:class "mt-4 border-t border-slate-200 pt-4"}
+               [:div {:class "mt-4 border-t border-slate-200 pt-4 dark:border-slate-700"}
                 [:h4 {:class "text-sm font-semibold text-slate-800"} "Finalização do campeonato"]
                 (cond
                   (not (common/status-active? (api-get ch :status)))
@@ -523,7 +523,7 @@
              [:<>
               [:div
                [:p {:class "text-sm text-slate-500"} "Temporada"]
-               [:h2 {:class "text-2xl font-semibold text-slate-900"}
+               [:h2 {:class "text-2xl font-semibold text-slate-900 dark:text-slate-100"}
                 (str (:championship-name @season) " · " (:season @season))]
                [common/badge (common/status-label raw)
                 :variant (common/status-variant s-status) :class "mt-2"]]
@@ -645,7 +645,7 @@
         [:div {:class "space-y-6"}
          [:div
           [:p {:class "text-sm text-slate-500"} "Cadastro"]
-          [:h2 {:class "text-2xl font-semibold text-slate-900"} (if is-edit? "Editar Campeonato" "Novo Campeonato")]]
+          [:h2 {:class "text-2xl font-semibold text-slate-900 dark:text-slate-100"} (if is-edit? "Editar Campeonato" "Novo Campeonato")]]
          (if @championship-loading?
            [common/loading-spinner]
            [:form {:class "space-y-6"

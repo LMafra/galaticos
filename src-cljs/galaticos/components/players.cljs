@@ -67,7 +67,7 @@
            [:div {:class "flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"}
             [:div
              [:p {:class "text-sm text-slate-500"} "Gestão do elenco"]
-             [:h2 {:class "text-2xl font-semibold text-slate-900"} "Jogadores"]]
+             [:h2 {:class "text-2xl font-semibold text-slate-900 dark:text-slate-100"} "Jogadores"]]
             (when authenticated
               [:div {:class "flex flex-wrap gap-2"}
                [common/button "Novo Jogador" #(rfe/push-state :player-new) :variant :primary]])]
@@ -82,7 +82,7 @@
                                     (reset! page 1)
                                     (reset! search (-> e .-target .-value))
                                     (search-backend!))
-                       :class "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-brand-maroon focus:outline-none focus:ring-2 focus:ring-brand-maroon/20 sm:w-64"}]
+                       :class "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-brand-maroon focus:outline-none focus:ring-2 focus:ring-brand-maroon/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 sm:w-64"}]
               [common/select-field "Posição" @position positions (fn [v]
                                                                    (reset! page 1)
                                                                    (reset! position v)
@@ -118,18 +118,18 @@
                          (when-let [photo (:photo-url player)]
                            [:img {:src photo :alt (:name player) :class "h-full w-full object-cover"}])]
                         [:div {:class "flex-1"}
-                         [:p {:class "text-base font-semibold text-slate-900"} (:name player)]
+                         [:p {:class "text-base font-semibold text-slate-900 dark:text-slate-100"} (:name player)]
                          [:p {:class "text-xs text-slate-500"} (or (:nickname player) "-")]
                          [common/badge (:position player) :variant :info :class "mt-2"]]]
                        [:div {:class "mt-4 grid grid-cols-3 gap-2 text-center text-xs text-slate-600"}
                         [:div
-                         [:p {:class "text-sm font-semibold text-slate-900"} (get-in player [:aggregated-stats :total :games] 0)]
+                         [:p {:class "text-sm font-semibold text-slate-900 dark:text-slate-100"} (get-in player [:aggregated-stats :total :games] 0)]
                          [:p "Partidas"]]
                         [:div
-                         [:p {:class "text-sm font-semibold text-slate-900"} (get-in player [:aggregated-stats :total :goals] 0)]
+                         [:p {:class "text-sm font-semibold text-slate-900 dark:text-slate-100"} (get-in player [:aggregated-stats :total :goals] 0)]
                          [:p "Gols"]]
                         [:div
-                         [:p {:class "text-sm font-semibold text-slate-900"} (get-in player [:aggregated-stats :total :assists] 0)]
+                         [:p {:class "text-sm font-semibold text-slate-900 dark:text-slate-100"} (get-in player [:aggregated-stats :total :assists] 0)]
                          [:p "Assistências"]]]]))]
                  [common/table
                   ["Nome" "Apelido" "Posição" "Partidas" "Gols" "Assistências"]
@@ -245,7 +245,7 @@
                           [:img {:src photo :alt (:name @player) :class "h-full w-full object-cover"}])]
                        [:div
                         [:p {:class "text-sm text-slate-500"} "Jogador"]
-                        [:h2 {:class "text-2xl font-semibold text-slate-900"} (:name @player)]
+                        [:h2 {:class "text-2xl font-semibold text-slate-900 dark:text-slate-100"} (:name @player)]
                         [common/badge (:position @player) :variant :info :class "mt-2"]]]
                       (when authenticated
                         [:div {:class "flex flex-wrap gap-2"}
@@ -431,7 +431,7 @@
         [:div {:class "space-y-6"}
          [:div
           [:p {:class "text-sm text-slate-500"} "Cadastro"]
-          [:h2 {:class "text-2xl font-semibold text-slate-900"} (if is-edit? "Editar Jogador" "Novo Jogador")]]
+          [:h2 {:class "text-2xl font-semibold text-slate-900 dark:text-slate-100"} (if is-edit? "Editar Jogador" "Novo Jogador")]]
          (if (or @player-loading? @teams-loading?)
            [common/loading-spinner]
            [:form {:class "space-y-6"

@@ -139,20 +139,20 @@
                         vec)
                    [])
             picker-panel-class (if compact?
-                                "overflow-hidden rounded-lg border border-slate-300 bg-white shadow-sm"
-                                "overflow-hidden rounded-lg border border-slate-300 bg-white shadow-sm")
+                                "overflow-hidden rounded-lg border border-slate-300 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-800"
+                                "overflow-hidden rounded-lg border border-slate-300 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-800")
             picker-input-class (common/merge-classes
-                                "w-full border-0 border-b bg-white px-3 shadow-none placeholder:text-slate-400 focus:outline-none focus:ring-0"
+                                "w-full border-0 border-b bg-white px-3 shadow-none placeholder:text-slate-400 focus:outline-none focus:ring-0 dark:border-slate-600 dark:bg-slate-800 dark:placeholder:text-slate-500"
                                 (if disabled?
-                                  "cursor-not-allowed border-slate-200 text-slate-400"
-                                  "border-slate-200 text-slate-900")
+                                  "cursor-not-allowed border-slate-200 text-slate-400 dark:text-slate-500"
+                                  "border-slate-200 text-slate-900 dark:text-slate-100")
                                 (if compact? "py-1.5 text-xs" "py-2 text-sm"))
             list-class (if compact?
-                         "max-h-36 overflow-y-auto bg-slate-50/50"
-                         "max-h-56 overflow-y-auto bg-slate-50/50")
+                         "max-h-36 overflow-y-auto bg-slate-50/50 dark:bg-slate-900/50"
+                         "max-h-56 overflow-y-auto bg-slate-50/50 dark:bg-slate-900/50")
             row-class (if compact?
-                        "flex items-center justify-between gap-2 border-b border-slate-100 px-2 py-1.5 text-xs last:border-b-0"
-                        "flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 text-sm last:border-b-0")
+                        "flex items-center justify-between gap-2 border-b border-slate-100 px-2 py-1.5 text-xs last:border-b-0 dark:border-slate-700"
+                        "flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 text-sm last:border-b-0 dark:border-slate-700")
             can-quick? (and (fn? on-quick-create)
                             has-query?
                             (empty? rows)
@@ -161,7 +161,7 @@
                             (not players-loading?))]
         [:div {:class (if compact? "space-y-2" "space-y-3")}
          (when label
-           [:label {:class (str "text-sm font-medium " (if disabled? "text-slate-400" "text-slate-700"))}
+           [:label {:class (str "text-sm font-medium " (if disabled? "text-slate-400" "text-slate-700 dark:text-slate-200"))}
             label])
          [:div {:class picker-panel-class}
           [:input {:type "text"
@@ -183,7 +183,7 @@
                      ^{:key (str i "-" (or pid "p"))}
                      [:div {:class (common/merge-classes row-class (when sel? "bg-brand-maroon/5"))}
                       [:div {:class "min-w-0 flex-1"}
-                       [:span {:class "font-medium text-slate-800"}
+                       [:span {:class "font-medium text-slate-800 dark:text-slate-200"}
                         (let [nm (player-name-str p)] (if (str/blank? nm) "—" nm))]
                        (when-let [pos (cond
                                         (map? p) (or (:position p) (get p "position"))
@@ -213,7 +213,7 @@
              [:p {:class (if compact? "text-xs text-slate-600" "text-sm text-slate-600")}
               [:span {:class "font-medium text-slate-800"} "Selecionado: "] (player-name-str p)]))
          (when can-quick?
-           [:div {:class "rounded-lg border border-dashed border-slate-300 bg-white p-3"}
+           [:div {:class "rounded-lg border border-dashed border-slate-300 bg-white p-3 dark:border-slate-600 dark:bg-slate-900/60"}
             [common/button
              (if @creating? "Criando..." (str "Criar jogador \"" (str/trim q) "\""))
              (fn []

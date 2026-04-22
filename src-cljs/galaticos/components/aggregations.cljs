@@ -267,7 +267,7 @@
       [:div {:class "space-y-6"}
        [:div
         [:p {:class "text-sm text-slate-500"} "Agregações"]
-        [:h2 {:class "text-2xl font-semibold text-slate-900"} "Estatísticas"]]
+        [:h2 {:class "text-2xl font-semibold text-slate-900 dark:text-slate-100"} "Estatísticas"]]
        [:div {:class "flex flex-wrap gap-2"}
         [common/button "Top Jogadores"
          #(reset! active-tab :top)

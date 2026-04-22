@@ -17,9 +17,12 @@
       (system-prefers-dark?) "dark"
       :else "light")))
 
+;; add/remove, not toggle("dark", force): some envs ignore 2nd arg and flip wrong.
 (defn- apply-theme! [theme]
-  (when-let [root (.-documentElement js/document)]
-    (.toggle (.-classList root) "dark" (= theme "dark"))))
+  (when-let [cl (.. js/document -documentElement -classList)]
+    (if (= theme "dark")
+      (.add cl "dark")
+      (.remove cl "dark"))))
 
 (defn- persist-theme! [theme]
   (try
