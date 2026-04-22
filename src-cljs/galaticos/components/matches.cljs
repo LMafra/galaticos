@@ -12,7 +12,10 @@
 
 (defn- quick-create-player-for-match!
   [championship-id stat-idx enrolled-players-atom form-data-atom form-error-atom name ok err]
-  (let [team-id (str/trim (str (:home-team-id @form-data-atom)))]
+  (let [team-id (str/trim (str (:home-team-id @form-data-atom)))
+        report! (fn [msg]
+                  (reset! form-error-atom msg)
+                  (state/toast-error! msg))]
     (if (str/blank? team-id)
       (err "Selecione o time mandante antes de criar jogador.")
       (api/create-player
@@ -30,11 +33,13 @@
                  (swap! form-data-atom assoc-in [:player-statistics stat-idx :player-id] pid)
                  (ok created))
                (fn [e]
-                 (reset! form-error-atom (str "Erro ao carregar inscritos: " e))
-                 (err (str "Erro ao carregar inscritos: " e)))))
+                 (let [msg (str "Erro ao carregar inscritos: " e)]
+                   (report! msg)
+                   (err msg)))))
             (fn [e]
-              (reset! form-error-atom (str "Erro ao inscrever jogador: " e))
-              (err (str "Erro ao inscrever jogador: " e))))
+              (let [msg (str "Erro ao inscrever jogador: " e)]
+                (report! msg)
+                (err msg))))
            (err "Jogador criado sem ID retornado.")))
        (fn [e]
          (err (str "Erro ao criar jogador: " e)))))))
@@ -86,13 +91,18 @@
                    (reset! match result)
                    (reset! loading? false))
                  (fn [err]
-                   (reset! error (str "Erro ao carregar partida: " err))
+                   (let [msg (str "Erro ao carregar partida: " err)]
+                     (reset! error msg)
+                     (state/toast-error! msg))
                    (reset! loading? false))))]
     (r/create-class
-     {:component-did-mount (fn [] (load!))
+     {:component-did-mount (fn []
+                             (effects/ensure-players!)
+                             (effects/ensure-teams!)
+                             (load!))
       :reagent-render
       (fn []
-        (let [{:keys [authenticated championships]} @state/app-state
+        (let [{:keys [authenticated championships players teams]} @state/app-state
               ch-id (some-> @match :championship-id str)
               ch-name (some->> championships (filter #(= (str (:_id %)) ch-id)) first :name)
               stats (or (:player-statistics @match) [])
@@ -100,7 +110,9 @@
                        (let [parsed (js/parseInt (or (some-> v str) "0") 10)]
                          (if (js/isNaN parsed) 0 parsed)))
               total-goals (reduce + 0 (map #(to-int (:goals %)) stats))
-              total-assists (reduce + 0 (map #(to-int (:assists %)) stats))]
+              total-assists (reduce + 0 (map #(to-int (:assists %)) stats))
+              player-name-by (into {} (map (fn [p] [(str (:_id p)) (:name p)]) (or players [])))
+              team-name-by (into {} (map (fn [t] [(str (:_id t)) (:name t)]) (or teams [])))]
           [:div {:class "space-y-6"}
            [:div {:class "flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"}
             [:div
@@ -112,7 +124,7 @@
                [common/button "Editar" #(rfe/push-state :match-edit {:id id}) :variant :primary])]]
 
            (cond
-             @error [common/error-message @error]
+             @error [common/button "Tentar novamente" load! :variant :outline]
              @loading? [common/loading-spinner]
              @match
              [:div {:class "grid gap-4 md:grid-cols-2"}
@@ -137,11 +149,19 @@
                  [common/table
                   ["Jogador" "Time" "Gols" "Assists" "Min"]
                   (map (fn [row]
-                         [(or (:player-name row) (some-> (:player-id row) str) "—")
-                          (some-> (:team-id row) str)
-                          (to-int (:goals row))
-                          (to-int (:assists row))
-                          (to-int (:minutes-played row))])
+                         (let [pid (some-> (:player-id row) str)
+                               tid (some-> (:team-id row) str)]
+                           [(or (:player-name row)
+                                (get player-name-by pid)
+                                (when (seq pid) pid)
+                                "—")
+                            (or (:team-name row)
+                                (get team-name-by tid)
+                                (when (seq tid) tid)
+                                "—")
+                            (to-int (:goals row))
+                            (to-int (:assists row))
+                            (to-int (:minutes-played row))]))
                        stats)
                   :dense? true
                   :show-search? false]
@@ -152,7 +172,7 @@
 (defn match-list []
   (let [search (r/atom "")]
     (fn []
-      (let [{:keys [authenticated matches matches-loading? matches-error championships]} @state/app-state
+      (let [{:keys [authenticated matches matches-loading? championships]} @state/app-state
             delete-match! (fn [match-id]
                             (when (js/confirm "Tem certeza que deseja deletar esta partida?")
                               (api/delete-match match-id
@@ -194,7 +214,6 @@
            [:div {:class "text-xs text-slate-500"} (str "Total: " (count filtered) " partidas")]]
 
           (cond
-            matches-error [common/error-message matches-error]
             matches-loading? [common/loading-spinner]
             (not has-group-ui?)
             [:p {:class "app-muted mt-4"} "Nenhuma partida encontrada."]
@@ -299,8 +318,10 @@
                                 (reset! enrolled-players result)
                                 (reset! players-loading? false))
                               (fn [err]
-                                (reset! form-error (str "Erro ao carregar jogadores inscritos: " err))
-                                (reset! players-loading? false))))))
+                                                (let [msg (str "Erro ao carregar jogadores inscritos: " err)]
+                                                  (reset! form-error msg)
+                                                  (state/toast-error! msg))
+                                                (reset! players-loading? false))))))
         load-match! (fn []
                      (when is-edit?
                        (reset! form-error nil)
@@ -326,7 +347,9 @@
                                         (load-enrolled! (if (:championship-id result) (str (:championship-id result)) ""))
                                         (reset! match-loading? false))
                                       (fn [err]
-                                        (reset! form-error (str "Erro ao carregar partida: " err))
+                                        (let [msg (str "Erro ao carregar partida: " err)]
+                                          (reset! form-error msg)
+                                          (state/toast-error! msg))
                                         (reset! match-loading? false)))))]
     (r/create-class
      {:component-did-mount (fn []
@@ -360,17 +383,23 @@
                                   (reset! form-error nil)
                                   (reset! field-errors {})
                                   (if-let [errs (valid-form?)]
-                                    (reset! field-errors errs)
+                                    (do
+                                      (reset! field-errors errs)
+                                      (state/toast-field-errors! errs))
                                     (do
                                       (reset! submitting? true)
                                       (let [payload (prepare-payload)
                                             on-success (fn [_result]
                                                         (reset! submitting? false)
                                                         (effects/ensure-matches! {:force? true})
+                                                        (effects/ensure-players! {:force? true})
+                                                        (effects/ensure-dashboard! {:force? true})
                                                         (rfe/push-state :matches))
                                             on-error (fn [error]
                                                       (reset! submitting? false)
-                                                      (reset! form-error (str "Erro ao " (if is-edit? "atualizar" "criar") " partida: " error)))]
+                                                      (let [msg (str "Erro ao " (if is-edit? "atualizar" "criar") " partida: " error)]
+                                                        (reset! form-error msg)
+                                                        (state/toast-error! msg)))]
                                         (if is-edit?
                                           (api/update-match id payload on-success on-error)
                                           (api/create-match payload on-success on-error))))))}
@@ -397,8 +426,6 @@
               [common/card
                [:div {:class "flex flex-wrap items-center justify-between gap-3"}
                 [:h3 {:class "app-section-title"} "Estatísticas dos jogadores"]
-                (when (:player-statistics @field-errors)
-                  [:p {:class "text-xs text-rose-600"} (:player-statistics @field-errors)])
                 [:div {:class "text-xs text-slate-500"}
                  (str "Gols: " total-goals " • Assistências: " total-assists
                       (when (not (str/blank? home-team-id))
@@ -455,8 +482,6 @@
                 :class "mt-3"
                 :disabled (str/blank? (:championship-id @form-data))]]
 
-              (when @form-error
-                [common/error-message @form-error])
               [:div {:class "flex flex-wrap gap-2"}
                [common/button (if @submitting? "Salvando..." (if is-edit? "Atualizar" "Criar Partida"))
                 nil

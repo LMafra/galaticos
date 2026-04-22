@@ -134,7 +134,6 @@
 
 (defn input-field [label value on-change & {:keys [type placeholder class container-class required? error id]}]
   (let [field-id (or id (str "field-" (swap! field-id-counter inc)))
-        error-id (str field-id "-error")
         border-class (if error
                       "border-rose-500 focus:border-rose-500 focus:ring-rose-500/20"
                       "border-slate-300 focus:border-brand-maroon focus:ring-brand-maroon/20")]
@@ -148,14 +147,10 @@
                      :on-change #(on-change (-> % .-target .-value))
                      :placeholder placeholder
                      :class (merge-classes "w-full rounded-lg border bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-2" border-class class)}
-                   (when error {:aria-invalid "true"
-                                :aria-describedby error-id}))]
-     (when error
-       [:p {:id error-id :class "text-xs text-rose-600"} error])]))
+                   (when error {:aria-invalid "true"}))]]))
 
 (defn select-field [label value options on-change & {:keys [class container-class required? error id]}]
   (let [field-id (or id (str "field-" (swap! field-id-counter inc)))
-        error-id (str field-id "-error")
         border-class (if error
                       "border-rose-500 focus:border-rose-500 focus:ring-rose-500/20"
                       "border-slate-300 focus:border-brand-maroon focus:ring-brand-maroon/20")]
@@ -167,13 +162,10 @@
                             :id field-id
                             :on-change #(on-change (-> % .-target .-value))
                             :class (merge-classes "w-full rounded-lg border bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2" border-class class)}
-                          (when error {:aria-invalid "true"
-                                       :aria-describedby error-id}))]
+                          (when error {:aria-invalid "true"}))]
            (map (fn [[opt-value opt-label]]
                   [:option {:key opt-value :value opt-value} opt-label])
-                options))
-     (when error
-       [:p {:id error-id :class "text-xs text-rose-600"} error])]))
+                options))]))
 
 (defn modal [{:keys [title content on-close actions]}]
   (let [title-id "modal-title"]

@@ -153,7 +153,7 @@
 
        :reagent-render
        (fn []
-         (let [{:keys [dashboard-stats dashboard-loading? dashboard-error]}
+         (let [{:keys [dashboard-stats dashboard-loading?]}
                @state/app-state
                championships (:championships dashboard-stats)
                teams-count (dashboard-stat-num dashboard-stats :teams-count)
@@ -213,11 +213,10 @@
                #(api/download-csv! "/api/exports/dashboard.csv"
                                    "galaticos-dashboard.csv"
                                    (fn [] nil)
-                                   (fn [err] (js/alert err)))
+                                   (fn [err] (state/toast-error! err)))
                :variant :outline]]]
 
             (cond
-              dashboard-error [common/error-message dashboard-error]
               dashboard-loading? [common/loading-spinner]
               dashboard-stats
               [:div {:class "space-y-6"}

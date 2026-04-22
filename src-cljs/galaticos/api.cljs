@@ -2,7 +2,8 @@
   "API client for making HTTP requests to the backend"
   (:require [cljs-http.client :as http]
             [cljs.core.async :refer [<! go]]
-            [goog.object :as gobj]))
+            [goog.object :as gobj]
+            [galaticos.i18n :as i18n]))
 
 (def token-storage-key "galaticos.auth.token")
 
@@ -51,10 +52,11 @@
 
 (defn- extract-error [response]
   (let [body (:body response)]
-    (cond
-      (string? body) body
-      (map? body) (or (:error body) (:message body) "Unknown error")
-      :else (str "Request failed: " (:status response)))))
+    (i18n/t
+     (cond
+       (string? body) body
+       (map? body) (or (:error body) (:message body) "Unknown error")
+       :else (str "Request failed: " (:status response))))))
 
 (defn- json-envelope? [b]
   (or (map? b)
@@ -91,14 +93,14 @@
         (not (json-envelope? body)) (on-success body)
         (true? (envelope-success-flag body)) (on-success (envelope-data-field body))
         (false? (envelope-success-flag body))
-        (on-error (str (or (some-> (envelope-error-field body) str not-empty)
-                           "Request failed"))
+        (on-error (i18n/t (or (some-> (envelope-error-field body) str not-empty)
+                              "Request failed"))
                   response)
-        (map? body) (on-error (or (some-> (envelope-error-field body) str not-empty)
-                                  (:error body) (:message body)
-                                  "Unknown error")
+        (map? body) (on-error (i18n/t (or (some-> (envelope-error-field body) str not-empty)
+                                          (:error body) (:message body)
+                                          "Unknown error"))
                               response)
-        :else (on-error "Unknown error" response)))
+        :else (on-error (i18n/t "Unknown error") response)))
     (on-error (extract-error response) response)))
 
 (defn coerce-player-list
@@ -130,6 +132,9 @@
           :headers (auth-headers)}
          extra))
 
+(defn- network-error-msg [e]
+  (i18n/t (str "Network error: " (.-message e))))
+
 (defn get-request
   "Make a GET request"
   [url params on-success on-error]
@@ -138,7 +143,7 @@
       (let [response (<! (http/get (str api-base-url url) (default-opts {:query-params params})))]
         (handle-response response on-success on-error))
       (catch :default e
-        (on-error (str "Network error: " (.-message e)) nil)))))
+        (on-error (network-error-msg e) nil)))))
 
 (defn post-request
   "Make a POST request"
@@ -148,7 +153,7 @@
       (let [response (<! (http/post (str api-base-url url) (default-opts {:json-params data})))]
         (handle-response response on-success on-error))
       (catch :default e
-        (on-error (str "Network error: " (.-message e)) nil)))))
+        (on-error (network-error-msg e) nil)))))
 
 (defn put-request
   "Make a PUT request"
@@ -158,7 +163,7 @@
       (let [response (<! (http/put (str api-base-url url) (default-opts {:json-params data})))]
         (handle-response response on-success on-error))
       (catch :default e
-        (on-error (str "Network error: " (.-message e)) nil)))))
+        (on-error (network-error-msg e) nil)))))
 
 (defn delete-request
   "Make a DELETE request"
@@ -168,7 +173,7 @@
       (let [response (<! (http/delete (str api-base-url url) (default-opts {})))]
         (handle-response response on-success on-error))
       (catch :default e
-        (on-error (str "Network error: " (.-message e)) nil)))))
+        (on-error (network-error-msg e) nil)))))
 
 ;; Auth API
 (defn login [username password on-success on-error]
@@ -365,9 +370,10 @@
                    (.then (.text resp)
                           (fn [message]
                             (when on-error
-                              (on-error (if (empty? message)
-                                          (str "Erro ao baixar CSV (" (.-status resp) ")")
-                                          message))))))))
+                              (on-error (i18n/t
+                                         (if (empty? message)
+                                           (str "Erro ao baixar CSV (" (.-status resp) ")")
+                                           message))))))))) 
         (.catch (fn [e]
                   (when on-error
                     (on-error (str "Erro de rede ao baixar CSV: " (.-message e)))))))))

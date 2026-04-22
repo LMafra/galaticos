@@ -1,5 +1,8 @@
-// MongoDB Index Creation Script for Docker
-// This script runs automatically when MongoDB container is first initialized
+// MongoDB index creation — runs only on first container init (empty /data/db).
+// For existing databases (e.g. production), apply the same definitions with:
+//   MONGO_URI=... DB_NAME=galaticos ./bin/galaticos db:setup
+// Keep this file in sync with scripts/mongodb/mongodb-indexes.js (source of truth).
+//
 // MongoDB will execute all .js files in /docker-entrypoint-initdb.d/
 
 // Switch to the database (MONGO_INITDB_DATABASE is set in docker-compose)

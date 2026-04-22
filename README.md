@@ -653,6 +653,8 @@ Para produção:
 ./bin/galaticos docker:prod start
 ```
 
+Operação contínua (preservar dados no MongoDB, backup, seed sem reset, índices): ver [docs/informacao/operacao/runbook-producao.md](docs/informacao/operacao/runbook-producao.md).
+
 #### Rodar tudo via Docker (sem instalar Python nem mongosh no host)
 
 Com o ambiente dev em Docker (`./bin/galaticos docker:dev start`), você pode executar os comandos de banco sem ter Python ou MongoDB shell instalados localmente:

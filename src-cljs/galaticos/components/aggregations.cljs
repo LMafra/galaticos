@@ -7,6 +7,12 @@
    [galaticos.state :as state]
    [galaticos.components.common :as common]))
 
+(defn- report-error!
+  "Registra erro em um atom local e emite toast."
+  [atom-ref msg]
+  (reset! atom-ref msg)
+  (state/toast-error! msg))
+
 (defn- avg-goals
   [total matches]
   (if (and matches (pos? matches))
@@ -36,7 +42,7 @@
                              (reset! data result)
                              (reset! loading? false))
                            (fn [err]
-                             (reset! error (str "Erro: " err))
+                             (report-error! error (str "Erro: " err))
                              (reset! loading? false))))]
     (fn []
       (let [championships  (:championships @state/app-state)
@@ -82,9 +88,6 @@
            :container-class "min-w-[100px]"]
           [common/button "Buscar" fetch! :variant :primary]]
 
-         (when @error
-           [common/error-message @error])
-
          (cond
            @loading?
            [common/loading-spinner]
@@ -124,13 +127,10 @@
            (reset! data result)
            (reset! loading? false))
          (fn [err]
-           (reset! error (str "Erro: " err))
+           (report-error! error (str "Erro: " err))
            (reset! loading? false))))
 
       [:div {:class "space-y-4"}
-       (when @error
-         [common/error-message @error])
-
        (cond
          @loading?
          [common/loading-spinner]
@@ -170,14 +170,14 @@
         loading?        (r/atom false)
         error           (r/atom nil)
         on-error        (fn [err]
-                          (reset! error (str "Erro: " err))
+                          (report-error! error (str "Erro: " err))
                           (reset! loading? false))
         fetch!          (fn []
                           (if (str/blank? @championship-id)
                             (do
                               (reset! player-stats nil)
                               (reset! position-stats nil)
-                              (reset! error "Selecione um campeonato."))
+                              (report-error! error "Selecione um campeonato."))
                             (do
                               (reset! error nil)
                               (reset! loading? true)
@@ -224,8 +224,6 @@
                 (reset! error nil))
            :container-class "min-w-[240px]"]
           [common/button "Buscar" fetch! :variant :primary]]
-         (when @error
-           [common/error-message @error])
          (cond
            @loading?
            [common/loading-spinner]

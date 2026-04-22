@@ -8,7 +8,7 @@
             [clojure.string :as str]))
 
 (def ^:private allowed-player-fields
-  #{:name :position :team-id :birth-date :nationality :height :weight
+  #{:name :nickname :position :team-id :birth-date :nationality :height :weight
     :preferred-foot :shirt-number :active :email :phone :number :photo-url :notes})
 
 (def ^:private required-player-fields

@@ -2,6 +2,7 @@
   "Busca local, lista alfabética e criação rápida de jogador (reutilizável)."
   (:require [reagent.core :as r]
             [galaticos.components.common :as common]
+            [galaticos.state :as state]
             [clojure.string :as str]
             [goog.object :as gobj]))
 
@@ -122,8 +123,7 @@
    :players-loading? (boolean; true enquanto o catálogo de :players ainda não foi obtido — ex. GET /api/players pendente)."
   [_props]
   (let [search (r/atom "")
-        creating? (r/atom false)
-        create-error (r/atom nil)]
+        creating? (r/atom false)]
     (fn [{:keys [players exclude-ids action-label on-pick-player on-quick-create
                  compact? disabled? search-placeholder selected-id label
                  players-loading?]}]
@@ -169,7 +169,6 @@
                    :disabled disabled?
                    :placeholder (or search-placeholder "Buscar por nome ou apelido...")
                    :on-change (fn [e]
-                                (reset! create-error nil)
                                 (reset! search (str (or (some-> e .-target .-value) ""))))
                    :class picker-input-class}]
           (if disabled?
@@ -215,13 +214,10 @@
               [:span {:class "font-medium text-slate-800"} "Selecionado: "] (player-name-str p)]))
          (when can-quick?
            [:div {:class "rounded-lg border border-dashed border-slate-300 bg-white p-3"}
-            (when @create-error
-              [:p {:class "mb-2 text-xs text-rose-600"} @create-error])
             [common/button
              (if @creating? "Criando..." (str "Criar jogador \"" (str/trim q) "\""))
              (fn []
                (when-not @creating?
-                 (reset! create-error nil)
                  (reset! creating? true)
                  (on-quick-create (str/trim q)
                                   (fn [_created]
@@ -229,7 +225,7 @@
                                     (reset! search ""))
                                   (fn [err-msg]
                                     (reset! creating? false)
-                                    (reset! create-error (str err-msg))))))
+                                    (state/toast-error! (str err-msg))))))
              :variant :primary
              :disabled @creating?
              :class (when compact? "text-xs")]])]))))

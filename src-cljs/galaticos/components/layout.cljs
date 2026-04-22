@@ -4,6 +4,7 @@
             [galaticos.routes :as routes]
             [galaticos.api :as api]
             [galaticos.components.common :as common]
+            [galaticos.components.toast :as toast]
             [reitit.frontend.easy :as rfe]
             ["lucide-react" :refer [LayoutDashboard Users CalendarDays Trophy Shield Menu Sun Moon BarChart2]]))
 
@@ -130,12 +131,9 @@
       [:div {:class "flex min-h-screen w-full flex-col"}
        [header current-route]
        [:main#main-content {:class "flex-1 px-4 pb-10 pt-6 lg:px-8"}
-        (when (:error @state/app-state)
-          [common/alert (:error @state/app-state)
-           :variant :error
-           :class "mb-6"])
         (if (:loading @state/app-state)
           [common/loading-spinner]
           content)]
-       [footer]]]]))
+       [footer]]]
+     [toast/toast-container]]))
 

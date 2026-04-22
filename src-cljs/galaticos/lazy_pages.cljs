@@ -3,7 +3,8 @@
   (:require
    [reagent.core :as r]
    [shadow.lazy :as lazy]
-   [galaticos.components.common :as common]))
+   [galaticos.components.common :as common]
+   [galaticos.state :as state]))
 
 (def dashboard (lazy/loadable galaticos.components.dashboard/dashboard))
 (def aggregations-page (lazy/loadable galaticos.components.aggregations/aggregations-page))
@@ -44,11 +45,15 @@
                           (-> (lazy/load loadable)
                               (.then (fn [] (reset! ready true)))
                               (.catch (fn [e]
-                                        (reset! err (or (.-message e) (str e)))))))
+                                        (let [m (or (.-message e) (str e))]
+                                          (reset! err m)
+                                          (state/toast-error! (str "Falha ao carregar módulo: " m)))))))
                         (catch :default e
-                          (reset! err (str e)))))
+                          (let [m (str e)]
+                            (reset! err m)
+                            (state/toast-error! (str "Falha ao carregar módulo: " m))))))
                     0))]
     (cond
-      @err [common/error-message (str "Falha ao carregar módulo: " @err)]
+      @err [common/button "Tentar novamente" #(reset! err nil) :variant :outline]
       @ready (into [@loadable] args)
       :else [common/loading-spinner])))

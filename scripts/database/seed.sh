@@ -8,6 +8,9 @@
 #
 # After db:seed-smoke: do not run this without --reset on the same DB — the Python seed
 # refuses to merge official Excel data with smoke/E2E data (use --reset or another DB_NAME).
+#
+# Production: prefer export GALATICOS_ENV=production when targeting prod; --reset is then
+# blocked unless ALLOW_DESTRUCTIVE_SEED=1 (see scripts/python/seed_mongodb.py).
 
 set -euo pipefail
 

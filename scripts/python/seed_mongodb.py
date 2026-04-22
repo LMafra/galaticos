@@ -23,6 +23,9 @@ when legacy CSV import is on, as the single stored season for those CSVs.
 
 Env EXCEL_FILE (or CLI --excel) overrides the default Excel path (default data/galaticos.xlsm).
 
+Env GALATICOS_ENV=production (or prod): when set, --reset is refused unless
+ALLOW_DESTRUCTIVE_SEED is 1/true/yes (reduces accidental wipe against production).
+
 If the database contains the smoke/E2E dataset (galaticos.tasks.seed-smoke), official seed
 without --reset is refused so test data is not mixed with Excel data. Use --reset to replace
 everything, or --ignore-smoke-dataset to force (not recommended).
@@ -76,6 +79,14 @@ SMOKE_MATCH_OPPONENT = "Smoke Opponent"
 
 # Position mapping (if needed)
 POSITION_OPTIONS = ["Goleiro", "Zagueiro", "Lateral", "Volante", "Meia", "Atacante"]
+
+
+def _galaticos_env_is_production() -> bool:
+    return os.getenv("GALATICOS_ENV", "").strip().lower() in ("production", "prod")
+
+
+def _destructive_seed_explicitly_allowed() -> bool:
+    return os.getenv("ALLOW_DESTRUCTIVE_SEED", "").strip().lower() in ("1", "true", "yes")
 
 
 def database_contains_smoke_dataset(db) -> bool:
@@ -1920,7 +1931,22 @@ Examples:
             print("⚠ All teams, players, championships, and matches will be deleted.")
             print("⚠ Admin users will be preserved.")
         print()
-    
+
+    if (
+        args.reset
+        and _galaticos_env_is_production()
+        and not _destructive_seed_explicitly_allowed()
+    ):
+        print(
+            "\n✗ Refusing --reset: GALATICOS_ENV is set to production.",
+            file=sys.stderr,
+        )
+        print(
+            "  Set ALLOW_DESTRUCTIVE_SEED=1 only if you intentionally want to wipe this database.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
     # Resolve Excel path: --excel, env EXCEL_FILE, default; try data/<basename>
     excel_path = resolve_excel_path(args.excel)
     if not excel_path.exists():

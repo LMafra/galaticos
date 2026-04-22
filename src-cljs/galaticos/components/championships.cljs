@@ -32,7 +32,7 @@
      [:p {:class "app-muted text-sm mt-2"} "Sem dados"])])
 
 (defn championship-list []
-  (let [{:keys [championships championships-loading? championships-error]} @state/app-state]
+  (let [{:keys [championships championships-loading?]} @state/app-state]
     [:div {:class "space-y-6"}
      [:div {:class "flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"}
       [:div
@@ -43,7 +43,6 @@
        [common/button "Atualizar" #(effects/ensure-championships! {:force? true}) :variant :outline]]]
      [common/card
       (cond
-        championships-error [common/error-message championships-error]
         championships-loading? [common/loading-spinner]
         (seq championships)
         [common/table
@@ -102,32 +101,42 @@
                                                              (fn [result]
                                                                (reset! matches result))
                                                              (fn [err]
-                                                               (reset! error (str "Erro ao carregar partidas: " err))))))
+                                                               (let [msg (str "Erro ao carregar partidas: " err)]
+                                                                 (reset! error msg)
+                                                                 (state/toast-error! msg))))))
                                         (reset! loading? false))
                                       (fn [err resp]
                                         (reset! loading? false)
                                         (if (and resp (= 404 (:status resp)))
                                           (do (reset! not-found? true)
                                               (reset! error "Campeonato não encontrado."))
-                                          (do (reset! not-found? false)
-                                              (reset! error (str "Erro ao carregar campeonato: " err))))))
+                                          (let [msg (str "Erro ao carregar campeonato: " err)]
+                                            (reset! not-found? false)
+                                            (reset! error msg)
+                                            (state/toast-error! msg)))))
                 (api/get-championship-seasons id
                                               (fn [result]
                                                 (reset! seasons result))
                                               (fn [err]
-                                                (reset! error (str "Erro ao carregar temporadas: " err))))
+                                                (let [msg (str "Erro ao carregar temporadas: " err)]
+                                                  (reset! error msg)
+                                                  (state/toast-error! msg))))
                 (api/get-championship-players id
                                               (fn [result]
                                                 (reset! enrolled-players result))
                                               (fn [err]
-                                                (reset! error (str "Erro ao carregar inscritos: " err))))
+                                                (let [msg (str "Erro ao carregar inscritos: " err)]
+                                                  (reset! error msg)
+                                                  (state/toast-error! msg))))
                 (api/get-players {}
                                  (fn [result]
                                    (reset! all-players (api/coerce-player-list result))
                                    (reset! players-catalog-ready? true))
                                  (fn [err]
                                    (reset! players-catalog-ready? true)
-                                   (reset! error (str "Erro ao carregar jogadores: " err)))))]
+                                   (let [msg (str "Erro ao carregar jogadores: " err)]
+                                     (reset! error msg)
+                                     (state/toast-error! msg)))))]
     (r/create-class
      {:component-did-mount (fn [] (load!))
       :reagent-render
@@ -154,7 +163,6 @@
              (if @not-found?
                [common/not-found-resource @error #(rfe/push-state :championships)]
                [:div
-                [common/error-message @error]
                 [common/button "Tentar novamente" load! :variant :outline]])
 
              @loading?
@@ -178,7 +186,7 @@
                  #(api/download-csv! (str "/api/exports/championships/" id ".csv")
                                      (str (or (api-get ch :name) "campeonato") ".csv")
                                      (fn [] nil)
-                                     (fn [err] (js/alert err)))
+                                     (fn [err] (state/toast-error! err)))
                  :variant :outline]
                 [common/button "Deletar"
                  (fn []
@@ -188,7 +196,9 @@
                                                 (effects/ensure-championships! {:force? true})
                                                 (rfe/push-state :championships))
                                               (fn [err]
-                                                (reset! error (str "Erro ao deletar campeonato: " err))))))
+                                                (let [msg (str "Erro ao deletar campeonato: " err)]
+                                                  (reset! error msg)
+                                                  (state/toast-error! msg))))))
                  :variant :danger]]]
 
               (when (seq @seasons)
@@ -202,8 +212,9 @@
                      selected-season-id
                      (fn [_result] (load!))
                      (fn [err]
-                       (reset! error
-                               (str "Erro ao ativar temporada: " err)))))
+                       (let [msg (str "Erro ao ativar temporada: " err)]
+                         (reset! error msg)
+                         (state/toast-error! msg)))))
                   :container-class "min-w-[260px]"]])
 
               [:div {:class "grid gap-4 md:grid-cols-2"}
@@ -240,7 +251,9 @@
                             (reset! new-season-label "")
                             (load!))
                           (fn [err]
-                            (reset! error (str "Erro ao criar temporada: " err)))))))
+                            (let [msg (str "Erro ao criar temporada: " err)]
+                              (reset! error msg)
+                              (state/toast-error! msg)))))))
                    :variant :outline]
                   (when (seq @seasons)
                     [:div {:class "mt-2"}
@@ -280,7 +293,9 @@
                                        sid
                                        (fn [_] (load!))
                                        (fn [err]
-                                         (reset! error (str "Erro ao ativar temporada: " err)))))
+                                         (let [msg (str "Erro ao ativar temporada: " err)]
+                                           (reset! error msg)
+                                           (state/toast-error! msg)))))
                                     :variant :outline])]]))
                            (sort-by (fn [s] (str (:season s))) @seasons))
                       :dense? true
@@ -329,9 +344,14 @@
                        (fn [_result]
                          (api/get-championship-players id
                                                        #(reset! enrolled-players %)
-                                                       #(reset! error (str "Erro ao carregar inscritos: " %))))
+                                                       (fn [e]
+                                                         (let [msg (str "Erro ao carregar inscritos: " e)]
+                                                           (reset! error msg)
+                                                           (state/toast-error! msg)))))
                        (fn [err]
-                         (reset! error (str "Erro ao inscrever jogador: " err))))))
+                         (let [msg (str "Erro ao inscrever jogador: " err)]
+                           (reset! error msg)
+                           (state/toast-error! msg))))))
                   :on-quick-create
                   (fn [name ok err]
                     (api/create-player
@@ -349,11 +369,15 @@
                                  (reset! enrolled-players rows)
                                  (ok created))
                                (fn [e]
-                                 (reset! error (str "Erro ao carregar inscritos: " e))
-                                 (err (str "Erro ao carregar inscritos: " e)))))
+                                 (let [msg (str "Erro ao carregar inscritos: " e)]
+                                   (reset! error msg)
+                                   (state/toast-error! msg)
+                                   (err msg)))))
                             (fn [e]
-                              (reset! error (str "Erro ao inscrever novo jogador: " e))
-                              (err (str "Erro ao inscrever novo jogador: " e)))))
+                              (let [msg (str "Erro ao inscrever novo jogador: " e)]
+                                (reset! error msg)
+                                (state/toast-error! msg)
+                                (err msg)))))
                          (err "Jogador criado sem ID retornado.")))
                      (fn [e]
                        (err (str "Erro ao criar jogador: " e)))))}]
@@ -365,15 +389,20 @@
                       [:div {:class "text-slate-700"} (:name player)]
                       [common/button "Remover"
                        (fn []
-                         (api/unenroll-player-from-championship
+                          (api/unenroll-player-from-championship
                           id
                           (str (:_id player))
                           (fn [_result]
                             (api/get-championship-players id
                                                           #(reset! enrolled-players %)
-                                                          #(reset! error (str "Erro ao carregar inscritos: " %))))
+                                                          (fn [e]
+                                                            (let [msg (str "Erro ao carregar inscritos: " e)]
+                                                              (reset! error msg)
+                                                              (state/toast-error! msg)))))
                           (fn [err]
-                            (reset! error (str "Erro ao desinscrever jogador: " err)))))
+                            (let [msg (str "Erro ao desinscrever jogador: " err)]
+                              (reset! error msg)
+                              (state/toast-error! msg)))))
                        :variant :danger]])]
                   [:p {:class "app-muted"} "Nenhum jogador inscrito"])]
                [:div {:class "mt-4 border-t border-slate-200 pt-4"}
@@ -425,7 +454,9 @@
                              (load!))
                            (fn [err]
                              (reset! finalizing? false)
-                             (reset! error (str "Erro ao finalizar campeonato: " err))))))
+                             (let [msg (str "Erro ao finalizar campeonato: " err)]
+                               (reset! error msg)
+                               (state/toast-error! msg))))))
                       :variant :primary
                       :disabled (or @finalizing? (not can-submit?))])])]]]
 
@@ -455,15 +486,21 @@
                                                                                (reset! loading? false))
                                                                              (fn [err]
                                                                                (reset! loading? false)
-                                                                               (reset! error (str "Erro ao carregar partidas: " err)))))
+                                                                               (let [msg (str "Erro ao carregar partidas: " err)]
+                                                                                 (reset! error msg)
+                                                                                 (state/toast-error! msg)))))
                                                           (fn [err]
                                                             (reset! loading? false)
-                                                            (reset! error (str "Erro ao carregar inscritos: " err)))))
+                                                            (let [msg (str "Erro ao carregar inscritos: " err)]
+                                                              (reset! error msg)
+                                                              (state/toast-error! msg)))))
                                 (fn [err resp]
                                   (reset! loading? false)
                                   (if (and resp (= 404 (:status resp)))
                                     (reset! error "Temporada não encontrada.")
-                                    (reset! error (str "Erro ao carregar temporada: " err))))))]
+                                    (let [msg (str "Erro ao carregar temporada: " err)]
+                                      (reset! error msg)
+                                      (state/toast-error! msg))))))]
     (r/create-class
      {:component-did-mount (fn [] (load!))
       :reagent-render
@@ -477,8 +514,7 @@
             :variant :outline]
            (cond
              @error
-             [:div [common/error-message @error]
-              [common/button "Tentar novamente" load! :variant :outline]]
+             [:div [common/button "Tentar novamente" load! :variant :outline]]
 
              @loading?
              [common/loading-spinner]
@@ -598,7 +634,9 @@
                                                                         :max-players (if (:max-players result) (str (:max-players result)) "")})
                                                      (reset! championship-loading? false))
                                                    (fn [err]
-                                                     (reset! form-error (str "Erro ao carregar campeonato: " err))
+                                                     (let [msg (str "Erro ao carregar campeonato: " err)]
+                                                       (reset! form-error msg)
+                                                       (state/toast-error! msg))
                                                      (reset! championship-loading? false)))))]
     (r/create-class
      {:component-did-mount load-championship!
@@ -616,7 +654,9 @@
                                 (reset! form-error nil)
                                 (reset! field-errors {})
                                 (if-let [errs (valid-form?)]
-                                  (reset! field-errors errs)
+                                  (do
+                                    (reset! field-errors errs)
+                                    (state/toast-field-errors! errs))
                                   (do
                                     (reset! submitting? true)
                                     (let [payload (prepare-payload)
@@ -626,7 +666,9 @@
                                                       (rfe/push-state :championships))
                                           on-error (fn [error]
                                                     (reset! submitting? false)
-                                                    (reset! form-error (str "Erro ao " (if is-edit? "atualizar" "criar") " campeonato: " error)))]
+                                                    (let [msg (str "Erro ao " (if is-edit? "atualizar" "criar") " campeonato: " error)]
+                                                      (reset! form-error msg)
+                                                      (state/toast-error! msg)))]
                                       (if is-edit?
                                         (api/update-championship id payload on-success on-error)
                                         (api/create-championship payload on-success on-error))))))}
@@ -654,8 +696,6 @@
               [common/input-field "Data de Término" (:end-date @form-data) #(swap! form-data assoc :end-date %) :type "date"]
               [common/input-field "Notas" (:notes @form-data) #(swap! form-data assoc :notes %) :placeholder "Observações adicionais" :container-class "md:col-span-2"]]]
 
-            (when @form-error
-              [common/error-message @form-error])
             [:div {:class "flex flex-wrap gap-2"}
              [common/button (if @submitting? "Salvando..." (if is-edit? "Atualizar" "Criar"))
               nil

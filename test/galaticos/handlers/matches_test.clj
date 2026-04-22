@@ -44,6 +44,21 @@
           result (with-redefs [matches-db/find-by-id (fn [x] (when (= x id) match))]
                   (handlers/get-match request))]
       (is (= 200 (:status result)))))
+  (testing "enriches player-name and team-name on player-statistics"
+    (let [pid (ObjectId.)
+          tid (ObjectId.)
+          id (str (ObjectId.))
+          request {:params {:id id}}
+          match {:_id (ObjectId. id)
+                 :player-statistics [{:player-id pid :team-id tid :goals 1}]}
+          result (with-redefs [matches-db/find-by-id (fn [x] (when (= x id) match))
+                               players-db/find-by-ids (fn [_ids] [{:_id pid :name "João"}])
+                               teams-db/find-by-ids (fn [_ids] [{:_id tid :name "Time A"}])]
+                  (handlers/get-match request))
+          body (parse-body result)]
+      (is (= 200 (:status result)))
+      (is (= "João" (get-in body [:data :player-statistics 0 :player-name])))
+      (is (= "Time A" (get-in body [:data :player-statistics 0 :team-name])))))
   (testing "not found"
     (let [request {:params {:id (str (ObjectId.))}}
           result (with-redefs [matches-db/find-by-id (fn [_] nil)]
@@ -130,7 +145,7 @@
                                  (when (= tid team-id)
                                    {:_id team-id :name "T" :active-player-ids [player-id]}))
                                matches-db/create (fn [_ _] created)
-                               agg/update-player-stats-for-match (fn [_] nil)]
+                               agg/update-all-player-stats (fn [] nil)]
                   (handlers/create-match request))
           body (parse-body result)]
       (is (= 201 (:status result)))
@@ -161,7 +176,7 @@
                                seasons-db/add-match (fn [sid mid]
                                                      (when (and (= sid season-id) (= mid (:_id created)))
                                                        (reset! add-match-called true)))
-                               agg/update-player-stats-for-match (fn [_] nil)]
+                               agg/update-all-player-stats (fn [] nil)]
                   (handlers/create-match request))]
       (is (= 201 (:status result)))
       (is (true? @add-match-called)))))
@@ -202,7 +217,7 @@
                                seasons-db/add-match (fn [sid m]
                                                      (when (= sid season-id)
                                                        (reset! add-called (= m mid))))
-                               agg/update-player-stats-for-match (fn [_] nil)]
+                               agg/update-all-player-stats (fn [] nil)]
                   (handlers/update-match request))]
       (is (= 200 (:status result)))
       (is (true? @add-called)))))

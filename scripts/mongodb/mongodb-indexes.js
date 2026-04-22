@@ -11,6 +11,9 @@
  * Note: This script explicitly switches to the 'galaticos' database to ensure
  * indexes are created in the correct database regardless of how it's called.
  * 
+ * When adding or changing indexes, update config/database/init-indexes.js in parallel
+ * so new Docker volumes get the same definitions on first boot.
+ *
  * Collections indexed:
  *   - championships: name+season (unique), status, date range
  *   - players: name, team+active, position, stats, nickname
