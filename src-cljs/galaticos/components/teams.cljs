@@ -11,18 +11,17 @@
             ["lucide-react" :refer [Shield UserPlus]]))
 
 (defn team-list []
-  (let [{:keys [authenticated teams teams-loading? teams-error]} @state/app-state]
+  (let [{:keys [authenticated teams teams-loading?]} @state/app-state]
     [:div {:class "space-y-6"}
      [:div {:class "flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"}
       [:div
        [:p {:class "text-sm text-slate-500"} "Gestão de equipes"]
-       [:h2 {:class "text-2xl font-semibold text-slate-900"} "Times"]]
+       [:h2 {:class "text-2xl font-semibold text-slate-900 dark:text-slate-100"} "Times"]]
       (when authenticated
         [:div {:class "flex flex-wrap gap-2"}
          [common/button "Novo Time" #(rfe/push-state :team-new) :variant :primary]])]
      [common/card
       (cond
-        teams-error [common/error-message teams-error]
         teams-loading? [common/loading-spinner]
         (seq teams) [common/table
                      ["Nome" "Cidade" "Treinador" "Estádio" "Ano Fundação" "Jogadores"]
@@ -90,7 +89,9 @@
                                                           :notes (or (:notes result) "")})
                                        (reset! team-loading? false))
                                      (fn [err]
-                                       (reset! form-error (str "Erro ao carregar time: " err))
+                                       (let [msg (str "Erro ao carregar time: " err)]
+                                         (reset! form-error msg)
+                                         (state/toast-error! msg))
                                        (reset! team-loading? false)))))]
     (r/create-class
      {:component-did-mount load-team!
@@ -99,7 +100,7 @@
         [:div {:class "space-y-6"}
          [:div
           [:p {:class "text-sm text-slate-500"} "Cadastro"]
-          [:h2 {:class "text-2xl font-semibold text-slate-900"} (if is-edit? "Editar Time" "Novo Time")]]
+          [:h2 {:class "text-2xl font-semibold text-slate-900 dark:text-slate-100"} (if is-edit? "Editar Time" "Novo Time")]]
          (if @team-loading?
            [common/loading-spinner]
            [:form {:class "space-y-6"
@@ -108,7 +109,9 @@
                                 (reset! form-error nil)
                                 (reset! field-errors {})
                                 (if-let [errs (valid-form?)]
-                                  (reset! field-errors errs)
+                                  (do
+                                    (reset! field-errors errs)
+                                    (state/toast-field-errors! errs))
                                   (do
                                     (reset! submitting? true)
                                     (let [payload (prepare-payload)
@@ -118,7 +121,9 @@
                                                       (rfe/push-state :teams))
                                           on-error (fn [error]
                                                     (reset! submitting? false)
-                                                    (reset! form-error (str "Erro ao " (if is-edit? "atualizar" "criar") " time: " error)))]
+                                                    (let [msg (str "Erro ao " (if is-edit? "atualizar" "criar") " time: " error)]
+                                                      (reset! form-error msg)
+                                                      (state/toast-error! msg)))]
                                       (if is-edit?
                                         (api/update-team id payload on-success on-error)
                                         (api/create-team payload on-success on-error))))))}
@@ -134,8 +139,6 @@
             [common/card
              [:h3 {:class "app-section-title"} "Notas"]
              [common/input-field "Observações" (:notes @form-data) #(swap! form-data assoc :notes %) :placeholder "Observações adicionais"]]
-            (when @form-error
-              [common/error-message @form-error])
             [:div {:class "flex flex-wrap gap-2"}
              [common/button (if @submitting? "Salvando..." (if is-edit? "Atualizar" "Criar"))
               nil
@@ -172,19 +175,25 @@
                                                                                    (some #(= (player-picker/normalize-id (or (:_id p) (:id p))) (str %)) player-ids))
                                                                                  catalog))))
                                                      (fn [err _resp]
-                                                       (reset! error (str "Erro ao carregar jogadores: " err))))
+                                                       (let [msg (str "Erro ao carregar jogadores: " err)]
+                                                         (reset! error msg)
+                                                         (state/toast-error! msg))))
                                     (api/get-players {}
                                                      (fn [all]
                                                        (reset! all-players (api/coerce-player-list all)))
                                                      (fn [err _resp]
-                                                       (reset! error (str "Erro ao carregar jogadores: " err)))))))
+                                                       (let [msg (str "Erro ao carregar jogadores: " err)]
+                                                         (reset! error msg)
+                                                         (state/toast-error! msg)))))))
                               (fn [err resp]
                                 (reset! loading? false)
                                 (if (and resp (= 404 (:status resp)))
                                   (do (reset! not-found? true)
                                       (reset! error "Time não encontrado."))
-                                  (do (reset! not-found? false)
-                                      (reset! error (str "Erro ao carregar time: " err)))))))
+                                  (let [msg (str "Erro ao carregar time: " err)]
+                                    (reset! not-found? false)
+                                    (reset! error msg)
+                                    (state/toast-error! msg))))))
         delete-team! (fn []
                        (when (js/confirm "Tem certeza que deseja deletar este time?")
                          (reset! deleting? true)
@@ -195,19 +204,25 @@
                                             (rfe/push-state :teams))
                                           (fn [err]
                                             (reset! deleting? false)
-                                            (reset! error (str "Erro ao deletar time: " err))))))
+                                            (let [msg (str "Erro ao deletar time: " err)]
+                                              (reset! error msg)
+                                              (state/toast-error! msg))))))
         add-player! (fn [player-id]
                       (api/add-player-to-team id player-id
                                               (fn [_result]
                                                 (load!))
                                               (fn [err]
-                                                (reset! error (str "Erro ao adicionar jogador: " err)))))
+                                                (let [msg (str "Erro ao adicionar jogador: " err)]
+                                                  (reset! error msg)
+                                                  (state/toast-error! msg)))))
         remove-player! (fn [player-id]
                          (api/remove-player-from-team id player-id
                                                       (fn [_result]
                                                         (load!))
                                                       (fn [err]
-                                                        (reset! error (str "Erro ao remover jogador: " err)))))]
+                                                        (let [msg (str "Erro ao remover jogador: " err)]
+                                                          (reset! error msg)
+                                                          (state/toast-error! msg)))))]
     (r/create-class
      {:component-did-mount load!
       :reagent-render
@@ -217,7 +232,6 @@
            @error (if @not-found?
                     [common/not-found-resource @error #(rfe/push-state :teams)]
                     [:div
-                     [common/error-message @error]
                      [common/button "Tentar novamente" load! :variant :outline]])
            @loading? [common/loading-spinner]
            @team (let [{:keys [authenticated]} @state/app-state]
@@ -228,7 +242,7 @@
                      [:> Shield {:size 20}]]
                     [:div
                      [:p {:class "text-sm text-slate-500"} "Time"]
-                     [:h2 {:class "text-2xl font-semibold text-slate-900"} (:name @team)]]]
+                     [:h2 {:class "text-2xl font-semibold text-slate-900 dark:text-slate-100"} (:name @team)]]]
                    (when authenticated
                      [:div {:class "flex flex-wrap gap-2"}
                       [common/button "Editar" #(rfe/push-state :team-edit {:id id}) :variant :outline]

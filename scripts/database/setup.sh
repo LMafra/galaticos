@@ -8,9 +8,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=utils/common.sh
 source "$SCRIPT_DIR/../utils/common.sh"
 
-# Configuration
-readonly DB_NAME="galaticos"
-readonly MONGO_URI="mongodb://localhost:27017"
+# Configuration (override with MONGO_URI / DB_NAME for remote or prod)
+DB_NAME="${DB_NAME:-galaticos}"
+MONGO_URI="${MONGO_URI:-mongodb://localhost:27017}"
 readonly INDEXES_SCRIPT="scripts/mongodb/mongodb-indexes.js"
 
 # Change to project root

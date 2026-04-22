@@ -136,6 +136,29 @@
       (log/error e user-message)
       (resp/server-error user-message))))
 
+(defn- enrich-match-view
+  "Attach :player-name and :team-name to each player-statistics row for read APIs (not persisted)."
+  [match]
+  (if-not (seq (:player-statistics match))
+    match
+    (let [stats (:player-statistics match)
+          p-ids (distinct (keep :player-id stats))
+          t-ids (distinct (keep :team-id stats))
+          players (players-db/find-by-ids p-ids)
+          teams (if (seq t-ids) (teams-db/find-by-ids t-ids) [])
+          pby (into {} (map (fn [p] [(str (:_id p)) p]) players))
+          tby (into {} (map (fn [t] [(str (:_id t)) t]) teams))]
+      (assoc match
+             :player-statistics
+             (mapv
+              (fn [row]
+                (let [pn (get pby (str (:player-id row)))
+                      tn (get tby (str (:team-id row)))]
+                  (cond-> row
+                    pn (assoc :player-name (or (:name pn) (:player-name row)))
+                    tn (assoc :team-name (or (:name tn) (:team-name row))))))
+              stats)))))
+
 (defn list-matches
   "List all matches"
   [request]
@@ -156,7 +179,7 @@
   (try
     (let [id (get-in request [:params :id])]
       (if-let [match (matches-db/find-by-id id)]
-        (resp/success match)
+        (resp/success (enrich-match-view match))
         (resp/not-found "Match not found")))
     (catch Exception e
       (handle-exception e "Failed to get match"))))
@@ -182,7 +205,8 @@
           (let [created (matches-db/create match-data player-statistics)]
             (when season-id
               (seasons-db/add-match season-id (:_id created)))
-            (agg/update-player-stats-for-match (str (:_id created)))
+            ;; Full recompute from all matches in DB (same as delete) so every player stays consistent.
+            (agg/update-all-player-stats)
             (resp/success created 201)))))
     (catch Exception e
       (handle-exception e "Failed to create match"))))
@@ -199,7 +223,9 @@
         (if (matches-db/exists? id)
           (let [existing (matches-db/find-by-id id)
                 championship-id (or (:championship-id data) (:championship-id existing))
-                season-id (or (:season-id data) (:season-id existing))
+                season-id (or (:season-id data)
+                              (:season-id existing)
+                              (some-> (seasons-db/find-active-by-championship championship-id) :_id))
                 player-statistics (or (:player-statistics data) (:player-statistics existing))]
             (when (seq player-statistics)
               (validate-players-enrolled championship-id season-id
@@ -212,7 +238,7 @@
               (do
                 (when season-id
                   (seasons-db/add-match season-id (:_id updated)))
-                (agg/update-player-stats-for-match id)
+                (agg/update-all-player-stats)
                 (resp/success updated))
               (resp/server-error "Failed to retrieve updated match")))
           (resp/not-found "Match not found"))))

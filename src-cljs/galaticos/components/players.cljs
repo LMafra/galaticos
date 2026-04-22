@@ -61,13 +61,13 @@
         (search-backend!))
       :reagent-render
       (fn [_]
-        (let [{:keys [authenticated players players-loading? players-error]} @state/app-state
+        (let [{:keys [authenticated players players-loading?]} @state/app-state
               positions (position-options (if (seq @position-catalog) @position-catalog players))]
           [:div {:class "space-y-6"}
            [:div {:class "flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"}
             [:div
              [:p {:class "text-sm text-slate-500"} "Gestão do elenco"]
-             [:h2 {:class "text-2xl font-semibold text-slate-900"} "Jogadores"]]
+             [:h2 {:class "text-2xl font-semibold text-slate-900 dark:text-slate-100"} "Jogadores"]]
             (when authenticated
               [:div {:class "flex flex-wrap gap-2"}
                [common/button "Novo Jogador" #(rfe/push-state :player-new) :variant :primary]])]
@@ -82,7 +82,7 @@
                                     (reset! page 1)
                                     (reset! search (-> e .-target .-value))
                                     (search-backend!))
-                       :class "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-brand-maroon focus:outline-none focus:ring-2 focus:ring-brand-maroon/20 sm:w-64"}]
+                       :class "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-brand-maroon focus:outline-none focus:ring-2 focus:ring-brand-maroon/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 sm:w-64"}]
               [common/select-field "Posição" @position positions (fn [v]
                                                                    (reset! page 1)
                                                                    (reset! position v)
@@ -103,7 +103,6 @@
                [:> Grid2X2 {:size 16}]]]]
 
             (cond
-              players-error [common/error-message players-error]
               players-loading? [common/loading-spinner]
               (seq players)
               [:div {:class "space-y-4"}
@@ -119,18 +118,18 @@
                          (when-let [photo (:photo-url player)]
                            [:img {:src photo :alt (:name player) :class "h-full w-full object-cover"}])]
                         [:div {:class "flex-1"}
-                         [:p {:class "text-base font-semibold text-slate-900"} (:name player)]
+                         [:p {:class "text-base font-semibold text-slate-900 dark:text-slate-100"} (:name player)]
                          [:p {:class "text-xs text-slate-500"} (or (:nickname player) "-")]
                          [common/badge (:position player) :variant :info :class "mt-2"]]]
                        [:div {:class "mt-4 grid grid-cols-3 gap-2 text-center text-xs text-slate-600"}
                         [:div
-                         [:p {:class "text-sm font-semibold text-slate-900"} (get-in player [:aggregated-stats :total :games] 0)]
+                         [:p {:class "text-sm font-semibold text-slate-900 dark:text-slate-100"} (get-in player [:aggregated-stats :total :games] 0)]
                          [:p "Partidas"]]
                         [:div
-                         [:p {:class "text-sm font-semibold text-slate-900"} (get-in player [:aggregated-stats :total :goals] 0)]
+                         [:p {:class "text-sm font-semibold text-slate-900 dark:text-slate-100"} (get-in player [:aggregated-stats :total :goals] 0)]
                          [:p "Gols"]]
                         [:div
-                         [:p {:class "text-sm font-semibold text-slate-900"} (get-in player [:aggregated-stats :total :assists] 0)]
+                         [:p {:class "text-sm font-semibold text-slate-900 dark:text-slate-100"} (get-in player [:aggregated-stats :total :assists] 0)]
                          [:p "Assistências"]]]]))]
                  [common/table
                   ["Nome" "Apelido" "Posição" "Partidas" "Gols" "Assistências"]
@@ -209,8 +208,10 @@
                           (if (and resp (= 404 (:status resp)))
                             (do (reset! not-found? true)
                                 (reset! error "Jogador não encontrado."))
-                            (do (reset! not-found? false)
-                                (reset! error (str "Erro ao carregar jogador: " err)))))))
+                            (let [msg (str "Erro ao carregar jogador: " err)]
+                              (reset! not-found? false)
+                              (reset! error msg)
+                              (state/toast-error! msg))))))
         delete-player! (fn []
                          (when (js/confirm "Tem certeza que deseja deletar este jogador?")
                            (reset! deleting? true)
@@ -220,7 +221,9 @@
                                                (rfe/push-state :players))
                                              (fn [err]
                                                (reset! deleting? false)
-                                               (reset! error (str "Erro ao deletar jogador: " err))))))]
+                                               (let [msg (str "Erro ao deletar jogador: " err)]
+                                                 (reset! error msg)
+                                                 (state/toast-error! msg))))))]
     (r/create-class
      {:component-did-mount load-player!
       :reagent-render
@@ -229,7 +232,6 @@
           @error (if @not-found?
                    [common/not-found-resource @error #(rfe/push-state :players)]
                    [:div {:class "space-y-4"}
-                    [common/error-message @error]
                     [common/button "Tentar novamente" load-player! :variant :outline]])
           @loading? [common/loading-spinner]
           @player (let [{:keys [authenticated]} @state/app-state
@@ -243,7 +245,7 @@
                           [:img {:src photo :alt (:name @player) :class "h-full w-full object-cover"}])]
                        [:div
                         [:p {:class "text-sm text-slate-500"} "Jogador"]
-                        [:h2 {:class "text-2xl font-semibold text-slate-900"} (:name @player)]
+                        [:h2 {:class "text-2xl font-semibold text-slate-900 dark:text-slate-100"} (:name @player)]
                         [common/badge (:position @player) :variant :info :class "mt-2"]]]
                       (when authenticated
                         [:div {:class "flex flex-wrap gap-2"}
@@ -395,7 +397,9 @@
                          (reset! teams normalized))
                        (reset! teams-loading? false))
                      (fn [err]
-                       (reset! form-error (str "Erro ao carregar times: " err))
+                       (let [msg (str "Erro ao carregar times: " err)]
+                         (reset! form-error msg)
+                         (state/toast-error! msg))
                        (reset! teams-loading? false)))
                     (when is-edit?
                       (api/get-player id
@@ -416,7 +420,9 @@
                                                           :notes (or (:notes result) "")})
                                        (reset! player-loading? false))
                                      (fn [err]
-                                       (reset! form-error (str "Erro ao carregar jogador: " err))
+                                       (let [msg (str "Erro ao carregar jogador: " err)]
+                                         (reset! form-error msg)
+                                         (state/toast-error! msg))
                                        (reset! player-loading? false)))))]
     (r/create-class
      {:component-did-mount load-data!
@@ -425,7 +431,7 @@
         [:div {:class "space-y-6"}
          [:div
           [:p {:class "text-sm text-slate-500"} "Cadastro"]
-          [:h2 {:class "text-2xl font-semibold text-slate-900"} (if is-edit? "Editar Jogador" "Novo Jogador")]]
+          [:h2 {:class "text-2xl font-semibold text-slate-900 dark:text-slate-100"} (if is-edit? "Editar Jogador" "Novo Jogador")]]
          (if (or @player-loading? @teams-loading?)
            [common/loading-spinner]
            [:form {:class "space-y-6"
@@ -434,7 +440,9 @@
                                 (reset! form-error nil)
                                 (reset! field-errors {})
                                 (if-let [errs (valid-form?)]
-                                  (reset! field-errors errs)
+                                  (do
+                                    (reset! field-errors errs)
+                                    (state/toast-field-errors! errs))
                                   (do
                                     (reset! submitting? true)
                                     (let [payload (prepare-payload)
@@ -444,7 +452,9 @@
                                                       (rfe/push-state :players))
                                           on-error (fn [error]
                                                     (reset! submitting? false)
-                                                    (reset! form-error (str "Erro ao " (if is-edit? "atualizar" "criar") " jogador: " error)))]
+                                                    (let [msg (str "Erro ao " (if is-edit? "atualizar" "criar") " jogador: " error)]
+                                                      (reset! form-error msg)
+                                                      (state/toast-error! msg)))]
                                       (if is-edit?
                                         (api/update-player id payload on-success on-error)
                                         (api/create-player payload on-success on-error))))))}
@@ -482,9 +492,6 @@
               [common/input-field "Telefone" (:phone @form-data) #(swap! form-data assoc :phone %) :type "tel"]
               [common/input-field "URL da Foto" (:photo-url @form-data) #(swap! form-data assoc :photo-url %) :type "url" :container-class "md:col-span-2"]
               [common/input-field "Notas" (:notes @form-data) #(swap! form-data assoc :notes %) :placeholder "Observações adicionais" :container-class "md:col-span-2"]]]
-
-            (when @form-error
-              [common/error-message @form-error])
 
             [:div {:class "flex flex-wrap gap-2"}
              [common/button (if @submitting? "Salvando..." (if is-edit? "Atualizar" "Criar"))

@@ -67,10 +67,13 @@
       (is (= 200 (:status response))))))
 
 (deftest wrap-static-cache
-  (testing "adds cache headers for static URI"
+  (testing "/js and /css: revalidate (bundles not fingerprinted in URL)"
     (let [h (handler/wrap-static-cache (fn [_] {:status 200 :headers {}}))
-          request {:uri "/js/app.js"}
-          response (h request)]
+          response (h {:uri "/js/compiled/app.js"})]
+      (is (str/includes? (or (get-in response [:headers "Cache-Control"]) "") "max-age=0"))))
+  (testing "adds long cache for /images and /fonts"
+    (let [h (handler/wrap-static-cache (fn [_] {:status 200 :headers {}}))
+          response (h {:uri "/images/logo.png"})]
       (is (get-in response [:headers "Cache-Control"]))
       (is (get-in response [:headers "Expires"]))))
   (testing "does not add cache headers for non-static URI"

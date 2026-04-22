@@ -127,9 +127,20 @@ test('create match with one player statistic', { tag: '@crud' }, async ({ page }
     await playerSearch.fill(playerName);
     await page.getByRole('button', { name: new RegExp(`Criar jogador "${playerName}"`) }).first().click();
     await expect(page.getByText(new RegExp(`Selecionado:\\s*${playerName}`))).toBeVisible({ timeout: 10_000 });
-    await page.getByLabel('Gols').first().fill('0');
+    // "Gols" substring-matches "Gols do adversário"; target the player stat row only.
+    await page.getByRole('spinbutton', { name: 'Gols', exact: true }).fill('0');
 
+    const createMatchResp = page.waitForResponse((r) => {
+      if (r.request().method() !== 'POST') return false;
+      try {
+        return new URL(r.url()).pathname === '/api/matches';
+      } catch {
+        return false;
+      }
+    }, { timeout: 20_000 });
     await page.getByRole('button', { name: 'Criar Partida' }).click();
+    const resp = await createMatchResp;
+    expect(resp.status(), await resp.text()).toBe(201);
     await expect(page).toHaveURL(/\#\/matches$/);
     await expect(page.getByRole('heading', { name: 'Partidas', level: 1 })).toBeVisible({ timeout: 15_000 });
   } finally {

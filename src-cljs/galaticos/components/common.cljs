@@ -9,17 +9,17 @@
        (str/join " ")))
 
 (defn loading-spinner []
-  [:div {:class "flex items-center justify-center gap-3 py-10 text-slate-500"}
-   [:div {:class "h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-brand-maroon"}]
+  [:div {:class "flex items-center justify-center gap-3 py-10 text-slate-500 dark:text-slate-400"}
+   [:div {:class "h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-brand-maroon dark:border-slate-600"}]
    [:span "Carregando..."]])
 
 (defn alert [message & {:keys [variant class]}]
   (let [variant (or variant :error)
         styles (case variant
-                 :success "border-emerald-200 bg-emerald-50 text-emerald-700"
-                 :warning "border-amber-200 bg-amber-50 text-amber-700"
-                 :info "border-sky-200 bg-sky-50 text-sky-700"
-                 "border-rose-200 bg-rose-50 text-rose-700")]
+                 :success "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800/50 dark:bg-emerald-950/40 dark:text-emerald-200"
+                 :warning "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800/50 dark:bg-amber-950/40 dark:text-amber-200"
+                 :info "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800/50 dark:bg-sky-950/40 dark:text-sky-200"
+                 "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800/50 dark:bg-rose-950/40 dark:text-rose-200")]
     [:div {:class (merge-classes "rounded-xl border px-4 py-3 text-sm" styles class)}
      message]))
 
@@ -32,9 +32,9 @@
         styles (case variant
                  :primary "bg-brand-maroon text-white hover:bg-brand-maroon/90"
                  :danger "bg-rose-600 text-white hover:bg-rose-700"
-                 :outline "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-                 :ghost "text-slate-600 hover:bg-slate-100"
-                 "bg-slate-100 text-slate-700 hover:bg-slate-200")]
+                 :outline "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                 :ghost "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                 "bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700")]
     [:button (merge {:on-click on-click
                      :class (merge-classes base styles class)
                      :type (or type "button")
@@ -59,8 +59,8 @@
   [:div {:class (merge-classes "app-card p-5" class)}
    [:div {:class "flex items-start justify-between"}
     [:div
-     [:p {:class "text-sm font-medium text-slate-500"} label]
-     [:p {:class "mt-2 text-2xl font-semibold text-slate-900"} value]
+     [:p {:class "text-sm font-medium text-slate-500 dark:text-slate-400"} label]
+     [:p {:class "mt-2 text-2xl font-semibold text-slate-900 dark:text-slate-100"} value]
      (when delta
        [:p {:class "mt-1 text-xs text-emerald-600"} delta])]
     (when icon
@@ -134,58 +134,50 @@
 
 (defn input-field [label value on-change & {:keys [type placeholder class container-class required? error id]}]
   (let [field-id (or id (str "field-" (swap! field-id-counter inc)))
-        error-id (str field-id "-error")
         border-class (if error
                       "border-rose-500 focus:border-rose-500 focus:ring-rose-500/20"
                       "border-slate-300 focus:border-brand-maroon focus:ring-brand-maroon/20")]
     [:div {:class (merge-classes "space-y-2" container-class)}
      [:label {:for field-id
-              :class (merge-classes "text-sm font-medium" (if error "text-rose-700" "text-slate-700"))}
+              :class (merge-classes "text-sm font-medium" (if error "text-rose-700" "text-slate-700 dark:text-slate-200"))}
       (str label (when required? " *"))]
      [:input (merge {:type (or type "text")
                      :id field-id
                      :value value
                      :on-change #(on-change (-> % .-target .-value))
                      :placeholder placeholder
-                     :class (merge-classes "w-full rounded-lg border bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-2" border-class class)}
-                   (when error {:aria-invalid "true"
-                                :aria-describedby error-id}))]
-     (when error
-       [:p {:id error-id :class "text-xs text-rose-600"} error])]))
+                     :class (merge-classes "w-full rounded-lg border bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500" border-class class)}
+                   (when error {:aria-invalid "true"}))]]))
 
 (defn select-field [label value options on-change & {:keys [class container-class required? error id]}]
   (let [field-id (or id (str "field-" (swap! field-id-counter inc)))
-        error-id (str field-id "-error")
         border-class (if error
                       "border-rose-500 focus:border-rose-500 focus:ring-rose-500/20"
                       "border-slate-300 focus:border-brand-maroon focus:ring-brand-maroon/20")]
     [:div {:class (merge-classes "space-y-2" container-class)}
      [:label {:for field-id
-              :class (merge-classes "text-sm font-medium" (if error "text-rose-700" "text-slate-700"))}
+              :class (merge-classes "text-sm font-medium" (if error "text-rose-700" "text-slate-700 dark:text-slate-200"))}
       (str label (when required? " *"))]
      (into [:select (merge {:value value
                             :id field-id
                             :on-change #(on-change (-> % .-target .-value))
-                            :class (merge-classes "w-full rounded-lg border bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2" border-class class)}
-                          (when error {:aria-invalid "true"
-                                       :aria-describedby error-id}))]
+                            :class (merge-classes "w-full rounded-lg border bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100" border-class class)}
+                          (when error {:aria-invalid "true"}))]
            (map (fn [[opt-value opt-label]]
                   [:option {:key opt-value :value opt-value} opt-label])
-                options))
-     (when error
-       [:p {:id error-id :class "text-xs text-rose-600"} error])]))
+                options))]))
 
 (defn modal [{:keys [title content on-close actions]}]
   (let [title-id "modal-title"]
-    [:div {:class "fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4"
+    [:div {:class "fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 dark:bg-black/50"
            :role "dialog"
            :aria-modal "true"
            :aria-labelledby title-id}
      [:div {:class "app-card w-full max-w-lg p-6"}
       [:div {:class "flex items-center justify-between"}
-       [:h3 {:id title-id :class "text-lg font-semibold text-slate-900"} title]
-       [:button {:class "text-slate-400 hover:text-slate-600" :on-click on-close :aria-label "Fechar"} "×"]]
-      [:div {:class "mt-4 text-sm text-slate-600"} content]
+       [:h3 {:id title-id :class "text-lg font-semibold text-slate-900 dark:text-slate-100"} title]
+       [:button {:class "text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300" :on-click on-close :aria-label "Fechar"} "×"]]
+      [:div {:class "mt-4 text-sm text-slate-600 dark:text-slate-300"} content]
       [:div {:class "mt-6 flex justify-end gap-2"} actions]]]))
 
 (defn- parse-number
@@ -260,10 +252,10 @@
                      :value @search-query
                      :on-change #(reset! search-query (-> % .-target .-value))
                      :placeholder "Buscar..."
-                     :class "w-full max-w-sm rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-brand-maroon focus:outline-none focus:ring-2 focus:ring-brand-maroon/20"}]])
-         [:div {:class "overflow-hidden rounded-xl border border-slate-200 bg-white"}
-          [:table {:class "min-w-full divide-y divide-slate-200"}
-           [:thead {:class "bg-slate-50"}
+                     :class "w-full max-w-sm rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-brand-maroon focus:outline-none focus:ring-2 focus:ring-brand-maroon/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"}]])
+         [:div {:class "overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"}
+          [:table {:class "min-w-full divide-y divide-slate-200 dark:divide-slate-700"}
+           [:thead {:class "bg-slate-50 dark:bg-slate-800/80"}
             [:tr
              (doall
               (map-indexed
@@ -274,25 +266,25 @@
                                         (if (= @sort-direction :asc) " ↑" " ↓"))]
                    ^{:key idx}
                    [:th {:on-click (when is-sortable #(handle-header-click idx))
-                         :class (merge-classes "select-none text-left text-xs font-semibold uppercase tracking-wide text-slate-500"
+                         :class (merge-classes "select-none text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
                                                cell-class
                                                (when is-sortable "cursor-pointer")
-                                               (when is-sorted "text-slate-900"))}
+                                               (when is-sorted "text-slate-900 dark:text-slate-100"))}
                     (str header sort-indicator)]))
                headers-vec))]]
-           [:tbody {:class "divide-y divide-slate-100"}
+           [:tbody {:class "divide-y divide-slate-100 dark:divide-slate-800"}
             (doall
              (map-indexed
               (fn [idx row]
                 ^{:key idx}
                 [:tr {:on-click (when on-row-click #(on-row-click (nth final-row-data idx)))
-                      :class (merge-classes "hover:bg-slate-50"
+                      :class (merge-classes "hover:bg-slate-50 dark:hover:bg-slate-800/80"
                                             (when on-row-click "cursor-pointer"))}
                  (doall
                   (map-indexed
                    (fn [idx2 cell]
                      ^{:key idx2}
-                     [:td {:class (merge-classes "text-slate-700" cell-class)} cell])
+                     [:td {:class (merge-classes "text-slate-700 dark:text-slate-300" cell-class)} cell])
                    row))])
               final-rows))]]]]))))
 

@@ -28,8 +28,11 @@ test.describe('Resource not found', { tag: '@validation' }, () => {
     try {
       await page.goto(`/#/championships/${FAKE_ID}`);
       await expect(page.getByRole('button', { name: 'Voltar' })).toBeVisible({ timeout: 15_000 });
+      // Same copy can appear inline and in toasts; scope to main to satisfy strict mode.
       await expect(
-        page.getByText(/Campeonato não encontrado\.|Erro ao carregar campeonato|Erro ao carregar partidas|Erro ao carregar inscritos/)
+        page
+          .locator('#main-content')
+          .getByText(/Campeonato não encontrado\.|Erro ao carregar campeonato|Erro ao carregar partidas|Erro ao carregar inscritos/)
       ).toBeVisible();
     } finally {
       await saveCoverage(page, testInfo);

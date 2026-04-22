@@ -92,6 +92,10 @@ data/*.csv
 *.bson
 *.dump
 
+# Local MongoDB backup archives (see scripts/database/backup-mongodb.sh)
+backups/mongodb/*
+!backups/mongodb/.gitkeep
+
 # Logs
 logs/
 *.log

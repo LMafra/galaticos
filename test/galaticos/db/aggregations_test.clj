@@ -1,7 +1,34 @@
 (ns galaticos.db.aggregations-test
   (:require [clojure.test :refer [deftest is testing]]
             [galaticos.db.aggregations :as agg]
-            [monger.collection :as mc]))
+            [monger.collection :as mc])
+  (:import [org.bson.types ObjectId]))
+
+(deftest coerce-player-stat-goals-assists-is-addfields-convert
+  (let [stage @#'agg/coerce-player-stat-goals-assists]
+    (is (map? stage))
+    (is (contains? stage :$addFields))
+    (is (= "long" (get-in stage [:$addFields "player-statistics.goals" :$convert :to])))))
+
+(deftest match-player-stats-filter-treats-objectid-and-string-as-same
+  (let [oid (ObjectId.)
+        match-set (#'agg/match-player-id-str-set [oid])]
+    (is (#'agg/stats-row-for-match-players? {:player-id oid} match-set))
+    (is (#'agg/stats-row-for-match-players? {:player-id (str oid)} match-set))
+    (is (not (#'agg/stats-row-for-match-players? {:player-id (ObjectId.)} match-set)))))
+
+(deftest merge-aggregated-stats-unifies-championship-id-types
+  (let [cid (ObjectId.)
+        existing {:total {:games 0 :goals 0 :assists 0 :titles 0}
+                  :by-championship [{:championship-id cid
+                                     :championship-name "C"
+                                     :games 0 :goals 0 :assists 0 :titles 0}]}
+        match-derived [{:championship-id (str cid)
+                        :championship-name "C"
+                        :games 2 :goals 1 :assists 0}]
+        merged (#'agg/merge-aggregated-stats existing match-derived)]
+    (is (= 2 (get-in merged [:total :games])))
+    (is (= 1 (get-in merged [:total :goals])))))
 
 (deftest merge-aggregated-stats-preserves-baseline
   (testing "keeps untouched championships and preserves titles while updating match-derived stats"
@@ -53,26 +80,117 @@
               :titles 0}
              (first (filter #(= "c3" (:championship-id %)) (:by-championship merged))))))))
 
-(deftest merge-aggregated-stats-skips-match-merge-for-season-scoped-rows
-  (testing "by-championship rows with :season keep table stats when match-derived arrives"
+(deftest merge-aggregated-stats-merges-match-into-season-scoped-rows
+  (testing "by-championship rows with :season absorb match rollups keyed by same championship+season"
     (let [existing {:total {:games 2 :goals 2 :assists 0 :titles 1}
                     :by-championship [{:championship-id "c1"
-                                      :season "2024"
-                                      :championship-name "C"
-                                      :games 2
-                                      :goals 2
-                                      :assists 0
-                                      :titles 1}]}
+                                       :season "2024"
+                                       :championship-name "C"
+                                       :games 2
+                                       :goals 2
+                                       :assists 0
+                                       :titles 1}]}
           match-derived [{:championship-id "c1"
+                          :season "2024"
                           :championship-name "C"
                           :games 9
                           :goals 5
                           :assists 2}]
           merged (#'agg/merge-aggregated-stats existing match-derived)
           row (first (:by-championship merged))]
-      (is (= 2 (:games row)))
-      (is (= 2 (:goals row)))
-      (is (= "2024" (:season row))))))
+      (is (= 9 (:games row)))
+      (is (= 5 (:goals row)))
+      (is (= 2 (:assists row)))
+      (is (= "2024" (:season row)))
+      (is (= 9 (get-in merged [:total :games])))
+      (is (= 5 (get-in merged [:total :goals]))))))
+
+(deftest merge-aggregated-stats-fans-out-unscoped-to-sole-season-row
+  (testing "nil-season match rollup merges into the only by-championship row for that championship"
+    (let [existing {:total {:games 0 :goals 0 :assists 0 :titles 1}
+                    :by-championship [{:championship-id "c-bol"
+                                       :season "2025"
+                                       :championship-name "Boleiro"
+                                       :games 0
+                                       :goals 0
+                                       :assists 0
+                                       :titles 1}]}
+          match-derived [{:championship-id "c-bol"
+                          :season nil
+                          :championship-name "Boleiro"
+                          :games 1
+                          :goals 0
+                          :assists 0}]
+          merged (#'agg/merge-aggregated-stats existing match-derived)
+          row (first (:by-championship merged))]
+      (is (= 1 (count (:by-championship merged))))
+      (is (= 1 (:games row)))
+      (is (= "2025" (:season row)))
+      (is (= 1 (get-in merged [:total :games]))))))
+
+(deftest merge-aggregated-stats-fanout-unifies-objectid-and-string-championship-id
+  (testing "Mongo rollup uses ObjectId championship-id; player row uses string — fan-out still merges"
+    (let [cid (ObjectId.)
+          cid-str (str cid)
+          existing {:total {:games 6 :goals 0 :assists 0 :titles 1}
+                    :by-championship [{:championship-id cid-str
+                                       :season "2025"
+                                       :championship-name "SARRADA"
+                                       :games 6
+                                       :goals 0
+                                       :assists 0
+                                       :titles 1}]}
+          match-derived [{:championship-id cid
+                          :season nil
+                          :championship-name "SARRADA"
+                          :games 1
+                          :goals 200
+                          :assists 0}]
+          merged (#'agg/merge-aggregated-stats existing match-derived)
+          row (first (:by-championship merged))]
+      (is (= 1 (count (:by-championship merged))))
+      (is (= cid-str (str (:championship-id row))))
+      (is (= 200 (:goals row)))
+      (is (= "2025" (:season row)))
+      (is (= 200 (get-in merged [:total :goals]))))))
+
+(deftest merge-aggregated-stats-ambiguous-unscoped-adds-orphan-row
+  (testing "multiple season rows for same championship: unscoped rollup does not pick a season"
+    (let [existing {:total {:games 2 :goals 0 :assists 0 :titles 0}
+                    :by-championship [{:championship-id "c1" :season "2024"
+                                       :championship-name "C" :games 1 :goals 0 :assists 0 :titles 0}
+                                      {:championship-id "c1" :season "2025"
+                                       :championship-name "C" :games 1 :goals 0 :assists 0 :titles 0}]}
+          match-derived [{:championship-id "c1" :season nil
+                          :championship-name "C" :games 3 :goals 2 :assists 0}]
+          merged (#'agg/merge-aggregated-stats existing match-derived)
+          by (:by-championship merged)]
+      (is (= 3 (count by)))
+      (is (= 5 (get-in merged [:total :games])))
+      (is (= 2 (get-in merged [:total :goals]))))))
+
+(deftest merge-aggregated-stats-distinguishes-seasons-same-championship
+  (testing "same championship-id different :season merge to separate rows (no double-count)"
+    (let [existing {:total {:games 4 :goals 3 :assists 1 :titles 0}
+                    :by-championship [{:championship-id "c1" :season "2024"
+                                       :championship-name "C" :games 2 :goals 1 :assists 1 :titles 0}
+                                      {:championship-id "c1" :season "2025"
+                                       :championship-name "C" :games 2 :goals 2 :assists 0 :titles 0}]}
+          match-derived [{:championship-id "c1" :season "2024"
+                          :championship-name "C" :games 3 :goals 2 :assists 0}
+                         {:championship-id "c1" :season "2025"
+                          :championship-name "C" :games 1 :goals 1 :assists 0}]
+          merged (#'agg/merge-aggregated-stats existing match-derived)
+          by (:by-championship merged)
+          r24 (first (filter #(= "2024" (:season %)) by))
+          r25 (first (filter #(= "2025" (:season %)) by))]
+      (is (= 2 (count by)))
+      (is (= 3 (:games r24)))
+      (is (= 2 (:goals r24)))
+      (is (= 1 (:games r25)))
+      (is (= 1 (:goals r25)))
+      (is (= 4 (get-in merged [:total :games])))
+      (is (= 3 (get-in merged [:total :goals]))))))
 
 (deftest championship-comparison-includes-all-championships
   (testing "returns all championships with zeroed metrics when there is no data"

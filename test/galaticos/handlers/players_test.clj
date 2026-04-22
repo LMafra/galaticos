@@ -118,6 +118,16 @@
                                players-db/find-by-id (fn [_] updated)]
                   (handlers/update-player request))]
       (is (= 200 (:status result)))))
+  (testing "nickname allowed"
+    (let [id (str (ObjectId.))
+          request {:params {:id id} :json-body {:nickname "Zico"}}
+          updated {:_id (ObjectId. id) :nickname "Zico"}
+          result (with-redefs [players-db/exists? (fn [x] (= x id))
+                               players-db/update-by-id (fn [_ _] nil)
+                               players-db/find-by-id (fn [_] updated)]
+                  (handlers/update-player request))]
+      (is (= 200 (:status result)))
+      (is (= "Zico" (get-in (parse-body result) [:data :nickname])))))
   (testing "not found"
     (let [request {:params {:id (str (ObjectId.))} :json-body {:name "X"}}
           result (with-redefs [players-db/exists? (fn [_] false)]

@@ -1,11 +1,46 @@
 (ns galaticos.db.matches
   "Database operations for matches collection"
-  (:require [monger.collection :as mc]
+  (:require [clojure.string :as str]
+            [monger.collection :as mc]
             [galaticos.db.core :refer [db]]
             [galaticos.util.response :refer [->object-id]])
   (:import [org.bson.types ObjectId]))
 
 (def collection-name "matches")
+
+(defn- safe-stat-int
+  "Coerce match stat field to int for BSON ($sum) and home-score. Mirrors aggregation semantics: nil/bad -> 0."
+  [value]
+  (cond
+    (number? value) (int (long value))
+    (nil? value) 0
+    (string? value)
+    (let [s (str/trim value)]
+      (if (str/blank? s)
+        0
+        (try (int (long (Double/parseDouble s)))
+             (catch Exception _ 0))))
+    :else
+    (try (int (long value))
+         (catch Exception _ 0))))
+
+(defn normalize-player-statistics
+  "Force goals/assists/cards/minutes to numeric ints on each player line (API may send strings).
+  Use from maintenance tasks; create/update call this before persisting."
+  [player-statistics]
+  (if-not (sequential? player-statistics)
+    player-statistics
+    (mapv
+     (fn [row]
+       (if (map? row)
+         (merge row
+                {:goals (safe-stat-int (:goals row))
+                 :assists (safe-stat-int (:assists row))
+                 :yellow-cards (safe-stat-int (:yellow-cards row))
+                 :red-cards (safe-stat-int (:red-cards row))
+                 :minutes-played (safe-stat-int (:minutes-played row))})
+         row))
+     player-statistics)))
 
 (defn- sum-goals [team-id player-statistics]
   (if team-id
@@ -22,7 +57,7 @@
                      0)
         ;; away-score: use value from request when provided (single-team platform), else 0
         away-score (if (some? (:away-score match-data))
-                     (or (:away-score match-data) 0)
+                     (safe-stat-int (or (:away-score match-data) 0))
                      0)]
     {:home-score home-score
      :away-score away-score}))
@@ -30,7 +65,8 @@
 (defn create
   "Create a new match with player statistics"
   [match-data player-statistics]
-  (let [now (java.util.Date.)
+  (let [player-statistics (normalize-player-statistics player-statistics)
+        now (java.util.Date.)
         id (ObjectId.)
         scores (calculate-scores match-data player-statistics)
         doc (merge match-data
@@ -83,6 +119,9 @@
   [id updates]
   (let [match (find-by-id id)
         merged (merge (select-keys match [:home-team-id :away-team-id :player-statistics :away-score]) updates)
+        merged (update merged :player-statistics
+                       (fn [ps]
+                         (if (sequential? ps) (normalize-player-statistics ps) ps)))
         scores (calculate-scores merged (:player-statistics merged))]
     (mc/update (db) collection-name
                {:_id (->object-id id)}

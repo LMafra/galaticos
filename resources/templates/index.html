@@ -30,6 +30,19 @@
         }
     </style>
     <link rel="stylesheet" href="/css/app.css">
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("galaticos.theme");
+          var d = document.documentElement;
+          if (t === "dark") { d.classList.add("dark"); }
+          else if (t === "light") { d.classList.remove("dark"); }
+          else if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+            d.classList.add("dark");
+          }
+        } catch (e) {}
+      })();
+    </script>
     <!-- Dev-only: reduz ruído no console (React DevTools, shadow-cljs ready). Não altera produção em host real. -->
     <script>
       (function () {

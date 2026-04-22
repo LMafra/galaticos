@@ -4,18 +4,19 @@
 
 @layer base {
   body {
-    @apply bg-slate-50 text-slate-900 antialiased;
+    @apply bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100;
   }
 }
 
 @layer components {
   .app-card {
-    @apply rounded-2xl border border-slate-200 bg-white shadow-sm;
+    @apply rounded-2xl border border-slate-200 bg-white shadow-sm
+      dark:border-slate-700 dark:bg-slate-900 dark:shadow-slate-950/30;
   }
   .app-section-title {
-    @apply text-lg font-semibold text-slate-900;
+    @apply text-lg font-semibold text-slate-900 dark:text-slate-100;
   }
   .app-muted {
-    @apply text-sm text-slate-500;
+    @apply text-sm text-slate-500 dark:text-slate-400;
   }
 }

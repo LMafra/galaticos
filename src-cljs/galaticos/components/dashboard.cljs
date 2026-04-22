@@ -153,7 +153,7 @@
 
        :reagent-render
        (fn []
-         (let [{:keys [dashboard-stats dashboard-loading? dashboard-error]}
+         (let [{:keys [dashboard-stats dashboard-loading?]}
                @state/app-state
                championships (:championships dashboard-stats)
                teams-count (dashboard-stat-num dashboard-stats :teams-count)
@@ -188,7 +188,7 @@
             [:div {:class "flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"}
              [:div
               [:p {:class "text-sm text-slate-500"} "Visão geral"]
-              [:h2 {:class "text-2xl font-semibold text-slate-900"} "Dashboard"]]
+              [:h2 {:class "text-2xl font-semibold text-slate-900 dark:text-slate-100"} "Dashboard"]]
              [:div {:class "flex flex-col gap-2 sm:flex-row sm:items-center sm:flex-wrap"}
               [:input {:type "text"
                        :value @player-search-q
@@ -199,7 +199,7 @@
                                         (let [q (str/trim (or @player-search-q ""))]
                                           (when-not (str/blank? q)
                                             (rfe/push-state :players {} {:q q})))))
-                       :class "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-brand-maroon focus:outline-none focus:ring-2 focus:ring-brand-maroon/20 sm:w-64"}]
+                       :class "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-brand-maroon focus:outline-none focus:ring-2 focus:ring-brand-maroon/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 sm:w-64"}]
               [common/select-field
                "Campeonato" @selected-champ champ-options #(reset! selected-champ %)
                :container-class "min-w-[220px]"]
@@ -213,11 +213,10 @@
                #(api/download-csv! "/api/exports/dashboard.csv"
                                    "galaticos-dashboard.csv"
                                    (fn [] nil)
-                                   (fn [err] (js/alert err)))
+                                   (fn [err] (state/toast-error! err)))
                :variant :outline]]]
 
             (cond
-              dashboard-error [common/error-message dashboard-error]
               dashboard-loading? [common/loading-spinner]
               dashboard-stats
               [:div {:class "space-y-6"}
@@ -259,7 +258,7 @@
                    :top-assists top-assists
                    :top-matches top-matches
                    :top-titles top-titles}]
-                 [:div {:class "min-h-[28rem] flex items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/50"}
+                 [:div {:class "min-h-[28rem] flex items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/50 dark:border-slate-700 dark:bg-slate-800/30"}
                   [common/loading-spinner]])]
               :else
               [:p {:class "app-muted"}

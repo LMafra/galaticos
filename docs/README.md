@@ -29,6 +29,10 @@ Referência estável: visão, processos, modelos e como medir.
 - [metodologia.md](informacao/performance/metodologia.md) — Lighthouse (DevTools e CLI), WSL/Chrome, rotas públicas e autenticadas.
 - [inventario-paginas.md](informacao/performance/inventario-paginas.md) — inventário de rotas e componentes para medição por página.
 
+### Operação (`docs/informacao/operacao/`)
+
+- [runbook-producao.md](informacao/operacao/runbook-producao.md) — deploy, backup, seed e índices em produção sem perda de dados.
+
 ### Domínio (`docs/informacao/dominio/`)
 
 - [regras-de-negocio.md](informacao/dominio/regras-de-negocio.md) — regras funcionais e técnicas do domínio.

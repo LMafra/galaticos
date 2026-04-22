@@ -55,6 +55,8 @@ show_help() {
     echo "    db:setup         Set up MongoDB indexes (creates indexes for all collections)"
     echo "    db:seed          Seed database from Excel file (populates teams, players, championships)"
     echo "    db:seed-smoke    Seed minimal deterministic data for smoke/E2E tests"
+    echo "    db:backup        Dump database to backups/mongodb (mongodump archive, needs MONGO_URI)"
+    echo "    db:restore       Restore from archive (mongorestore; use --archive PATH [--drop])"
     echo ""
     echo "  Docker:"
     echo "    docker:dev       Manage dev environment (start|stop|restart|logs|status|validate|clean)"
@@ -117,6 +119,13 @@ case "$COMMAND" in
         ;;
     db:seed-smoke)
         exec "$SCRIPTS_DIR/database/seed-smoke.sh"
+        ;;
+    db:backup)
+        exec "$SCRIPTS_DIR/database/backup-mongodb.sh"
+        ;;
+    db:restore)
+        shift
+        exec "$SCRIPTS_DIR/database/restore-mongodb.sh" "$@"
         ;;
     
     # Docker commands

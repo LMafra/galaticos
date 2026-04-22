@@ -31,6 +31,14 @@
   [name]
   (mc/find-one-as-map (db) collection-name {:name name}))
 
+(defn find-by-ids
+  "Find teams by a list of IDs (ObjectId or string)."
+  [ids]
+  (let [object-ids (map ->object-id (filter some? ids))]
+    (if (seq object-ids)
+      (mc/find-maps (db) collection-name {:_id {:$in object-ids}})
+      [])))
+
 (defn find-all
   "Find all teams"
   []
