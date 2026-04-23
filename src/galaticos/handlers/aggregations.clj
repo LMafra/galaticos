@@ -1,11 +1,19 @@
 (ns galaticos.handlers.aggregations
   "Request handlers for aggregation and analytics endpoints"
-  (:require [galaticos.db.aggregations :as agg]
+  (:require [galaticos.analytics.player-stats-job-store :as job-store]
+            [galaticos.analytics.player-stats-jobs :as player-stats-jobs]
+            [galaticos.db.aggregations :as agg]
             [galaticos.db.core :refer [db]]
             [galaticos.util.response :as resp]
             [monger.collection :as mc]
             [clojure.tools.logging :as log]
             [clojure.string :as str]))
+
+(defn- async-reconcile? [request]
+  (let [s (or (get-in request [:query-params "async"])
+              (get-in request [:params :async])
+              (get-in request [:params "async"]))]
+    (= "true" (str/lower-case (str/trim (str s))))))
 
 (defn- validate-data-integrity
   "Check data integrity and log warnings for common issues"
@@ -284,17 +292,47 @@
       (log/error e "Error getting top players")
       (resp/server-error "Failed to get top players"))))
 
-(defn reconcile-stats
-  "Manual reconciliation: validate data integrity (log warnings) then recalculate all player aggregated stats."
+(defn player-stats-jobs-status
+  "Read-only: last successful job metadata (Mongo) + in-process executor queue depth. Auth required.
+  See technical-evolution (player stats jobs) and reconciliation-runbook."
   [_request]
+  (try
+    (let [doc (job-store/fetch-doc)
+          ex (player-stats-jobs/executor-runtime-info)]
+      (log/info "player-stats-jobs status read")
+      (resp/success {:executor ex
+                     :last-success (select-keys (or doc {})
+                                                [:_id :last-incremental :last-full :updated-at])}))
+    (catch Exception e
+      (log/error e "Error reading player-stats-jobs status")
+      (resp/server-error "Failed to read player-stats job status"))))
+
+(defn reconcile-stats
+  "Manual reconciliation: validate data integrity (log warnings) then full player aggregated-stats
+  recompute. Default: synchronous, returns :updated. Query `?async=true` (POST /api/aggregations/reconcile?async=true)
+  enqueues on the in-process worker and returns 202 with :job-id.
+  See informacao/analytics/reconciliation-runbook.md."
+  [request]
   (try
     (log/info "Manual stats reconciliation started")
     (validate-data-integrity)
-    (let [result (agg/update-all-player-stats)
-          updated (get result :updated 0)]
-      (log/info (str "Reconciliation completed: " updated " player(s) updated"))
-      (resp/success {:updated updated
-                     :message (str "Reconciliação concluída. " updated " jogador(es) atualizado(s).")}))
-  (catch Exception e
-    (log/error e "Error during stats reconciliation")
-    (resp/server-error (str "Falha na reconciliação: " (.getMessage e))))))
+    (if (async-reconcile? request)
+      (let [{:keys [status job-id]} (player-stats-jobs/submit-full-recompute! :manual-reconciliation)]
+        (if (= :ok status)
+          (do
+            (log/info "Manual stats reconciliation enqueued" {:job-id job-id :async true})
+            (resp/success {:job-id job-id
+                           :message "Reconciliação enfileirada. Acompanhe nos logs (job-id)."} 202))
+          (resp/server-error "Falha ao enfileirar reconciliação.")))
+      (let [{:keys [status result message]} (player-stats-jobs/synchronous-full-recompute! :manual-reconciliation)]
+        (if (= :ok status)
+          (let [updated (get result :updated 0)]
+            (log/info (str "Reconciliation completed: " updated " player(s) updated"))
+            (resp/success {:updated updated
+                           :message (str "Reconciliação concluída. " updated " jogador(es) atualizado(s).")}))
+          (do
+            (log/error "Reconciliation recompute failed" {:message message})
+            (resp/server-error (str "Falha na reconciliação: " (or message "unknown error")))))))
+    (catch Exception e
+      (log/error e "Error during stats reconciliation")
+      (resp/server-error (str "Falha na reconciliação: " (.getMessage e))))))

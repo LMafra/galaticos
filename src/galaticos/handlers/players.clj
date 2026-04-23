@@ -71,8 +71,13 @@
   (try
     (let [id (get-in request [:params :id])]
       (if-let [player (players-db/find-by-id id)]
-        (resp/success {:player player
-                       :evolution (agg/player-performance-evolution id)})
+        (let [team-name (some-> (:team-id player)
+                                teams-db/find-by-id
+                                :name)
+              player* (cond-> player
+                        (some? team-name) (assoc :team-name team-name))]
+          (resp/success {:player player*
+                         :evolution (agg/player-performance-evolution id)}))
         (resp/not-found "Player not found")))
     (catch Exception e
       (handle-exception e "Failed to get player detail"))))

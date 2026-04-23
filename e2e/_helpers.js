@@ -36,7 +36,7 @@ function sanitizeCoverageName(testInfo) {
 }
 
 async function saveCoverage(page, testInfo) {
-  if (!coverageEnabled()) {
+  if (!coverageEnabled() || !page || typeof page.evaluate !== 'function') {
     return;
   }
   let coverage;
@@ -54,6 +54,19 @@ async function saveCoverage(page, testInfo) {
   await fs.writeFile(filename, JSON.stringify(coverage));
 }
 
-module.exports = { loginAsAdmin, getStoredToken, saveCoverage };
+/**
+ * @param {import('@playwright/test').APIRequestContext} request
+ * @returns {Promise<string | null>}
+ */
+async function getAdminToken(request) {
+  const r = await request.post('/api/auth/login', {
+    data: { username: 'admin', password: 'admin' },
+  });
+  if (!r.ok()) return null;
+  const j = await r.json();
+  return j?.data?.token ?? null;
+}
+
+module.exports = { loginAsAdmin, getStoredToken, saveCoverage, getAdminToken };
 
 

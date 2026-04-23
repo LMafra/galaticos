@@ -8,7 +8,7 @@
             [galaticos.db.players :as players-db]
             [galaticos.db.seasons :as seasons-db]
             [galaticos.db.teams :as teams-db]
-            [galaticos.db.aggregations :as agg])
+            [galaticos.analytics.player-stats-jobs :as player-stats-jobs])
   (:import [org.bson.types ObjectId]))
 
 (defn- parse-body [response]
@@ -145,7 +145,7 @@
                                  (when (= tid team-id)
                                    {:_id team-id :name "T" :active-player-ids [player-id]}))
                                matches-db/create (fn [_ _] created)
-                               agg/update-all-player-stats (fn [] nil)]
+                               player-stats-jobs/submit-incremental-recalc-after-match! (fn [_] nil)]
                   (handlers/create-match request))
           body (parse-body result)]
       (is (= 201 (:status result)))
@@ -176,7 +176,7 @@
                                seasons-db/add-match (fn [sid mid]
                                                      (when (and (= sid season-id) (= mid (:_id created)))
                                                        (reset! add-match-called true)))
-                               agg/update-all-player-stats (fn [] nil)]
+                               player-stats-jobs/submit-incremental-recalc-after-match! (fn [_] nil)]
                   (handlers/create-match request))]
       (is (= 201 (:status result)))
       (is (true? @add-match-called)))))
@@ -217,7 +217,7 @@
                                seasons-db/add-match (fn [sid m]
                                                      (when (= sid season-id)
                                                        (reset! add-called (= m mid))))
-                               agg/update-all-player-stats (fn [] nil)]
+                               player-stats-jobs/submit-incremental-recalc-after-match! (fn [_] nil)]
                   (handlers/update-match request))]
       (is (= 200 (:status result)))
       (is (true? @add-called)))))
@@ -235,7 +235,7 @@
                                seasons-db/remove-match (fn [sid m]
                                                          (when (and (= sid season-id) (= m mid))
                                                            (reset! removed true)))
-                               agg/update-all-player-stats (fn [] nil)]
+                               player-stats-jobs/submit-incremental-recalc-after-match! (fn [_] nil)]
                   (handlers/delete-match request))
           body (parse-body result)]
       (is (= 200 (:status result)))

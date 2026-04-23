@@ -47,6 +47,18 @@
   (let [pid (:player-id player-stats)]
     (boolean (and pid (contains? match-pid-str-set (str pid))))))
 
+(defn- distinct-player-object-ids
+  "Coerce a seq/set of player id values to distinct ObjectIds; skip nil/invalid."
+  [ids]
+  (vec
+   (distinct
+    (keep (fn [x]
+            (when (some? x)
+              (try (->object-id x) (catch Exception _ nil))))
+          (if (or (sequential? ids) (set? ids))
+            ids
+            (when (some? ids) [ids]))))))
+
 (defn- merge-championship-entry
   [existing-entry match-entry]
   (let [match-games (safe-int (:games match-entry))
@@ -255,49 +267,65 @@
       (log/error e "Error getting player performance evolution")
       (throw e))))
 
+(defn- update-aggregated-stats-pipeline-vec
+  "Mongo stages from optional match pre-filter through projected player rows.
+  When `player-object-ids` is non-empty, only matches and stat rows for those player ids
+  are scanned (incremental recompute for listed players)."
+  [player-object-ids]
+  (let [oids (seq (distinct (or player-object-ids [])))]
+    (into
+     (if oids
+       [{:$match {:player-statistics {:$elemMatch {:player-id {:$in oids}}}}}]
+       [])
+     (into
+      (if oids
+        [{:$unwind "$player-statistics"}
+         coerce-player-stat-goals-assists
+         {:$match {"player-statistics.player-id" {:$in oids}}}]
+        [{:$unwind "$player-statistics"}
+         coerce-player-stat-goals-assists])
+      [{:$group {:_id {:player-id "$player-statistics.player-id"
+                        :championship-id "$championship-id"
+                        :season-id "$season-id"}
+                 :games {:$sum 1}
+                 :goals {:$sum "$player-statistics.goals"}
+                 :assists {:$sum "$player-statistics.assists"}}}
+       {:$lookup {:from "championships"
+                  :localField "_id.championship-id"
+                  :foreignField "_id"
+                  :as "championship"}}
+       {:$unwind {:path "$championship"
+                  :preserveNullAndEmptyArrays true}}
+       {:$lookup {:from "seasons"
+                  :localField "_id.season-id"
+                  :foreignField "_id"
+                  :as "season-doc"}}
+       {:$addFields {:season-label {:$ifNull [{:$arrayElemAt ["$season-doc.season" 0]} nil]}}}
+       {:$group {:_id "$_id.player-id"
+                 :by-championship
+                 {:$push {:championship-id "$_id.championship-id"
+                          :championship-name {:$ifNull ["$championship.name" ""]}
+                          :season "$season-label"
+                          :games "$games"
+                          :goals "$goals"
+                          :assists "$assists"}}
+                 :total {:$push {:games "$games"
+                                 :goals "$goals"
+                                 :assists "$assists"}}}}
+       {:$project {:player-id "$_id"
+                  :aggregated-stats
+                  {:total {:games {:$sum "$total.games"}
+                           :goals {:$sum "$total.goals"}
+                           :assists {:$sum "$total.assists"}}
+                   :by-championship "$by-championship"}}}]))))
+
 (defn update-aggregated-stats-pipeline
   "Aggregation pipeline to calculate aggregated stats for all players.
    Groups by (player, championship, season-id) so table rows keyed by :season align with match rollups.
    Returns data structure ready to update players collection."
   []
   (try
-    (mc/aggregate (db) "matches"
-                  [{:$unwind "$player-statistics"}
-                   coerce-player-stat-goals-assists
-                   {:$group {:_id {:player-id "$player-statistics.player-id"
-                                   :championship-id "$championship-id"
-                                   :season-id "$season-id"}
-                            :games {:$sum 1}
-                            :goals {:$sum "$player-statistics.goals"}
-                            :assists {:$sum "$player-statistics.assists"}}}
-                   {:$lookup {:from "championships"
-                              :localField "_id.championship-id"
-                              :foreignField "_id"
-                              :as "championship"}}
-                   {:$unwind {:path "$championship"
-                              :preserveNullAndEmptyArrays true}}
-                   {:$lookup {:from "seasons"
-                              :localField "_id.season-id"
-                              :foreignField "_id"
-                              :as "season-doc"}}
-                   {:$addFields {:season-label {:$ifNull [{:$arrayElemAt ["$season-doc.season" 0]} nil]}}}
-                   {:$group {:_id "$_id.player-id"
-                            :by-championship
-                            {:$push {:championship-id "$_id.championship-id"
-                                     :championship-name {:$ifNull ["$championship.name" ""]}
-                                     :season "$season-label"
-                                     :games "$games"
-                                     :goals "$goals"
-                                     :assists "$assists"}}
-                            :total {:$push {:games "$games"
-                                            :goals "$goals"
-                                            :assists "$assists"}}}}
-                   {:$project {:player-id "$_id"
-                              :aggregated-stats
-                              {:total {:games {:$sum "$total.games"}
-                                       :goals {:$sum "$total.goals"}
-                                       :assists {:$sum "$total.assists"}}
-                               :by-championship "$by-championship"}}}])
+    (mc/aggregate (db) "matches" (update-aggregated-stats-pipeline-vec []))
     (catch Exception e
       (log/error e "Error in update aggregated stats pipeline")
       (throw e))))
@@ -322,25 +350,40 @@
       (log/error e "Error updating all player stats")
       (throw e))))
 
+(defn update-incremental-player-stats!
+  "Recompute `players.aggregated-stats` only for the given player ids, scanning matches that reference
+  at least one of those players. Empty or all-invalid ids is a no-op.
+  Returns {:status :success :updated n}."
+  [player-ids]
+  (let [oids (distinct-player-object-ids player-ids)]
+    (if (empty? oids)
+      {:status :success :updated 0}
+      (try
+        (let [stats-data (mc/aggregate (db) "matches" (update-aggregated-stats-pipeline-vec oids))]
+          (doseq [player-stats stats-data]
+            (let [pid (->object-id (:player-id player-stats))]
+              (when-let [player (mc/find-one-as-map (db) "players" {:_id pid})]
+                (let [existing-stats (:aggregated-stats player)
+                      match-by-championship (get-in player-stats [:aggregated-stats :by-championship] [])
+                      merged-stats (merge-aggregated-stats existing-stats match-by-championship)]
+                  (mc/update (db) "players"
+                             {:_id pid}
+                             {:$set {:aggregated-stats merged-stats
+                                    :updated-at (java.util.Date.)}})))))
+          {:status :success :updated (count stats-data)})
+        (catch Exception e
+          (log/error e "Error updating incremental player stats")
+          (throw e))))))
+
 (defn update-player-stats-for-match
-  "Update aggregated stats for players involved in a specific match"
+  "Update aggregated stats for players involved in a specific match (incremental scan)."
   [match-id]
   (try
     (if-let [match (mc/find-one-as-map (db) "matches" {:_id (->object-id match-id)})]
-      (let [match-pid-set (match-player-id-str-set (map :player-id (:player-statistics match)))
-            stats-data (update-aggregated-stats-pipeline)]
-        (doseq [player-stats stats-data
-                :when (stats-row-for-match-players? player-stats match-pid-set)]
-          (let [pid (->object-id (:player-id player-stats))]
-            (when-let [player (mc/find-one-as-map (db) "players" {:_id pid})]
-              (let [existing-stats (:aggregated-stats player)
-                    match-by-championship (get-in player-stats [:aggregated-stats :by-championship] [])
-                    merged-stats (merge-aggregated-stats existing-stats match-by-championship)]
-                (mc/update (db) "players"
-                           {:_id pid}
-                           {:$set {:aggregated-stats merged-stats
-                                   :updated-at (java.util.Date.)}})))))
-        {:status :success})
+      (let [pids (map :player-id (:player-statistics match))]
+        (if (seq pids)
+          (update-incremental-player-stats! pids)
+          {:status :success :updated 0}))
       {:status :error :message "Match not found"})
     (catch Exception e
       (log/error e "Error updating player stats for match")
