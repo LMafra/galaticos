@@ -1,6 +1,6 @@
 (ns galaticos.routes.api
   "Main API router that combines all resource routes"
-  (:require [compojure.core :refer [routes GET]]
+  (:require [compojure.core :refer [routes GET POST]]
             [galaticos.routes.players :refer [player-routes]]
             [galaticos.routes.championships :refer [championship-routes]]
             [galaticos.routes.seasons :refer [season-routes]]
@@ -33,6 +33,8 @@
   (GET "/api/aggregations/players/search" request (agg-handlers/search-players request))
   (GET "/api/aggregations/championships/comparison" request (agg-handlers/championship-comparison request))
   (GET "/api/aggregations/players/top" request (agg-handlers/top-players request))
+  (POST "/api/aggregations/reconcile" request ((wrap-auth agg-handlers/reconcile-stats) request))
+  (GET "/api/aggregations/player-stats-jobs" request ((wrap-auth agg-handlers/player-stats-jobs-status) request))
    (GET "/api/exports/dashboard.csv" request ((wrap-auth export-handlers/export-dashboard-csv) request))
    (GET "/api/exports/championships/:id.csv" [id :as request]
         ((wrap-auth export-handlers/export-championship-csv) (assoc request :params {:id id})))))

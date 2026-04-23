@@ -1,7 +1,7 @@
 (ns galaticos.handlers.matches
   "Request handlers for match operations"
   (:require [galaticos.db.matches :as matches-db]
-            [galaticos.db.aggregations :as agg]
+            [galaticos.analytics.player-stats-jobs :as player-stats-jobs]
             [galaticos.db.championships :as championships-db]
             [galaticos.db.players :as players-db]
             [galaticos.db.seasons :as seasons-db]
@@ -205,8 +205,11 @@
           (let [created (matches-db/create match-data player-statistics)]
             (when season-id
               (seasons-db/add-match season-id (:_id created)))
-            ;; Full recompute from all matches in DB (same as delete) so every player stays consistent.
-            (agg/update-all-player-stats)
+            (player-stats-jobs/submit-incremental-recalc-after-match!
+             {:reason :after-match-create
+              :op :create
+              :match-id (:_id created)
+              :affected-player-ids (vec (map :player-id player-statistics))})
             (resp/success created 201)))))
     (catch Exception e
       (handle-exception e "Failed to create match"))))
@@ -238,7 +241,13 @@
               (do
                 (when season-id
                   (seasons-db/add-match season-id (:_id updated)))
-                (agg/update-all-player-stats)
+                (player-stats-jobs/submit-incremental-recalc-after-match!
+                 {:reason :after-match-update
+                  :op :update
+                  :match-id (:_id updated)
+                  :affected-player-ids
+                  (vec (distinct (concat (map :player-id (:player-statistics existing))
+                                         (map :player-id player-statistics))))})
                 (resp/success updated))
               (resp/server-error "Failed to retrieve updated match")))
           (resp/not-found "Match not found"))))
@@ -256,7 +265,11 @@
           (matches-db/delete-by-id id)
           (when season-id
             (seasons-db/remove-match season-id (:_id existing)))
-          (agg/update-all-player-stats)
+          (player-stats-jobs/submit-incremental-recalc-after-match!
+           {:reason :after-match-delete
+            :op :delete
+            :match-id (:_id existing)
+            :affected-player-ids (vec (map :player-id (:player-statistics existing)))})
           (resp/success {:message "Match deleted"}))
         (resp/not-found "Match not found")))
     (catch Exception e

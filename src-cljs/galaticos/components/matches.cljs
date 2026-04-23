@@ -153,11 +153,11 @@
                                tid (some-> (:team-id row) str)]
                            [(or (:player-name row)
                                 (get player-name-by pid)
-                                (when (seq pid) pid)
+                                (when (seq pid) "Jogador desconhecido")
                                 "—")
                             (or (:team-name row)
                                 (get team-name-by tid)
-                                (when (seq tid) tid)
+                                (when (seq tid) "Time desconhecido")
                                 "—")
                             (to-int (:goals row))
                             (to-int (:assists row))
@@ -245,7 +245,7 @@
                   [:div {:class "flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"}
                    [:div {:class "min-w-0"}
                     [:h3 {:class "text-lg font-semibold text-slate-900 dark:text-slate-100"} "Outro campeonato"]
-                    [:p {:class "text-xs text-slate-400 truncate"} oid]
+                    [:p {:class "text-xs text-slate-400 truncate"} "Campeonato nao mapeado"]
                     [:p {:class "text-xs text-slate-500"} (str (count ms) " partida(s)")]]]
                   [:div {:class "mt-4 space-y-3"}
                    (for [m ms]

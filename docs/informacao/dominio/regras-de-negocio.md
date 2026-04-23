@@ -78,7 +78,7 @@ Cada regra abaixo é classificada conforme o Manifesto:
 - **BRM-05 (E – Temporada Ativa por Campeonato)**  
   - **Descrição**: Cada campeonato deve ter no máximo uma temporada ativa; alterações de temporada devem preservar o histórico das temporadas anteriores como temporadas passadas.  
   - **Tipo**: Estrutural.  
-  - **Observação**: O modelo atual utiliza campo `season` no campeonato; a distinção entre ativa e passada pode demandar campos adicionais (`current-season`, `past-seasons`) ou convenções de status.
+  - **Implementação**: Coleção MongoDB `seasons` com `championship-id`, `status` (`active` / `inactive` / etc.), unicidade `(championship-id, season)` e `activate!` que desativa as demais. O documento raiz em `championships` enriquece resposta com temporada ativa (`active-season-id`, campos denormalizados). Campo `season` no raiz permanece para compatibilidade/leitura agregada.
 
 - **BRM-06 (A – Gestão de Temporadas)**  
   - **Descrição**: O administrador deve ser capaz de adicionar novas temporadas a um campeonato e selecionar qual temporada está ativa, garantindo que a temporada ativa apareça de forma destacada na tela de detalhes do campeonato, junto com o nome do campeonato.  
@@ -89,17 +89,17 @@ Cada regra abaixo é classificada conforme o Manifesto:
 - **BRM-07 (A – Finalização de Campeonato)**  
   - **Descrição**: O administrador deve ser capaz de finalizar um campeonato, alterando seu status para concluído e registrando a data de finalização. Um campeonato só pode ser finalizado uma vez.  
   - **Tipo**: Ação.  
-  - **Relação com regras existentes**: Alinhado com `RN-PEND-03` (finalize-championship) e constraints de status.
+  - **Relação com regras existentes**: Finalização em `handlers/championships.clj` (`finalize-championship`) e `handlers/seasons.clj` (`finalize-season`). Ver [mapeamento RN-PEND](#mapeamento-rn-pend) (alias **RN-PEND-03**).
 
 - **BRM-08 (A/D – Incremento de Títulos)**  
   - **Descrição**: Ao finalizar um campeonato, os títulos dos jogadores só devem ser incrementados se o administrador informar explicitamente que o clube foi campeão. Desta maneira, todos os jogadores serão considerados vencedores.
   - **Tipo**: Ação + Derivação (deriva novo valor de títulos com base em vencedores e `titles-award-count`).  
-  - **Relação com regras existentes**: Corresponde a `RN-PEND-03` (increment-titles).
+  - **Relação com regras existentes**: Mesmo fluxo que **RN-PEND-03** — `titles-award-count` e `winner-player-ids`; ver [mapeamento RN-PEND](#mapeamento-rn-pend).
 
 - **BRM-09 (E – Participação e Pertencimento ao Time)**  
   - **Descrição**: Todos os jogadores que participam de um campeonato por meio de partidas (com estatísticas registradas) devem pertencer a um time válido e estar inscritos no campeonato, mantendo coerência entre inscrição, time e participação em partidas.  
   - **Tipo**: Estrutural.  
-  - **Relação com regras existentes**: Corresponde a `RN-PEND-04` (validação de jogadores da partida pertencem ao campeonato) e regras de integridade referencial de time/jogador.
+  - **Relação com regras existentes**: `validate-player-team-coherence` e `validate-players-enrolled` em `handlers/matches.clj`. Ver [mapeamento RN-PEND](#mapeamento-rn-pend) (alias **RN-PEND-04**).
 
 #### Grupo 4 – Partidas e Estatísticas
 
@@ -111,26 +111,27 @@ Cada regra abaixo é classificada conforme o Manifesto:
 - **BRM-11 (A/D – Registro de Estatísticas na Partida)**  
   - **Descrição**: Na tela de partida, o administrador deve poder registrar ou editar as estatísticas de cada jogador (gols, assistências e participação), disparando o recálculo das estatísticas agregadas do jogador e o cálculo automático do placar da partida.  
   - **Tipo**: Ação + Derivação.  
-  - **Relação com regras existentes**: Conecta `RN-MATCH-05/06/07` com `RN-STATS-01` a `RN-STATS-07` e `RN-PEND-05`.
+  - **Relação com regras existentes**: Conecta `RN-MATCH-05/06/07` com `RN-STATS-01` a `RN-STATS-07` e jobs em `galaticos.analytics.player-stats-jobs` — ver [mapeamento RN-PEND](#mapeamento-rn-pend) (alias **RN-PEND-05**).
 
 #### Grupo 5 – Navegação via Dashboard
 
 - **BRM-12 (A – Navegação por Itens do Dashboard)**  
   - **Descrição**: O administrador deve ser capaz de clicar em cada item (card, link ou atalho) do dashboard e ser redirecionado para a tela correspondente (por exemplo, lista de jogadores, lista de times, campeonatos, partidas, estatísticas agregadas).  
   - **Tipo**: Ação (regra de UX/navegação).  
-  - **Observação**: Deve haver um mapeamento claro entre cada card do dashboard e sua rota de destino.
+  - **Mapeamento card → rota** (implementação `src-cljs/galaticos/components/dashboard.cljs`): Jogadores → `:players`; Partidas (total) → `:matches`; Temporadas → `:championships`; Times → `:teams`. Cards “Gols” usam rota `:players` (atalho ao elenco). Tabelas diferidas (tops) ligam ao detalhe do jogador via componente de link.
 
 #### Grupo 6 – Buscas de Jogadores
 
 - **BRM-13 (A – Busca de Jogadores ao Inscrever em Campeonato)**  
   - **Descrição**: Ao adicionar jogadores a um campeonato, o administrador deve poder buscar jogadores pelo nome (total ou parcial), facilitando a inscrição via autocomplete ou lista filtrada.  
   - **Tipo**: Ação.  
-  - **Relação com regras existentes**: Complementa `RN-PEND-01` e `RN-PEND-02` (inscrição/listagem de jogadores por campeonato).
+  - **Relação com regras existentes**: `player_picker.cljs` (filtro local por nome/apelido). Inscrição persiste em `enrolled-player-ids` da temporada ativa — ver [mapeamento RN-PEND](#mapeamento-rn-pend) (aliases **RN-PEND-01**, **RN-PEND-02**).
 
 - **BRM-14 (A – Busca de Jogadores no Dashboard)**  
-  - **Descrição**: A partir do dashboard, o administrador deve poder buscar todos os jogadores cadastrados no sistema, com filtro por nome e, idealmente, por outras propriedades (posição, time, status).  
+  - **Descrição**: A partir do dashboard, o administrador deve poder buscar jogadores cadastrados no sistema; filtros adicionais podem ser usados na tela de elenco.  
   - **Tipo**: Ação.  
-  - **Relação com regras existentes**: Compatível com `RN-STATS-07` (busca avançada de jogadores) e componentes de UI de players/dashboard.
+  - **Escopo implementado**: No dashboard, campo “Buscar jogador…” envia query `q` para a rota `:players`. Na página **Jogadores**, `GET` com `q`, `position`, paginação e ordenação usa `search-players` / **RN-STATS-07**. Filtro por **time** na busca global não está no dashboard (somente na gestão de elenco/time se aplicável).  
+  - **Relação com regras existentes**: **RN-STATS-07**; UI `dashboard.cljs`, `players.cljs`, `api.cljs`.
 
 #### Grupo 7 – Importação via Planilhas
 
@@ -142,14 +143,24 @@ Cada regra abaixo é classificada conforme o Manifesto:
 - **BRM-16 (D – Derivação de Posição Goleiro por "GK" no Nome)**  
   - **Descrição**: Ao importar jogadores a partir da planilha de jogadores, se o nome do jogador contiver "GK" (por exemplo, "João Silva GK"), o sistema deve inferir automaticamente a posição do jogador como goleiro, caso nenhuma posição mais específica tenha sido definida.  
   - **Tipo**: Derivação.  
-  - **Origem**: Regra de negócio de importação de jogadores (`scripts/python/read_excel.py`, `seed_mongodb.py` e correlatos).
+  - **Origem**: Lógica de importação em **`scripts/python/seed_mongodb.py`** (inferência só quando posição em falta; posição explícita na planilha prevalece). `scripts/python/read_excel.py` é utilitário de inspeção/leitura Excel, sem essa regra.
+
+#### Mapeamento RN-PEND
+
+Aliases usados no apêndice antes da consolidação no catálogo RN-*. Não existem entradas `### RN-PEND-*` separadas; o comportamento está nos módulos abaixo.
+
+| Alias | Onde no código |
+|-------|----------------|
+| **RN-PEND-01**, **RN-PEND-02** | Inscrição: `enrolled-player-ids` em documentos `seasons` (e legado no raiz `championships`); UI `championships.cljs`, `player_picker.cljs`; handlers de campeonato/temporada. |
+| **RN-PEND-03** | `finalize-championship` (`handlers/championships.clj`), `finalize-season` (`handlers/seasons.clj`), `finalize!` (`db/seasons.clj`). |
+| **RN-PEND-04** | `validate-players-enrolled`, `validate-player-team-coherence` (`handlers/matches.clj`). |
+| **RN-PEND-05** | Recálculo: `galaticos.analytics.player-stats-jobs` + `db/aggregations.clj`. |
 
 ### Questões Abertas e Lacunas Identificadas
 
 - **Q-01 – Modelo de Temporadas**:  
-  - Não está totalmente explícito no modelo atual como múltiplas temporadas por campeonato são representadas (um campeonato por temporada vs. campeonato com coleção de temporadas).  
-  - **Sugestão de regra estrutural adicional**:  
-    - Cada combinação `campeonato + temporada` deve ser única, e o modelo de dados deve representar explicitamente temporadas ativas e passadas (por exemplo, entidade `championship-season`).
+  - **Resolvido na implementação**: coleção `seasons` ligada a `championship-id`, status `active` único por campeonato (via `activate!`), rótulo `season` único por par `(championship-id, season)` em `seasons-db/create`. Documentação de produto deve usar este modelo como referência.  
+  - **Pendência de texto**: alinhar diagramas ou materiais externos que ainda falem só em campo `season` no documento `championships`.
 
 - **Q-02 – Reabertura/Desfazer Finalização de Campeonato**:  
   - O enunciado não especifica se é permitido reabrir um campeonato já finalizado ou corrigir títulos concedidos de forma equivocada.  
@@ -157,37 +168,31 @@ Cada regra abaixo é classificada conforme o Manifesto:
     - Definir se há uma operação de "reabrir" campeonato, incluindo regras para estornar títulos já incrementados.
 
 - **Q-03 – Critérios de Busca de Jogadores**:  
-  - Não está totalmente definido se a busca por jogadores (BRM-13 e BRM-14) é case-insensitive, se suporta acentos, paginação e ordenação padronizada.  
-  - **Sugestão**:  
-    - Normalizar buscas para serem case-insensitive e accent-insensitive, com limites de resultados para performance e ordenação consistente (por exemplo, por nome).
+  - **Implementação atual**: API `search-players` usa `galaticos.util.string/normalize-text` no termo `q`, regex case-insensitive em `name`/`nickname`, e campo `search-name` quando presente; paginação `page`/`limit`; ordenação configurável (`sort-by`, `sort-order`). BRM-13 (picker) filtra em memória por nome/apelido sem normalização accent-insensitive obrigatória.  
+  - **Sugestão de produto**: documentar como regra oficial o comportamento acima ou exigir unificação picker vs API.
 
 - **Q-04 – Conflitos na Importação por Planilhas**:  
-  - Não está especificado o comportamento quando um jogador ou campeonato já existe no sistema e também aparece na planilha (duplicidade; conflitos de dados).  
-  - **Sugestão**:  
-    - Definir regras de merge vs. sobrescrita, tratamento de duplicados e validação de integridade ao inscrever jogadores automaticamente.
+  - **Política aplicada no seed** (`seed_mongodb.py`): identificação de jogador por nome; ao existir, a planilha corrente pode actualizar `aggregated-stats.total` (ver implementação e mensagens de log), preservando `by-championship` e campos estruturais; `create_championship` evita duplicados `name+season`.  
+  - Detalhe operacional e checklist: [regras-de-negocio-checklist.md](../../a-fazer/dominio/regras-de-negocio-checklist.md) (Q-04 concluída). Evoluções (relatório de conflitos exportável, etc.) permanecem opcionais.
 
 - **Q-05 – Derivação de "GK" quando Posição já Existe**:  
-  - Não está definido o que acontece se a planilha descreve um jogador com "GK" no nome mas também já traz um campo de posição explícito divergente.  
-  - **Sugestão**:  
-    - Regra de precedência: posição explícita prevalece sobre inferência por "GK"; a inferência só é aplicada quando a posição não for fornecida.
+  - **Resolvido na implementação** (`seed_mongodb.py`): posição explícita na planilha prevalece; inferência por `"GK"` no nome só quando posição ausente ou vazia.
 
 - **Q-06 – Navegação do Dashboard para Novas Funcionalidades**:  
-  - O escopo exato dos itens do dashboard (quais cards e quais telas) não está totalmente detalhado.  
-  - **Sugestão**:  
-    - Manter um mapeamento de navegação formal (tabela card → rota) para garantir consistência entre regras de negócio e implementação.
+  - **Mapeamento base** documentado em **BRM-12**. Novos cards devem atualizar essa tabela e `dashboard.cljs`.
 
 ### Avaliação de Completude
 
 - **Cobertura**: As regras BRM-01 a BRM-16 cobrem os pontos principais descritos no enunciado original (CRUD, temporadas, finalização, estatísticas, dashboard, buscas e importação via planilhas).  
 - **Integração com regras existentes**: A maior parte dessas regras já está mapeada e/ou implementada nas seções anteriores (`RN-*`), especialmente no que diz respeito a campeonatos, partidas, estatísticas e finalização.  
-- **Lacunas**: As principais lacunas concentram-se na modelagem explícita de temporadas múltiplas, políticas de reabertura de campeonatos, detalhes finos de busca e estratégias de resolução de conflitos em importações de planilhas.  
+- **Lacunas**: Temporadas múltiplas estão modeladas em código; persistem como **lacuna de negócio** a reabertura de campeonatos (Q-02) e eventual extensão de filtros na busca global (BRM-14 parcial). A política de merge na importação (Q-04) está fechada no seed conforme o checklist, sujeita a evolução de produto.  
 - **Próximos passos recomendados**: Validar as questões abertas com o time de negócio e, uma vez decididas, promover essas regras candidatas a regras oficiais (com novos identificadores `RN-*`) e alinhar implementações (API, scripts de importação e UI).
 
 # Regras de Negócio - Sistema Galáticos
 
-**Última atualização:** 19 de Fevereiro de 2026
+**Última atualização:** 23 de Abril de 2026
 
-Este documento lista todas as regras de negócio implementadas no sistema Galáticos, identificadas através da análise do código-fonte.
+Este documento lista todas as regras de negócio implementadas no sistema Galáticos, identificadas através da análise do código-fonte. Verificação cruzada: [regras-negocio-auditoria.md](regras-negocio-auditoria.md).
 
 ---
 
@@ -501,26 +506,25 @@ Este documento lista todas as regras de negócio implementadas no sistema Galát
 
 ### RN-MATCH-05: Recalculo Automático de Estatísticas na Criação
 - **Descrição**: Ao criar uma partida, estatísticas dos jogadores são recalculadas.
-- **Arquivo**: `src/galaticos/handlers/matches.clj` (linha 102-116)
+- **Arquivo**: `src/galaticos/handlers/matches.clj`; `src/galaticos/analytics/player_stats_jobs.clj`
 - **Comportamento**:
-  - Após inserir partida, chama `update-player-stats-for-match`
-  - Atualiza campo `aggregated-stats` dos jogadores envolvidos
-  - Agregação é feita via pipeline MongoDB
+  - Após inserir partida, aciona `submit-incremental-recalc-after-match!` com `{:reason :after-match-create, :op :create, :match-id, :affected-player-ids}`; o worker aplica, por padrão, recompute **incremental** (`update-incremental-player-stats!`) no executor de thread única, sem bloquear a resposta (exceto se `GALATICOS_PLAYER_STATS_SYNC=true`)
+  - Atualiza `aggregated-stats` dos jogadores impactados, via `merge-aggregated-stats` em `galaticos.db.aggregations`. `GALATICOS_PLAYER_STATS_FORCE_FULL=true` força recompute completo
+  - **Operação:** reintentos com limite e backoff (`GALATICOS_PLAYER_STATS_MAX_ATTEMPTS`, `GALATICOS_PLAYER_STATS_RETRY_BACKOFF_MS`); o último job concluído com sucesso fica em MongoDB (`player_stats_job_meta` via `player-stats-job-store`); leitura autenticada em `GET /api/aggregations/player-stats-jobs` (ver [technical-evolution (parcial)](../../parcial/analytics/technical-evolution.md))
 
 ### RN-MATCH-06: Recalculo Automático de Estatísticas na Atualização
 - **Descrição**: Ao atualizar uma partida, estatísticas dos jogadores são recalculadas.
-- **Arquivo**: `src/galaticos/handlers/matches.clj` (linha 118-137)
+- **Arquivo**: `src/galaticos/handlers/matches.clj`; `src/galaticos/analytics/player_stats_jobs.clj`
 - **Comportamento**:
-  - Após atualizar partida, chama `update-player-stats-for-match`
-  - Garante consistência das estatísticas agregadas
+  - Após atualizar partida, aciona `submit-incremental-recalc-after-match!` com união de jogadores do documento existente e do corpo, motivo `:after-match-update` (assíncrono por padrão, igual à RN-MATCH-05)
+  - Garante consistência via recompute incremental agendado (não no request); retry, store e GET aplicam-se tal como em RN-MATCH-05
 
-### RN-MATCH-07: Recalculo Completo de Estatísticas na Deleção
-- **Descrição**: Ao deletar uma partida, todas as estatísticas de jogadores são recalculadas.
-- **Arquivo**: `src/galaticos/handlers/matches.clj` (linha 139-151)
+### RN-MATCH-07: Recalculo de Estatísticas na Deleção
+- **Descrição**: Ao deletar uma partida, estatísticas dos jogadores que participavam da partida são recalculadas.
+- **Arquivo**: `src/galaticos/handlers/matches.clj`; `src/galaticos/analytics/player_stats_jobs.clj`
 - **Comportamento**:
-  - Após remover partida, chama `update-all-player-stats`
-  - Recalcula estatísticas de TODOS os jogadores
-  - Garante que estatísticas estejam corretas após remoção
+  - Após remover partida, aciona `submit-incremental-recalc-after-match!` com motivo `:after-match-delete` e jogadores a partir de `player-statistics` da partida (antes do delete)
+  - Recalcula agregados de forma incremental com o conjunto atual de partidas; falhas do job não revertem a eliminação; retry, store e GET como em RN-MATCH-05
 
 ### RN-MATCH-08: Filtragem por Campeonato
 - **Descrição**: Listagem de partidas pode ser filtrada por campeonato.
@@ -535,7 +539,7 @@ Este documento lista todas as regras de negócio implementadas no sistema Galát
 
 ### RN-STATS-01: Agregação por Campeonato
 - **Descrição**: Sistema calcula estatísticas de jogadores por campeonato específico.
-- **Arquivo**: `src/galaticos/db/aggregations.clj` (linha 9-37)
+- **Implementação**: `player-stats-by-championship` em `src/galaticos/db/aggregations.clj`
 - **Métricas Calculadas**:
   - `games`: Número de partidas jogadas
   - `goals`: Total de gols marcados
@@ -547,7 +551,7 @@ Este documento lista todas as regras de negócio implementadas no sistema Galát
 
 ### RN-STATS-02: Média de Gols por Posição
 - **Descrição**: Sistema calcula média de gols por posição em um campeonato.
-- **Arquivo**: `src/galaticos/db/aggregations.clj` (linha 39-63)
+- **Implementação**: `avg-goals-by-position` em `src/galaticos/db/aggregations.clj`
 - **Métricas Calculadas**:
   - `avg-goals`: Média de gols da posição
   - `total-goals`: Total de gols da posição
@@ -557,7 +561,7 @@ Este documento lista todas as regras de negócio implementadas no sistema Galát
 
 ### RN-STATS-03: Evolução de Performance do Jogador
 - **Descrição**: Sistema rastreia evolução temporal de performance de jogadores.
-- **Arquivo**: `src/galaticos/db/aggregations.clj` (linha 65-88)
+- **Implementação**: `player-performance-evolution` em `src/galaticos/db/aggregations.clj`
 - **Comportamento**:
   - Agrega dados por ano, mês e semana
   - Calcula métricas por período temporal
@@ -565,7 +569,7 @@ Este documento lista todas as regras de negócio implementadas no sistema Galát
 
 ### RN-STATS-04: Pipeline de Atualização de Estatísticas
 - **Descrição**: Sistema usa pipeline de agregação MongoDB para calcular estatísticas.
-- **Arquivo**: `src/galaticos/db/aggregations.clj` (linha 90-125)
+- **Implementação**: `update-aggregated-stats-pipeline`, `update-aggregated-stats-pipeline-vec` em `src/galaticos/db/aggregations.clj`
 - **Comportamento**:
   - Desdobra estatísticas de jogadores das partidas
   - Agrupa por jogador e campeonato
@@ -575,7 +579,7 @@ Este documento lista todas as regras de negócio implementadas no sistema Galát
 
 ### RN-STATS-05: Atualização de Estatísticas de Todos os Jogadores
 - **Descrição**: Sistema pode recalcular estatísticas de todos os jogadores.
-- **Arquivo**: `src/galaticos/db/aggregations.clj` (linha 127-140)
+- **Implementação**: `update-all-player-stats` em `src/galaticos/db/aggregations.clj`
 - **Comportamento**:
   - Executa pipeline de agregação completo
   - Atualiza campo `aggregated-stats` de cada jogador
@@ -584,7 +588,7 @@ Este documento lista todas as regras de negócio implementadas no sistema Galát
 
 ### RN-STATS-06: Atualização de Estatísticas por Partida
 - **Descrição**: Sistema pode recalcular estatísticas apenas dos jogadores de uma partida.
-- **Arquivo**: `src/galaticos/db/aggregations.clj` (linha 142-159)
+- **Implementação**: `update-player-stats-for-match`, `update-incremental-player-stats!` em `src/galaticos/db/aggregations.clj`
 - **Comportamento**:
   - Identifica jogadores envolvidos na partida
   - Executa pipeline de agregação completo
@@ -593,7 +597,7 @@ Este documento lista todas as regras de negócio implementadas no sistema Galát
 
 ### RN-STATS-07: Busca Avançada de Jogadores
 - **Descrição**: Sistema permite busca de jogadores com múltiplos filtros.
-- **Arquivo**: `src/galaticos/db/aggregations.clj` (linha 161-204)
+- **Implementação**: `search-players` em `src/galaticos/db/aggregations.clj` (normalização de texto via `galaticos.util.string`)
 - **Filtros Disponíveis**:
   - `position`: Posição do jogador
   - `min-games`: Mínimo de partidas jogadas
@@ -606,7 +610,7 @@ Este documento lista todas as regras de negócio implementadas no sistema Galát
 
 ### RN-STATS-08: Comparação entre Campeonatos
 - **Descrição**: Sistema compara estatísticas agregadas entre diferentes campeonatos.
-- **Arquivo**: `src/galaticos/db/aggregations.clj` (linha 206-296)
+- **Implementação**: `championship-comparison` em `src/galaticos/db/aggregations.clj`
 - **Comportamento**:
   - Tenta agregar de partidas se existirem dados
   - Fallback para agregação de `aggregated-stats` dos jogadores
@@ -622,7 +626,7 @@ Este documento lista todas as regras de negócio implementadas no sistema Galát
 
 ### RN-STATS-09: Top Jogadores por Métrica
 - **Descrição**: Sistema retorna ranking de jogadores por métrica específica.
-- **Arquivo**: `src/galaticos/db/aggregations.clj` (linha 298-347)
+- **Implementação**: `top-players-by-metric`, `championship-table-leaderboards` em `src/galaticos/db/aggregations.clj`
 - **Comportamento**:
   - Filtra apenas jogadores ativos com `aggregated-stats`
   - Pode filtrar por campeonato específico
@@ -636,7 +640,7 @@ Este documento lista todas as regras de negócio implementadas no sistema Galát
 
 ### RN-STATS-10: Validação de Integridade de Dados
 - **Descrição**: Sistema valida integridade de dados antes de agregações.
-- **Arquivo**: `src/galaticos/handlers/aggregations.clj` (linha 9-42)
+- **Implementação**: `validate-data-integrity` (privado) e handlers em `src/galaticos/handlers/aggregations.clj`
 - **Verificações**:
   - Partidas referenciando campeonatos inexistentes
   - Partidas sem `player-statistics`
@@ -817,17 +821,17 @@ Este documento lista todas as regras de negócio implementadas no sistema Galát
 
 ### RN-QUERY-01: Ordenação de Partidas por Data
 - **Descrição**: Partidas de um campeonato são retornadas ordenadas por data (mais recentes primeiro).
-- **Arquivo**: `src/galaticos/db/matches.clj` (linha 36-41)
+- **Implementação**: `find-by-championship` e funções relacionadas em `src/galaticos/db/matches.clj` (`sort-by` em `:date`, mais recentes primeiro).
 - **Comportamento**:
   - Ordem decrescente por campo `date`
   - Aplicado automaticamente em `find-by-championship`
 
 ### RN-QUERY-02: Ordenação de Estatísticas por Métrica
 - **Descrição**: Estatísticas são ordenadas pela métrica relevante.
-- **Arquivo**: `src/galaticos/db/aggregations.clj` (linha 34)
+- **Implementação** (`src/galaticos/db/aggregations.clj`): estágios `:$sort` nos pipelines — por exemplo `search-players` (`sort-by` / `sort-order`), `top-players-by-metric`, `championship-table-leaderboards`, e ordenação em consultas como `player-stats-by-championship` / `avg-goals-by-position`. Helpers no início do ficheiro (ex. `agg-entity-id-str`) não definem ordenação de resultados.
 - **Comportamento**:
-  - Ordem decrescente (maiores valores primeiro)
-  - Ordenação secundária quando aplicável
+  - Regra geral: ordem decrescente para métricas de desempenho (maiores valores primeiro)
+  - Ordenação secundária quando aplicável (ex. gols e depois assistências)
 
 ---
 
@@ -910,10 +914,14 @@ Quando uma regra impactar cálculo analítico:
 3. Incluir cobertura de regressão em `docs/informacao/dominio/testing-coverage.md`.
 4. Registrar validação operacional em `docs/informacao/analytics/reconciliation-runbook.md`.
 
+### Jobs de recálculo (player stats)
+
+- O mesmo módulo `galaticos.analytics.player-stats-jobs` aplica às regras de partida (RN-MATCH-05/06/07) retry controlado, persistência de metadados de último sucesso e um endpoint de consulta; pormenores em `docs/parcial/analytics/technical-evolution.md`.
+
 ---
 
 
 **Documento gerado automaticamente através da análise do código-fonte.**
-**Última atualização: 29 de Janeiro de 2026**
+**Última atualização: 23 de Abril de 2026**
 **Para dúvidas ou sugestões, consulte o código-fonte nos arquivos mencionados.**
 

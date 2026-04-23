@@ -234,3 +234,12 @@
       (is (= "c2" (:championship-id c2)))
       (is (= 0 (:matches-count c2)))
       (is (= 0 (:players-count c2))))))
+
+(deftest update-aggregated-stats-pipeline-vec-prefilter
+  (testing "full recompute: no match prefilter on collection"
+    (let [v (#'agg/update-aggregated-stats-pipeline-vec [])]
+      (is (contains? (first v) :$unwind))))
+  (testing "incremental: $match on matches first"
+    (let [a (ObjectId.) b (ObjectId.)
+          v (#'agg/update-aggregated-stats-pipeline-vec [a b])]
+      (is (contains? (first v) :$match)))))

@@ -4,6 +4,8 @@
             [galaticos.handlers.aggregations :as handlers]
             [galaticos.db.aggregations :as agg]
             [galaticos.db.core :as db]
+            [galaticos.analytics.player-stats-jobs :as pjobs]
+            [galaticos.analytics.player-stats-job-store :as job-store]
             [monger.collection :as mc])
   (:import [org.bson.types ObjectId]))
 
@@ -97,7 +99,7 @@
       (is (= 200 (:status result))))))
 
 (deftest reconcile-stats
-  (testing "success"
+  (testing "success synchronous"
     (let [request {}
           result (with-redefs [db/db (fn [] :mock-db)
                               mc/find-maps (fn [_ _ _] [])
@@ -105,7 +107,27 @@
                   (handlers/reconcile-stats request))
           body (parse-body result)]
       (is (= 200 (:status result)))
-      (is (= 3 (get-in body [:data :updated]))))))
+      (is (= 3 (get-in body [:data :updated])))))
+  (testing "async 202 with job-id"
+    (let [request {:query-params {"async" "true"}}
+          result (with-redefs [db/db (fn [] :mock-db)
+                              mc/find-maps (fn [_ _ _] [])
+                              pjobs/submit-full-recompute! (fn [_] {:status :ok :job-id "jid-1"})]
+                  (handlers/reconcile-stats request))
+          body (parse-body result)]
+      (is (= 202 (:status result)))
+      (is (= "jid-1" (get-in body [:data :job-id]))))))
+
+(deftest player-stats-jobs-status-handler
+  (let [result (with-redefs [job-store/fetch-doc (fn [] {:_id "player-stats-jobs"
+                                                        :last-incremental {:job-id "j1"}
+                                                        :updated-at (java.util.Date.)})
+                            pjobs/executor-runtime-info (fn [] {:queue-size 0 :active-count 0 :pool-size 1})]
+                 (handlers/player-stats-jobs-status {}))
+        body (parse-body result)]
+    (is (= 200 (:status result)))
+    (is (= 0 (get-in body [:data :executor :queue-size])))
+    (is (= "j1" (get-in body [:data :last-success :last-incremental :job-id])))))
 
 (deftest championship-table-leaderboards-handler
   (testing "success"

@@ -43,20 +43,21 @@ flowchart LR
 
 ## Decisões arquiteturais atuais
 
-- Recomputação de estatísticas acoplada ao CRUD de partidas.
+- Após CRUD de partidas, recálculo completo de `players.aggregated-stats` é **agendado** em `galaticos.analytics.player-stats-jobs` (executor de thread única), desacoplado da resposta HTTP por padrão.
+- Reconciliação operacional: `POST /api/aggregations/reconcile` (autenticado) e `reconcile-stats` disparam o mesmo recálculo completo de forma síncrona (ver `reconciliation-runbook.md`).
 - Fallback e reconciliação manual existentes para inconsistências.
 - Exportação CSV como ponte com BI externo.
 
 ## Limitações conhecidas
 
-- Reprocessamentos podem impactar latência de operações transacionais.
-- Ausência de fila/jobs assíncronos para volume alto.
+- O pipeline `update-aggregated-stats-pipeline` ainda percorre todas as partidas; apenas a resposta HTTP deixou de esperar pelo recálculo (consistência eventual no dashboard).
+- Fila in-process: um único worker; múltiplas instâncias da API exigiriam fila externa ou coordenação adicional.
 - Contratos de dados ainda precisando de governança explícita por versão.
 
 ## Evolução recomendada
 
 1. Introduzir contratos de dados versionados para entradas analíticas.
-2. Adicionar processamento assíncrono para recomputações completas.
+2. Restringir o pipeline de agregação a subconjuntos (campeonato/temporada) e/ou fila distribuída para escala.
 3. Definir SLOs de atualização e qualidade para métricas críticas.
 
 ## Referência de execução técnica

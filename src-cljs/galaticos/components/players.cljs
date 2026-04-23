@@ -225,7 +225,9 @@
                                                  (reset! error msg)
                                                  (state/toast-error! msg))))))]
     (r/create-class
-     {:component-did-mount load-player!
+     {:component-did-mount (fn []
+                             (effects/ensure-teams!)
+                             (load-player!))
       :reagent-render
       (fn []
         (cond
@@ -234,8 +236,14 @@
                    [:div {:class "space-y-4"}
                     [common/button "Tentar novamente" load-player! :variant :outline]])
           @loading? [common/loading-spinner]
-          @player (let [{:keys [authenticated]} @state/app-state
+          @player (let [{:keys [authenticated teams]} @state/app-state
                         player-stats (get-in @player [:aggregated-stats :total] {})
+                        team-id (normalize-id (:team-id @player))
+                        team-name (or (:team-name @player)
+                                      (some->> teams
+                                               (filter #(= (normalize-id (or (:_id %) (:id %))) team-id))
+                                               first
+                                               :name))
                         by-champ (get-in @player [:aggregated-stats :by-championship])]
                     [:div {:class "space-y-6"}
                      [:div {:class "flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"}
@@ -268,7 +276,7 @@
                         [:div {:class "mt-4 grid gap-4 md:grid-cols-2"}
                          [:div {:class "space-y-2 text-sm text-slate-600"}
                           [:p [:span {:class "font-medium text-slate-800"} "Apelido: "] (or (:nickname @player) "-")]
-                          [:p [:span {:class "font-medium text-slate-800"} "Time ID: "] (or (:team-id @player) "-")]
+                          [:p [:span {:class "font-medium text-slate-800"} "Time: "] (or team-name "Time nao informado")]
                           [:p [:span {:class "font-medium text-slate-800"} "Data de Nascimento: "] (or (:birth-date @player) "-")]
                           [:p [:span {:class "font-medium text-slate-800"} "Nacionalidade: "] (or (:nationality @player) "-")]]
                          [:div {:class "space-y-2 text-sm text-slate-600"}
