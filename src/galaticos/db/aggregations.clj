@@ -359,7 +359,10 @@
     (if (empty? oids)
       {:status :success :updated 0}
       (try
-        (let [stats-data (mc/aggregate (db) "matches" (update-aggregated-stats-pipeline-vec oids))]
+        (let [stats-data (mc/aggregate (db) "matches" (update-aggregated-stats-pipeline-vec oids))
+              updated-pids (into #{} (keep #(try (->object-id (:player-id %))
+                                                 (catch Exception _ nil))
+                                           stats-data))]
           (doseq [player-stats stats-data]
             (let [pid (->object-id (:player-id player-stats))]
               (when-let [player (mc/find-one-as-map (db) "players" {:_id pid})]
@@ -370,6 +373,15 @@
                              {:_id pid}
                              {:$set {:aggregated-stats merged-stats
                                     :updated-at (java.util.Date.)}})))))
+          ;; Players with no remaining matches emit no aggregation row; zero their stats explicitly.
+          (doseq [pid oids
+                  :when (not (contains? updated-pids pid))]
+            (when (mc/find-one-as-map (db) "players" {:_id pid})
+              (mc/update (db) "players"
+                         {:_id pid}
+                         {:$set {:aggregated-stats {:total {:games 0 :goals 0 :assists 0 :titles 0}
+                                                    :by-championship []}
+                                 :updated-at (java.util.Date.)}})))
           {:status :success :updated (count stats-data)})
         (catch Exception e
           (log/error e "Error updating incremental player stats")

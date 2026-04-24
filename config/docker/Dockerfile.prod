@@ -11,7 +11,8 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Dependency layers (Clojure + npm)
-COPY deps.edn shadow-cljs.edn package.json package-lock.json ./
+COPY deps.edn shadow-cljs.edn package.json package-lock.json \
+     tailwind.config.js postcss.config.js ./
 RUN clj -P
 RUN npm ci --no-fund --no-audit
 
