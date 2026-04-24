@@ -10,11 +10,38 @@ source "$SCRIPT_DIR/../utils/common.sh"
 
 # Configuration (override with MONGO_URI / DB_NAME for remote or prod)
 DB_NAME="${DB_NAME:-galaticos}"
-MONGO_URI="${MONGO_URI:-mongodb://localhost:27017}"
+readonly _DEFAULT_MONGO_URI="mongodb://localhost:27017"
+MONGO_URI="${MONGO_URI:-$_DEFAULT_MONGO_URI}"
 readonly INDEXES_SCRIPT="scripts/mongodb/mongodb-indexes.js"
 
 # Change to project root
 cd_project_root
+
+# Docker prod: Mongo exige auth. Se MONGO_URI ainda é o default, carregar config/docker/.env
+# (MONGO_INITDB_ROOT_*) e montar URI com authSource=admin em 127.0.0.1:27017 (porta publicada no host).
+if [[ "$MONGO_URI" == "$_DEFAULT_MONGO_URI" && -f "config/docker/.env" ]]; then
+    set -a
+    # shellcheck disable=SC1091
+    source "config/docker/.env"
+    set +a
+    if [[ -n "${MONGO_INITDB_ROOT_USERNAME:-}" && -n "${MONGO_INITDB_ROOT_PASSWORD:-}" ]]; then
+        MONGO_URI="mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@127.0.0.1:27017/${DB_NAME}?authSource=admin"
+    fi
+fi
+
+# URI passada ao mongosh: se já tem /db ou ? (auth), usar tal qual; senão anexar /DB_NAME (dev sem auth).
+mongosh_connection_uri() {
+    local u="$MONGO_URI"
+    if [[ "$u" == *"/${DB_NAME}"* ]] || [[ "$u" == *"?"* ]]; then
+        echo "$u"
+    else
+        echo "${u}/${DB_NAME}"
+    fi
+}
+
+redact_mongo_uri_for_log() {
+    echo "$1" | sed -E 's|(mongodb://[^:]+:)[^@]+@|\1***@|'
+}
 
 log_info "Setting up MongoDB indexes..."
 echo ""
@@ -54,7 +81,7 @@ while [ $retry_count -lt $MAX_RETRIES ]; do
 done
 
 if [ $retry_count -eq $MAX_RETRIES ]; then
-    log_error "Cannot connect to MongoDB at $MONGO_URI after $MAX_RETRIES attempts"
+    log_error "Cannot connect to MongoDB at $(redact_mongo_uri_for_log "$MONGO_URI") after $MAX_RETRIES attempts"
     log_info "Trying alternative connection test..."
     
     # Try using Python as alternative (more reliable)
@@ -93,14 +120,14 @@ except Exception as e:
 fi
 
 log_info "Database: $DB_NAME"
-log_info "MongoDB URI: $MONGO_URI"
+log_info "MongoDB URI: $(redact_mongo_uri_for_log "$MONGO_URI")"
 echo ""
 
 # Run indexes script with appropriate MongoDB shell
 log_step "Creating indexes in database '$DB_NAME'..."
 if command_exists mongosh; then
     # mongosh: use --file flag for script execution with full URI including database
-    if mongosh "$MONGO_URI/$DB_NAME" --file "$INDEXES_SCRIPT"; then
+    if mongosh "$(mongosh_connection_uri)" --file "$INDEXES_SCRIPT"; then
         log_success "MongoDB indexes created successfully in database '$DB_NAME'!"
     else
         log_error "Failed to create indexes"
@@ -108,7 +135,7 @@ if command_exists mongosh; then
     fi
 elif command_exists mongo; then
     # mongo: use full URI with database name to ensure correct connection
-    if mongo "$MONGO_URI/$DB_NAME" "$INDEXES_SCRIPT"; then
+    if mongo "$(mongosh_connection_uri)" "$INDEXES_SCRIPT"; then
         log_success "MongoDB indexes created successfully in database '$DB_NAME'!"
     else
         log_error "Failed to create indexes"
@@ -121,7 +148,7 @@ else
         if [[ -n "$MONGO_CONTAINER" ]]; then
             log_info "Mongo shell not found locally, running indexes inside container: $MONGO_CONTAINER"
             # Pipe script into mongosh inside the container
-            if docker exec -i "$MONGO_CONTAINER" mongosh "$MONGO_URI/$DB_NAME" --quiet < "$INDEXES_SCRIPT"; then
+            if docker exec -i "$MONGO_CONTAINER" mongosh "$(mongosh_connection_uri)" --quiet < "$INDEXES_SCRIPT"; then
                 log_success "MongoDB indexes created successfully in database '$DB_NAME' (via Docker)!"
             else
                 log_error "Failed to create indexes inside MongoDB container"
@@ -142,7 +169,7 @@ fi
 # Verify indexes were created
 log_step "Verifying indexes..."
 if command_exists mongosh; then
-    if mongosh "$MONGO_URI/$DB_NAME" --quiet --eval "
+    if mongosh "$(mongosh_connection_uri)" --quiet --eval "
         print('Collections with indexes:');
         db.getCollectionNames().forEach(function(coll) {
             var indexes = db.getCollection(coll).getIndexes();
@@ -156,7 +183,7 @@ if command_exists mongosh; then
         log_warning "Could not verify indexes (this is not critical)"
     fi
 elif command_exists mongo; then
-    if mongo "$MONGO_URI/$DB_NAME" --quiet --eval "
+    if mongo "$(mongosh_connection_uri)" --quiet --eval "
         print('Collections with indexes:');
         db.getCollectionNames().forEach(function(coll) {
             var indexes = db.getCollection(coll).getIndexes();
@@ -184,6 +211,7 @@ if command_exists python3; then
     else
         if python3 -c "
 import sys
+from datetime import datetime, timezone
 from pymongo import MongoClient
 from bson import ObjectId
 
@@ -225,7 +253,7 @@ try:
             {
                 '\$set': {
                     'titles-count': max_titles,
-                    'updated-at': datetime.utcnow()
+                    'updated-at': datetime.now(timezone.utc)
                 }
             }
         )
