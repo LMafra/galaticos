@@ -29,6 +29,10 @@ Referência estável: visão, processos, modelos e como medir.
 - [metodologia.md](informacao/performance/metodologia.md) — Lighthouse (DevTools e CLI), WSL/Chrome, rotas públicas e autenticadas.
 - [inventario-paginas.md](informacao/performance/inventario-paginas.md) — inventário de rotas e componentes para medição por página.
 
+### Qualidade (`docs/informacao/qualidade/`)
+
+- [auditoria-alucinacoes-ia.md](informacao/qualidade/auditoria-alucinacoes-ia.md) — guia para auditar código assistido por IA (deps, Monger, Ring/Compojure, CLJS, prompts e validação com testes e clj-kondo).
+
 ### Operação (`docs/informacao/operacao/`)
 
 - [runbook-producao.md](informacao/operacao/runbook-producao.md) — deploy, backup, seed e índices em produção sem perda de dados.

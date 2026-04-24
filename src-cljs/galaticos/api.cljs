@@ -349,6 +349,11 @@
 (defn get-avg-goals-by-position [championship-id on-success on-error]
   (get-request (str "/api/aggregations/positions/" championship-id) {} on-success on-error))
 
+(defn reconcile-aggregated-stats!
+  "POST /api/aggregations/reconcile — recalcula aggregated-stats de todos os jogadores a partir de matches (admin)."
+  [on-success on-error]
+  (post-request "/api/aggregations/reconcile" {} on-success on-error))
+
 (defn download-csv!
   "Download CSV file from API endpoint."
   [url filename on-success on-error]

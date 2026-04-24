@@ -258,6 +258,39 @@
              "Selecione um campeonato e clique em Buscar."]])]))))
 
 ;; ---------------------------------------------------------------------------
+;; Admin: reconcile player aggregates with matches collection
+;; ---------------------------------------------------------------------------
+
+(defn- reconcile-toolbar []
+  (let [loading? (r/atom false)]
+    (fn []
+      (when (:authenticated @state/app-state)
+        [:div {:class "rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/40"}
+         [:div {:class "flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"}
+          [:div {:class "space-y-1"}
+           [:p {:class "text-sm font-medium text-slate-800 dark:text-slate-200"}
+            "Reconciliar estatísticas"]
+           [:p {:class "text-xs text-slate-600 dark:text-slate-400"}
+            "Recalcula os totais em ficha (gols, partidas, etc.) a partir das partidas guardadas. Use após corrigir ou apagar partidas."]]
+          [common/button "Executar reconciliação"
+           #(when-not @loading?
+              (reset! loading? true)
+              (api/reconcile-aggregated-stats!
+               (fn [data]
+                 (reset! loading? false)
+                 (let [msg (or (:message data)
+                               (when (some? (:updated data))
+                                 (str "Reconciliação concluída. " (:updated data) " jogador(es) atualizado(s)."))
+                               "Reconciliação concluída.")]
+                   (state/toast-success! msg)))
+               (fn [err _]
+                 (reset! loading? false)
+                 (state/toast-error! (str err)))))
+           :variant :outline
+           :disabled @loading?
+           :aria-label "Recalcular estatísticas agregadas dos jogadores"]]]))))
+
+;; ---------------------------------------------------------------------------
 ;; Page container
 ;; ---------------------------------------------------------------------------
 
@@ -268,6 +301,7 @@
        [:div
         [:p {:class "text-sm text-slate-500"} "Agregações"]
         [:h2 {:class "text-2xl font-semibold text-slate-900 dark:text-slate-100"} "Estatísticas"]]
+       [reconcile-toolbar]
        [:div {:class "flex flex-wrap gap-2"}
         [common/button "Top Jogadores"
          #(reset! active-tab :top)
