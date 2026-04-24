@@ -72,10 +72,14 @@
     (let [id (get-in request [:params :id])]
         (if-let [player (players-db/find-by-id id)]
         (let [;; Never echo a stale :team-name from the player document; only attach from teams.
-              team-name (some-> (:team-id player)
-                                teams-db/find-by-id
-                                :name
-                                str/trim)
+              ;; Wrap in try/catch so a malformed or missing team-id never aborts the whole bundle.
+              team-name (try
+                          (some-> (:team-id player)
+                                  teams-db/find-by-id
+                                  :name
+                                  str/trim)
+                          (catch Exception _
+                            nil))
               team-name (when-not (str/blank? team-name) team-name)
               player* (cond-> (dissoc player :team-name)
                         team-name (assoc :team-name team-name))]
