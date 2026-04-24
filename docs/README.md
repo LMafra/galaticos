@@ -32,6 +32,7 @@ Referência estável: visão, processos, modelos e como medir.
 ### Operação (`docs/informacao/operacao/`)
 
 - [runbook-producao.md](informacao/operacao/runbook-producao.md) — deploy, backup, seed e índices em produção sem perda de dados.
+- [vps-hospedeiro.md](informacao/operacao/vps-hospedeiro.md) — SSH, `.env` do Compose, Nginx/HTTPS, build Docker na VPS (Clojars/MTU), seed com Excel e checklist de deploy.
 
 ### Domínio (`docs/informacao/dominio/`)
 

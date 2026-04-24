@@ -16,6 +16,16 @@
     (map? v) (or (get v "$oid") (get v :$oid))
     :else nil))
 
+(defn- looks-like-object-id? [s]
+  (and (string? s)
+       (= 24 (count s))
+       (boolean (re-matches #"^[0-9a-fA-F]{24}$" s))))
+
+(defn- display-team-name [name-from-player name-from-teams]
+  (let [raw (or name-from-player name-from-teams)]
+    (when-not (looks-like-object-id? raw)
+      raw)))
+
 (defn- position-options [players]
   (->> players
        (map :position)
@@ -239,11 +249,12 @@
           @player (let [{:keys [authenticated teams]} @state/app-state
                         player-stats (get-in @player [:aggregated-stats :total] {})
                         team-id (normalize-id (:team-id @player))
-                        team-name (or (:team-name @player)
-                                      (some->> teams
-                                               (filter #(= (normalize-id (or (:_id %) (:id %))) team-id))
-                                               first
-                                               :name))
+                        team-name (display-team-name
+                                   (:team-name @player)
+                                   (some->> teams
+                                            (filter #(= (normalize-id (or (:_id %) (:id %))) team-id))
+                                            first
+                                            :name))
                         by-champ (get-in @player [:aggregated-stats :by-championship])]
                     [:div {:class "space-y-6"}
                      [:div {:class "flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"}
