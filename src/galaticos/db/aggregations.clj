@@ -154,11 +154,11 @@
                             (map (fn [e]
                                    (match-aggregate-key (:championship-id e) (:season e))))
                             existing-by)
-        ;; Only keep entries that still have matches; drop stale by-championship rows entirely.
-        merged-existing (keep (fn [entry]
+        merged-existing (mapv (fn [entry]
                                 (let [k (match-aggregate-key (:championship-id entry) (:season entry))]
-                                  (when (contains? match-map k)
-                                    (merge-championship-entry entry (get match-map k)))))
+                                  (if (contains? match-map k)
+                                    (merge-championship-entry entry (get match-map k))
+                                    (update entry :titles safe-int))))
                               existing-by)
         match-only (for [entry match-derived
                          :let [k (match-aggregate-key (:championship-id entry) (:season entry))]
