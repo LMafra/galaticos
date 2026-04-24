@@ -62,7 +62,21 @@
           body (parse-body result)]
       (is (= 200 (:status result)))
       (is (= "Bundled" (get-in body [:data :player :name])))
-      (is (= 2024 (get-in body [:data :evolution 0 :year]))))))
+      (is (= 2024 (get-in body [:data :evolution 0 :year])))))
+  (testing "stale team-name on document is replaced by teams collection"
+    (let [tid (ObjectId.)
+          id (str (ObjectId.))
+          request {:params {:id id}}
+          player {:_id (ObjectId. id)
+                  :name "P"
+                  :team-id tid
+                  :team-name (str tid)}
+          result (with-redefs [players-db/find-by-id (fn [x] (when (= x id) player))
+                              teams-db/find-by-id (fn [x] (when (= x tid) {:_id tid :name "Galáticos"}))
+                              agg/player-performance-evolution (fn [_] [])]
+                  (handlers/get-player-detail-bundle request))
+          body (parse-body result)]
+      (is (= "Galáticos" (get-in body [:data :player :team-name]))))))
 
 (deftest create-player
   (testing "success"

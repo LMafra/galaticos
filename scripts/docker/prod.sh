@@ -67,6 +67,38 @@ case "$COMMAND" in
         }
         log_success "Services restarted!"
         ;;
+    deploy)
+        log_info "Building app image (MongoDB untouched)..."
+        $DOCKER_COMPOSE_CMD -f "$COMPOSE_FILE" build app || {
+            log_error "Failed to build app image"
+            exit 1
+        }
+        log_info "Recreating app container..."
+        $DOCKER_COMPOSE_CMD -f "$COMPOSE_FILE" up -d --force-recreate --no-deps app || {
+            log_error "Failed to recreate app container"
+            exit 1
+        }
+        log_success "Deploy complete! Monitor with: ./bin/galaticos docker:prod logs"
+        ;;
+    deploy:clean)
+        log_info "Building app image without cache (MongoDB untouched)..."
+        $DOCKER_COMPOSE_CMD -f "$COMPOSE_FILE" build --no-cache app || {
+            log_error "Failed to build app image"
+            exit 1
+        }
+        log_info "Recreating app container..."
+        $DOCKER_COMPOSE_CMD -f "$COMPOSE_FILE" up -d --force-recreate --no-deps app || {
+            log_error "Failed to recreate app container"
+            exit 1
+        }
+        log_success "Deploy complete! Monitor with: ./bin/galaticos docker:prod logs"
+        ;;
+    clean)
+        log_info "Removing stopped app container and dangling images..."
+        $DOCKER_COMPOSE_CMD -f "$COMPOSE_FILE" rm -f app || true
+        docker image prune -f
+        log_success "Cleanup complete!"
+        ;;
     logs)
         log_info "Showing Docker logs (Ctrl+C to exit)..."
         $DOCKER_COMPOSE_CMD -f "$COMPOSE_FILE" logs -f
@@ -81,13 +113,18 @@ case "$COMMAND" in
         echo "Usage: ./bin/galaticos docker:prod [command]"
         echo ""
         echo "Commands:"
-        echo "  build    - Build production images"
-        echo "  start    - Start all services"
-        echo "  stop     - Stop all services"
-        echo "  restart  - Restart all services"
-        echo "  logs     - Show logs (follow mode)"
-        echo "  status   - Show services status"
-        echo "  help     - Show this help message"
+        echo "  deploy       - Build app image (layer cache) and recreate app container only"
+        echo "  deploy:clean - Build app image without cache (use when deps changed) and recreate"
+        echo "  build        - Build all production images"
+        echo "  start        - Start all services"
+        echo "  stop         - Stop all services"
+        echo "  restart      - Restart all services"
+        echo "  logs         - Show logs (follow mode)"
+        echo "  status       - Show services status"
+        echo "  clean        - Remove stopped app container and dangling images"
+        echo "  help         - Show this help message"
+        echo ""
+        echo "MongoDB is never touched by deploy, deploy:clean, or clean."
         ;;
 esac
 

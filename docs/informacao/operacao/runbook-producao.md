@@ -2,6 +2,8 @@
 
 Este documento descreve como fazer deploy e manutenção do Galáticos em produção **sem perder dados** no MongoDB.
 
+Para operações típicas em **VPS + domínio externo** (SSH, localização do `.env`, Nginx, timeouts do Clojars no `docker build`, seed com `MONGO_URI`), ver [vps-hospedeiro.md](vps-hospedeiro.md).
+
 ## Princípios
 
 - Os dados persistem no volume Docker nomeado **`mongodb-data-prod`** ([config/docker/docker-compose.prod.yml](../../../config/docker/docker-compose.prod.yml)).
@@ -15,7 +17,7 @@ Este documento descreve como fazer deploy e manutenção do Galáticos em produ�
 ```bash
 ./bin/galaticos docker:prod build
 ./bin/galaticos docker:prod start
-./bin/galaticos docker:prod restart
+./bin/galaticos docker:prod restart   # reinicia containers; não reconstrói imagem (código novo exige build)
 ./bin/galaticos docker:prod stop   # usa `docker compose down` sem `-v`
 ```
 

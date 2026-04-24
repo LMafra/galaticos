@@ -70,12 +70,15 @@
   [request]
   (try
     (let [id (get-in request [:params :id])]
-      (if-let [player (players-db/find-by-id id)]
-        (let [team-name (some-> (:team-id player)
+        (if-let [player (players-db/find-by-id id)]
+        (let [;; Never echo a stale :team-name from the player document; only attach from teams.
+              team-name (some-> (:team-id player)
                                 teams-db/find-by-id
-                                :name)
-              player* (cond-> player
-                        (some? team-name) (assoc :team-name team-name))]
+                                :name
+                                str/trim)
+              team-name (when-not (str/blank? team-name) team-name)
+              player* (cond-> (dissoc player :team-name)
+                        team-name (assoc :team-name team-name))]
           (resp/success {:player player*
                          :evolution (agg/player-performance-evolution id)}))
         (resp/not-found "Player not found")))
