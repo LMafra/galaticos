@@ -122,8 +122,8 @@
 
 (defn wrap-static-cache
   "Cache headers for static assets.
-  `/js` e `/css` não usam filename com hash: `max-age=1y` faz o browser
-  manter app.js antigo após deploy/restart — só o HTML revalida com no-cache."
+  `/js` e `/css`: `max-age=0, must-revalidate` (bundles share stable URLs; evita browser
+  ficar com JS/CSS antigo por 1 ano). `/images` e `/fonts`: cache longo."
   [handler]
   (fn [request]
     (let [response (handler request)

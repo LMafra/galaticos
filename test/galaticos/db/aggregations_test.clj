@@ -31,7 +31,7 @@
     (is (= 1 (get-in merged [:total :goals])))))
 
 (deftest merge-aggregated-stats-preserves-baseline
-  (testing "keeps untouched championships and preserves titles while updating match-derived stats"
+  (testing "championships absent from full match rollup get match stats zeroed; titles kept"
     (let [existing {:total {:games 12 :goals 9 :assists 5 :titles 3}
                     :by-championship [{:championship-id "c1"
                                        :championship-name "Champ 1"
@@ -58,6 +58,8 @@
           merged (#'agg/merge-aggregated-stats existing match-derived)]
       (is (= 3 (count (:by-championship merged))))
       (is (= 3 (get-in merged [:total :titles])))
+      (is (= 4 (get-in merged [:total :games])))
+      (is (= 3 (get-in merged [:total :goals])))
       (is (= {:championship-id "c1"
               :championship-name "Champ 1"
               :games 3
@@ -67,9 +69,9 @@
              (first (filter #(= "c1" (:championship-id %)) (:by-championship merged)))))
       (is (= {:championship-id "c2"
               :championship-name "Champ 2"
-              :games 2
-              :goals 1
-              :assists 1
+              :games 0
+              :goals 0
+              :assists 0
               :titles 1}
              (first (filter #(= "c2" (:championship-id %)) (:by-championship merged)))))
       (is (= {:championship-id "c3"
@@ -155,7 +157,7 @@
       (is (= 200 (get-in merged [:total :goals]))))))
 
 (deftest merge-aggregated-stats-ambiguous-unscoped-adds-orphan-row
-  (testing "multiple season rows for same championship: unscoped rollup does not pick a season"
+  (testing "unscoped match rollup: season-scoped existing rows with no DB bucket get match stats zeroed; orphan c1| row carries the rollup"
     (let [existing {:total {:games 2 :goals 0 :assists 0 :titles 0}
                     :by-championship [{:championship-id "c1" :season "2024"
                                        :championship-name "C" :games 1 :goals 0 :assists 0 :titles 0}
@@ -166,7 +168,7 @@
           merged (#'agg/merge-aggregated-stats existing match-derived)
           by (:by-championship merged)]
       (is (= 3 (count by)))
-      (is (= 5 (get-in merged [:total :games])))
+      (is (= 3 (get-in merged [:total :games])))
       (is (= 2 (get-in merged [:total :goals]))))))
 
 (deftest merge-aggregated-stats-distinguishes-seasons-same-championship

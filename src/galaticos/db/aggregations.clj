@@ -155,10 +155,13 @@
                                    (match-aggregate-key (:championship-id e) (:season e))))
                             existing-by)
         merged-existing (mapv (fn [entry]
-                                (let [k (match-aggregate-key (:championship-id entry) (:season entry))]
+                                (let [k (match-aggregate-key (:championship-id entry) (:season entry))
+                                      t (update entry :titles safe-int)]
                                   (if (contains? match-map k)
                                     (merge-championship-entry entry (get match-map k))
-                                    (update entry :titles safe-int))))
+                                    ;; No match rows for this championship+season in DB: drop stale
+                                    ;; games/goals/assists; keep :titles (awards, title-only rows).
+                                    (assoc t :games 0 :goals 0 :assists 0))))
                               existing-by)
         match-only (for [entry match-derived
                          :let [k (match-aggregate-key (:championship-id entry) (:season entry))]
@@ -334,8 +337,10 @@
   "Update aggregated stats for all players based on matches"
   []
   (try
-    (let [stats-data (update-aggregated-stats-pipeline)]
-      (doseq [player-stats stats-data]
+    (let [;; Realize the aggregation: Mongo cursors are single-pass; doseq + count can yield :updated 0
+          ;; and incremental paths that walk the seq twice can skip the doseq body entirely.
+          rows (vec (or (update-aggregated-stats-pipeline) []))]
+      (doseq [player-stats rows]
         (let [pid (->object-id (:player-id player-stats))]
           (when-let [player (mc/find-one-as-map (db) "players" {:_id pid})]
             (let [existing-stats (:aggregated-stats player)
@@ -345,7 +350,7 @@
                          {:_id pid}
                          {:$set {:aggregated-stats merged-stats
                                 :updated-at (java.util.Date.)}})))))
-      {:status :success :updated (count stats-data)})
+      {:status :success :updated (count rows)})
     (catch Exception e
       (log/error e "Error updating all player stats")
       (throw e))))
@@ -359,11 +364,11 @@
     (if (empty? oids)
       {:status :success :updated 0}
       (try
-        (let [stats-data (mc/aggregate (db) "matches" (update-aggregated-stats-pipeline-vec oids))
+        (let [rows (vec (or (mc/aggregate (db) "matches" (update-aggregated-stats-pipeline-vec oids)) []))
               updated-pids (into #{} (keep #(try (->object-id (:player-id %))
                                                  (catch Exception _ nil))
-                                           stats-data))]
-          (doseq [player-stats stats-data]
+                                           rows))]
+          (doseq [player-stats rows]
             (let [pid (->object-id (:player-id player-stats))]
               (when-let [player (mc/find-one-as-map (db) "players" {:_id pid})]
                 (let [existing-stats (:aggregated-stats player)
@@ -382,7 +387,7 @@
                          {:$set {:aggregated-stats {:total {:games 0 :goals 0 :assists 0 :titles 0}
                                                     :by-championship []}
                                  :updated-at (java.util.Date.)}})))
-          {:status :success :updated (count stats-data)})
+          {:status :success :updated (count rows)})
         (catch Exception e
           (log/error e "Error updating incremental player stats")
           (throw e))))))
