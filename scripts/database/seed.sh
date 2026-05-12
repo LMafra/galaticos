@@ -26,11 +26,28 @@ readonly SEED_SCRIPT="scripts/python/seed_mongodb.py"
 readonly ADMIN_USER="admin"
 readonly ADMIN_PASS="admin"
 # Allow DB_NAME and MONGO_URI to be overridden via environment variable (not readonly so they can be exported)
+readonly _DEFAULT_MONGO_URI="mongodb://localhost:27017"
 DB_NAME="${DB_NAME:-galaticos}"
-MONGO_URI="${MONGO_URI:-mongodb://localhost:27017}"
+MONGO_URI="${MONGO_URI:-$_DEFAULT_MONGO_URI}"
 
 # Change to project root
 cd_project_root
+
+# Docker prod: Mongo requires auth. If MONGO_URI still default, load config/docker/.env
+# (MONGO_INITDB_ROOT_*) and build URI with authSource=admin on 127.0.0.1:27017 (host-published port).
+if [[ "$MONGO_URI" == "$_DEFAULT_MONGO_URI" && -f "config/docker/.env" ]]; then
+    set -a
+    # shellcheck disable=SC1091
+    source "config/docker/.env"
+    set +a
+    if [[ -n "${MONGO_INITDB_ROOT_USERNAME:-}" && -n "${MONGO_INITDB_ROOT_PASSWORD:-}" ]]; then
+        MONGO_URI="mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@127.0.0.1:27017/${DB_NAME}?authSource=admin"
+    fi
+fi
+
+redact_mongo_uri_for_log() {
+    echo "$1" | sed -E 's|(mongodb://[^:]+:)[^@]+@|\1***@|'
+}
 
 print_admin_credentials() {
     echo ""
@@ -42,7 +59,7 @@ print_admin_credentials() {
 
 log_info "Seeding MongoDB database..."
 log_info "Database: $DB_NAME"
-log_info "MongoDB URI: $MONGO_URI"
+log_info "MongoDB URI: $(redact_mongo_uri_for_log "$MONGO_URI")"
 log_info "Excel file (EXCEL_FILE): $EXCEL_FILE"
 
 # Parse arguments and pass them to Python script
