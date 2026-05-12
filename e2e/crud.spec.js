@@ -1,5 +1,74 @@
 const { test, expect } = require('@playwright/test');
-const { saveCoverage } = require('./_helpers');
+const { saveCoverage, getAdminToken } = require('./_helpers');
+
+/**
+ * @param {import('@playwright/test').APIRequestContext} request
+ * @param {string} token
+ * @param {string} method
+ * @param {string} path
+ * @param {Record<string, unknown>} [data]
+ */
+async function apiJson(request, token, method, path, data = undefined) {
+  const opts = {
+    method,
+    headers: { Authorization: `Bearer ${token}` },
+  };
+  if (data !== undefined && method !== 'GET') {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.data = data;
+  }
+  const response = await request.fetch(path, opts);
+  const body = await response.json().catch(() => ({}));
+  return { response, body };
+}
+
+/**
+ * Championship + Galáticos player enrolled via API (same pattern as player-stats-refresh).
+ * Do not send status: active here: that creates an active season and enroll hits seasons/add-player,
+ * which can fail on bad/legacy enrolled-player-ids shapes; without an active season, enroll uses the
+ * championship root and get-championship-players still lists the player (roster union).
+ */
+async function setupActiveChampionshipWithEnrolledGalaticosPlayer(request) {
+  const token = await getAdminToken(request);
+  expect(token, 'admin token (db:seed-smoke: admin/admin)').toBeTruthy();
+
+  const unique = Date.now();
+  const { response: cRes, body: cBody } = await apiJson(request, token, 'POST', '/api/championships', {
+    name: `E2E Champ ${unique}`,
+    season: '2026',
+    'titles-count': 0,
+  });
+  expect(cRes.ok(), JSON.stringify(cBody)).toBeTruthy();
+  const championshipId = cBody?.data?._id;
+  expect(championshipId).toBeTruthy();
+
+  const { response: tRes, body: tBody } = await apiJson(request, token, 'GET', '/api/teams');
+  expect(tRes.ok()).toBeTruthy();
+  const teams = Array.isArray(tBody?.data) ? tBody.data : [];
+  const galaticos = teams.find((t) => t?.name === 'Galáticos' || t?.name === 'Galaticos');
+  expect(galaticos?._id, 'Need Galáticos team (db:seed-smoke)').toBeTruthy();
+  const teamId = galaticos._id;
+
+  const { response: pRes, body: pBody } = await apiJson(request, token, 'POST', '/api/players', {
+    name: `E2E Match Roster ${unique}`,
+    position: 'Atacante',
+    'team-id': teamId,
+  });
+  expect(pRes.ok(), JSON.stringify(pBody)).toBeTruthy();
+  const playerId = pBody?.data?._id;
+  expect(playerId).toBeTruthy();
+
+  const { response: eRes, body: eBody } = await apiJson(
+    request,
+    token,
+    'POST',
+    `/api/championships/${championshipId}/enroll/${playerId}`,
+    {}
+  );
+  expect(eRes.ok(), JSON.stringify(eBody)).toBeTruthy();
+
+  return String(championshipId);
+}
 
 test('create team', { tag: '@crud' }, async ({ page }, testInfo) => {
   try {
@@ -74,61 +143,36 @@ test('create championship', { tag: '@crud' }, async ({ page }, testInfo) => {
   }
 });
 
-test('create match with one player statistic', { tag: '@crud' }, async ({ page }, testInfo) => {
+test('create match with one player statistic', { tag: '@crud' }, async ({ page, request }, testInfo) => {
   try {
     await page.goto('/#/matches/new');
     await expect(page.getByRole('heading', { name: 'Nova Partida' })).toBeVisible();
 
-    const champSelect = page.getByLabel(/^Campeonato/);
-    await champSelect.waitFor({ state: 'visible' });
-    let valueOptions = await champSelect.locator('option').evaluateAll((opts) => opts.map((o) => o.getAttribute('value')));
-    let firstValue = valueOptions.find((v) => v && v.length > 0);
-    if (!firstValue) {
-      await test.step('create championship so match form has an option', async () => {
-        await page.goto('/#/championships');
-        await expect(page.getByRole('heading', { name: 'Campeonatos', level: 1 })).toBeVisible();
-        await page.getByRole('button', { name: 'Novo Campeonato' }).click();
-        await expect(page.getByRole('heading', { name: 'Novo Campeonato' })).toBeVisible();
-        await page.getByLabel(/^Nome/).fill(`Campeonato E2E ${Date.now()}`);
-        await page.getByLabel(/^Temporada/).fill('2025');
-        await page.getByLabel(/^Títulos/).fill('0');
-        await page.getByRole('button', { name: 'Criar' }).click();
-        await expect(page).toHaveURL(/\#\/championships$/);
-        await page.goto('/#/matches/new');
-        await expect(page.getByRole('heading', { name: 'Nova Partida' })).toBeVisible();
-        await champSelect.waitFor({ state: 'visible' });
-        valueOptions = await champSelect.locator('option').evaluateAll((opts) => opts.map((o) => o.getAttribute('value')));
-        firstValue = valueOptions.find((v) => v && v.length > 0);
-      });
-    }
-    if (!firstValue) {
-      test.skip(true, 'No championship available after setup - run db:seed-smoke');
-      return;
-    }
-    await champSelect.selectOption(firstValue);
-    await page.waitForTimeout(800);
+    await page.getByText('Carregando jogadores inscritos...').waitFor({ state: 'hidden', timeout: 15_000 }).catch(() => {});
 
-    const homeTeamSelect = page.getByLabel(/^Time mandante/);
-    await homeTeamSelect.waitFor({ state: 'visible' });
-    const homeTeamValues = await homeTeamSelect.locator('option').evaluateAll((opts) => opts.map((o) => o.getAttribute('value')));
-    const firstHomeTeam = homeTeamValues.find((v) => v && v.length > 0);
-    if (!firstHomeTeam) {
-      test.skip(true, 'No teams available to create a match');
-      return;
+    const noActiveChamp = page.getByText('Nenhum campeonato ativo encontrado.');
+    const noEnrolled = page.getByText('Nenhum jogador inscrito neste campeonato.');
+    const needsSetup =
+      (await noActiveChamp.isVisible().catch(() => false)) || (await noEnrolled.isVisible().catch(() => false));
+
+    if (needsSetup) {
+      let champId;
+      await test.step('API: active championship + Galáticos player enrolled', async () => {
+        champId = await setupActiveChampionshipWithEnrolledGalaticosPlayer(request);
+      });
+      await page.goto(`/#/matches/by-championship/${champId}/new`);
     }
-    await homeTeamSelect.selectOption(firstHomeTeam);
+
+    await expect(page.getByRole('heading', { name: 'Nova Partida' })).toBeVisible();
+    await page.getByText('Carregando jogadores inscritos...').waitFor({ state: 'hidden', timeout: 15_000 }).catch(() => {});
+
+    await expect(page.locator('table tbody tr').first()).toBeVisible({ timeout: 15_000 });
 
     await page.getByLabel(/^Data/).fill('2025-06-01');
     await page.getByLabel(/^Adversário/).fill('Adversário E2E');
 
-    const playerSearch = page.getByPlaceholder('Buscar por nome ou apelido...').first();
-    await playerSearch.waitFor({ state: 'visible', timeout: 5000 });
-    const playerName = `Jogador Match E2E ${Date.now()}`;
-    await playerSearch.fill(playerName);
-    await page.getByRole('button', { name: new RegExp(`Criar jogador "${playerName}"`) }).first().click();
-    await expect(page.getByText(new RegExp(`Selecionado:\\s*${playerName}`))).toBeVisible({ timeout: 10_000 });
-    // "Gols" substring-matches "Gols do adversário"; target the player stat row only.
-    await page.getByRole('spinbutton', { name: 'Gols', exact: true }).fill('0');
+    // Player stats use number-stepper (+/-), not spinbuttons; one goal includes this row in the payload.
+    await page.locator('table tbody tr').first().locator('td').nth(1).getByRole('button', { name: '+' }).click();
 
     const createMatchResp = page.waitForResponse((r) => {
       if (r.request().method() !== 'POST') return false;

@@ -1,6 +1,7 @@
 (ns galaticos.handlers.championships
   "Request handlers for championship operations"
-  (:require [galaticos.db.championships :as championships-db]
+  (:require [galaticos.championship.roster :as roster]
+            [galaticos.db.championships :as championships-db]
             [galaticos.db.seasons :as seasons-db]
             [galaticos.db.players :as players-db]
             [galaticos.util.response :as resp]
@@ -125,6 +126,15 @@
       (log/error e user-message)
       (resp/server-error user-message))))
 
+(defn- enrolled-object-id-set
+  "ObjectIds enrolled on a championship or season doc. Tolerates legacy scalar :enrolled-player-ids."
+  [m]
+  (let [raw (:enrolled-player-ids m [])]
+    (set (cond
+           (sequential? raw) raw
+           (some? raw) [raw]
+           :else []))))
+
 (defn list-championships
   "List all championships"
   [request]
@@ -248,7 +258,7 @@
         (resp/error "Championship ID and player ID are required" 400)
         (if-let [_player (players-db/find-by-id player-id)]
           (if-let [active-season (seasons-db/find-active-by-championship championship-id)]
-            (let [enrolled (set (:enrolled-player-ids active-season []))
+            (let [enrolled (enrolled-object-id-set active-season)
                   max-players (:max-players active-season)
                   already-enrolled? (contains? enrolled (resp/->object-id player-id))]
               (if (and max-players (>= (count enrolled) max-players) (not already-enrolled?))
@@ -257,7 +267,7 @@
                   (seasons-db/add-player (:_id active-season) player-id)
                   (resp/success {:message "Player enrolled"}))))
             (if-let [championship (championships-db/find-by-id championship-id)]
-              (let [enrolled (set (:enrolled-player-ids championship []))
+              (let [enrolled (enrolled-object-id-set championship)
                     max-players (:max-players championship)
                     already-enrolled? (contains? enrolled (resp/->object-id player-id))]
                 (if (and max-players (>= (count enrolled) max-players) (not already-enrolled?))
@@ -290,14 +300,6 @@
     (catch Exception e
       (handle-exception e "Failed to unenroll player"))))
 
-(defn- normalize-player-id-for-query
-  [x]
-  (cond
-    (instance? ObjectId x) x
-    (nil? x) nil
-    :else (try (ObjectId. (str x))
-               (catch Exception _ nil))))
-
 (defn get-championship-players
   "Get enrolled players for a championship.
   With an active season, returns only that season's roster.
@@ -306,21 +308,12 @@
   [request]
   (try
     (let [championship-id (get-in request [:params :id])]
-      (if-let [active-season (seasons-db/find-active-by-championship championship-id)]
-        (resp/success (seasons-db/get-players (:_id active-season)))
-        (if-let [championship (championships-db/find-by-id championship-id)]
-          (let [season-rows (seasons-db/find-all-by-championship championship-id)
-                season-ids (mapcat :enrolled-player-ids season-rows)
-                root-ids (:enrolled-player-ids championship [])
-                union-ids (->> (concat season-ids root-ids)
-                               (map normalize-player-id-for-query)
-                               (filter some?)
-                               distinct
-                               vec)
-                players (players-db/find-by-ids union-ids)
-                players (sort-by (fn [p] (str/lower-case (str (:name p)))) players)]
-            (resp/success players))
-          (resp/not-found "Championship not found"))))
+      (if-not (championships-db/exists? championship-id)
+        (resp/not-found "Championship not found")
+        (let [union-ids (roster/enrolled-player-object-ids championship-id)
+              players (players-db/find-by-ids union-ids)
+              players (sort-by (fn [p] (str/lower-case (str (:name p)))) players)]
+          (resp/success players))))
     (catch Exception e
       (handle-exception e "Failed to list enrolled players"))))
 

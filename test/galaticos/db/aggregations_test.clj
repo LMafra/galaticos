@@ -194,6 +194,83 @@
       (is (= 4 (get-in merged [:total :games])))
       (is (= 3 (get-in merged [:total :goals]))))))
 
+(deftest merge-aggregated-stats-keeps-table-cache-when-drop-stale-disabled
+  (testing "after player merge incremental: rows absent from match rollup keep games/goals/assists"
+    (let [existing {:total {:games 12 :goals 9 :assists 5 :titles 3}
+                    :by-championship [{:championship-id "c1"
+                                       :championship-name "Champ 1"
+                                       :games 10
+                                       :goals 8
+                                       :assists 4
+                                       :titles 2}
+                                      {:championship-id "c2"
+                                       :championship-name "Champ 2"
+                                       :games 2
+                                       :goals 1
+                                       :assists 1
+                                       :titles 1}]}
+          match-derived [{:championship-id "c1"
+                          :championship-name "Champ 1"
+                          :games 3
+                          :goals 2
+                          :assists 1}
+                         {:championship-id "c3"
+                          :championship-name "Champ 3"
+                          :games 1
+                          :goals 1
+                          :assists 0}]
+          merged (#'agg/merge-aggregated-stats existing match-derived
+                                               {:drop-stale-without-match-rollups? false})]
+      (is (= {:championship-id "c2"
+              :championship-name "Champ 2"
+              :games 2
+              :goals 1
+              :assists 1
+              :titles 1}
+             (first (filter #(= "c2" (:championship-id %)) (:by-championship merged))))))))
+
+(deftest combine-players-aggregated-stats-sums-disjoint-championships
+  (let [p1 {:aggregated-stats {:total {:games 7 :goals 1 :assists 0 :titles 0}
+                              :by-championship [{:championship-id "a"
+                                                :championship-name "ASTCU"
+                                                :season "2025"
+                                                :games 7 :goals 1 :assists 0 :titles 0}]}}
+        p2 {:aggregated-stats {:total {:games 11 :goals 0 :assists 0 :titles 2}
+                              :by-championship [{:championship-id "b"
+                                                :championship-name "SARRADA"
+                                                :season "2025"
+                                                :games 6 :goals 0 :assists 0 :titles 1}
+                                                {:championship-id "c"
+                                                 :championship-name "Fut7"
+                                                 :season "2025"
+                                                 :games 5 :goals 0 :assists 0 :titles 0}
+                                                {:championship-id "d"
+                                                 :championship-name "Boleiro"
+                                                 :season "2025"
+                                                 :games 0 :goals 0 :assists 0 :titles 1}]}}
+        out (agg/combine-players-aggregated-stats [p1 p2])]
+    (is (= 18 (get-in out [:total :games])))
+    (is (= 1 (get-in out [:total :goals])))
+    (is (= 2 (get-in out [:total :titles])))
+    (is (= 4 (count (:by-championship out))))))
+
+(deftest combine-players-aggregated-stats-sums-same-championship-row
+  (let [p1 {:aggregated-stats {:by-championship [{:championship-id "x"
+                                                  :season "2025"
+                                                  :championship-name "C"
+                                                  :games 3 :goals 2 :assists 1 :titles 0}]}}
+        p2 {:aggregated-stats {:by-championship [{:championship-id "x"
+                                                  :season "2025"
+                                                  :championship-name "C"
+                                                  :games 4 :goals 0 :assists 0 :titles 1}]}}
+        out (agg/combine-players-aggregated-stats [p1 p2])
+        row (first (:by-championship out))]
+    (is (= 1 (count (:by-championship out))))
+    (is (= 7 (:games row)))
+    (is (= 2 (:goals row)))
+    (is (= 1 (:assists row)))
+    (is (= 1 (:titles row)))))
+
 (deftest championship-comparison-includes-all-championships
   (testing "returns all championships with zeroed metrics when there is no data"
     (let [championships [{:_id "c1" :name "A" :format "Pontos"}

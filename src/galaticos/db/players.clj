@@ -113,6 +113,11 @@
   [id]
   (update-by-id id {:active false}))
 
+(defn hard-delete-by-id!
+  "Permanently remove a player document (used after duplicate merge)."
+  [id]
+  (mc/remove (db) collection-name {:_id (->object-id id)}))
+
 (defn exists?
   "Check if player exists"
   [id]

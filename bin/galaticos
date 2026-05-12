@@ -54,7 +54,9 @@ show_help() {
     echo "  Database:"
     echo "    db:setup         Set up MongoDB indexes (creates indexes for all collections)"
     echo "    db:seed          Seed database from Excel file (populates teams, players, championships)"
+    echo "                     Flags: --reset, --import-tournament-matches, --import-asbac-data"
     echo "    db:seed-smoke    Seed minimal deterministic data for smoke/E2E tests"
+    echo "    db:reset         Drop all collections (dev only; use --keep-admins to preserve admins)"
     echo "    db:backup        Dump database to backups/mongodb (mongodump archive, needs MONGO_URI)"
     echo "    db:restore       Restore from archive (mongorestore; use --archive PATH [--drop])"
     echo ""
@@ -117,10 +119,15 @@ case "$COMMAND" in
         exec "$SCRIPTS_DIR/database/setup.sh"
         ;;
     db:seed)
-        exec "$SCRIPTS_DIR/database/seed.sh"
+        shift
+        exec "$SCRIPTS_DIR/database/seed.sh" "$@"
         ;;
     db:seed-smoke)
         exec "$SCRIPTS_DIR/database/seed-smoke.sh"
+        ;;
+    db:reset)
+        shift
+        exec "$SCRIPTS_DIR/database/reset.sh" "$@"
         ;;
     db:backup)
         exec "$SCRIPTS_DIR/database/backup-mongodb.sh"
@@ -170,6 +177,10 @@ case "$COMMAND" in
                 ;;
             *seed*|*populate*|*data*)
                 echo "💡 Did you mean: db:seed"
+                echo ""
+                ;;
+            *reset*|*drop*|*clear*|*wipe*)
+                echo "💡 Did you mean: db:reset"
                 echo ""
                 ;;
         esac

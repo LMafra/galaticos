@@ -140,29 +140,36 @@
      entries)))
 
 (defn- merge-aggregated-stats
-  [existing match-derived]
-  (let [existing (or existing {})
-        existing-by (vec (or (:by-championship existing) []))
-        match-map (-> (into {}
-                            (keep (fn [entry]
-                                    (when-let [cid (:championship-id entry)]
-                                      [(match-aggregate-key cid (:season entry)) entry])))
-                            match-derived)
-                      (fanout-unscoped-rollups-into-match-map match-derived existing-by)
-                      (drop-unscoped-when-scoped-present))
-        existing-keys (into #{}
-                            (map (fn [e]
-                                   (match-aggregate-key (:championship-id e) (:season e))))
-                            existing-by)
-        merged-existing (mapv (fn [entry]
-                                (let [k (match-aggregate-key (:championship-id entry) (:season entry))
-                                      t (update entry :titles safe-int)]
-                                  (if (contains? match-map k)
-                                    (merge-championship-entry entry (get match-map k))
-                                    ;; No match rows for this championship+season in DB: drop stale
-                                    ;; games/goals/assists; keep :titles (awards, title-only rows).
-                                    (assoc t :games 0 :goals 0 :assists 0))))
-                              existing-by)
+  ([existing match-derived]
+   (merge-aggregated-stats existing match-derived {}))
+  ([existing match-derived opts]
+   (let [drop-stale-without-match? (:drop-stale-without-match-rollups? opts true)
+         existing (or existing {})
+         existing-by (vec (or (:by-championship existing) []))
+         match-map (-> (into {}
+                             (keep (fn [entry]
+                                     (when-let [cid (:championship-id entry)]
+                                       [(match-aggregate-key cid (:season entry)) entry])))
+                             match-derived)
+                       (fanout-unscoped-rollups-into-match-map match-derived existing-by)
+                       (drop-unscoped-when-scoped-present))
+         existing-keys (into #{}
+                             (map (fn [e]
+                                    (match-aggregate-key (:championship-id e) (:season e))))
+                             existing-by)
+         merged-existing (mapv (fn [entry]
+                                 (let [k (match-aggregate-key (:championship-id entry) (:season entry))
+                                       t (update entry :titles safe-int)]
+                                   (if (contains? match-map k)
+                                     (merge-championship-entry entry (get match-map k))
+                                     ;; No match rollup for this championship+season: by default drop stale
+                                     ;; games/goals/assists (table cache vs truth); keep :titles. After player
+                                     ;; merge, pass :drop-stale-without-match-rollups? false to preserve rows
+                                     ;; with no match lines yet.
+                                     (if drop-stale-without-match?
+                                       (assoc t :games 0 :goals 0 :assists 0)
+                                       t))))
+                               existing-by)
         match-only (for [entry match-derived
                          :let [k (match-aggregate-key (:championship-id entry) (:season entry))]
                          :when (and (not (contains? existing-keys k))
@@ -175,12 +182,67 @@
                               :titles 0}
                        (some? (season-key-suffix (:season entry)))
                        (assoc :season (:season entry))))
-        merged-by (vec (concat merged-existing match-only))]
-    {:total {:games (sum-stat merged-by :games)
-             :goals (sum-stat merged-by :goals)
-             :assists (sum-stat merged-by :assists)
-             :titles (sum-stat merged-by :titles)}
-     :by-championship merged-by}))
+         merged-by (vec (concat merged-existing match-only))]
+     {:total {:games (sum-stat merged-by :games)
+              :goals (sum-stat merged-by :goals)
+              :assists (sum-stat merged-by :assists)
+              :titles (sum-stat merged-by :titles)}
+      :by-championship merged-by})))
+
+(defn- combine-players-by-championship-additive
+  "Sum `by-championship` rows across duplicate player docs (same key = championship-id + season label)."
+  [players]
+  (let [merged-map
+        (reduce
+         (fn [acc p]
+           (reduce
+            (fn [acc row]
+              (if-let [cid (:championship-id row)]
+                (let [k (match-aggregate-key cid (:season row))
+                      g (safe-int (:games row))
+                      gl (safe-int (:goals row))
+                      a (safe-int (:assists row))
+                      ti (safe-int (:titles row))]
+                  (update acc k
+                          (fn [existing]
+                            (if existing
+                              (-> existing
+                                  (update :games + g)
+                                  (update :goals + gl)
+                                  (update :assists + a)
+                                  (update :titles + ti)
+                                  (update :championship-name
+                                          (fn [nm]
+                                            (if (and (string? nm) (not (str/blank? nm)))
+                                              nm
+                                              (or (:championship-name row) "")))))
+                              (cond-> {:championship-id cid
+                                       :championship-name (or (:championship-name row) "")
+                                       :games g :goals gl :assists a :titles ti}
+                                (some? (season-key-suffix (:season row)))
+                                (assoc :season (:season row)))))))
+                acc))
+            acc
+            (or (:by-championship (:aggregated-stats p)) [])))
+         {}
+         players)
+        rows (->> (vals merged-map)
+                  (sort-by (fn [r] [(str (agg-entity-id-str (:championship-id r)))
+                                   (str (or (:season r) ""))])))]
+    (vec rows)))
+
+(defn combine-players-aggregated-stats
+  "Fold multiple players' `:aggregated-stats` caches into one by summing per championship+season.
+  (Does not use `merge-aggregated-stats` — that function reconciles one player cache with match rollups
+  and would zero rows missing from the other player's list.)"
+  [players]
+  (when (seq players)
+    (let [by (combine-players-by-championship-additive players)]
+      {:total {:games (sum-stat by :games)
+               :goals (sum-stat by :goals)
+               :assists (sum-stat by :assists)
+               :titles (sum-stat by :titles)}
+       :by-championship by})))
 
 (defn player-stats-by-championship
   "Get aggregated player statistics for a specific championship"
@@ -358,39 +420,51 @@
 (defn update-incremental-player-stats!
   "Recompute `players.aggregated-stats` only for the given player ids, scanning matches that reference
   at least one of those players. Empty or all-invalid ids is a no-op.
+  Opts:
+  - `:zero-if-no-matches?` (default true) — when true, player ids with no aggregation row get stats
+    zeroed (e.g. last match removed). When false, those players are left unchanged (used after player merge
+    so combined doc-only stats are not wiped when there are no match lines yet).
+  - `:drop-stale-without-match-rollups?` (default true) — when false, `by-championship` rows with no
+    corresponding match rollup keep games/goals/assists (used after merge so combined table cache survives
+    incremental refresh).
   Returns {:status :success :updated n}."
-  [player-ids]
-  (let [oids (distinct-player-object-ids player-ids)]
-    (if (empty? oids)
-      {:status :success :updated 0}
-      (try
-        (let [rows (vec (or (mc/aggregate (db) "matches" (update-aggregated-stats-pipeline-vec oids)) []))
-              updated-pids (into #{} (keep #(try (->object-id (:player-id %))
-                                                 (catch Exception _ nil))
-                                           rows))]
-          (doseq [player-stats rows]
-            (let [pid (->object-id (:player-id player-stats))]
-              (when-let [player (mc/find-one-as-map (db) "players" {:_id pid})]
-                (let [existing-stats (:aggregated-stats player)
-                      match-by-championship (get-in player-stats [:aggregated-stats :by-championship] [])
-                      merged-stats (merge-aggregated-stats existing-stats match-by-championship)]
-                  (mc/update (db) "players"
-                             {:_id pid}
-                             {:$set {:aggregated-stats merged-stats
-                                    :updated-at (java.util.Date.)}})))))
-          ;; Players with no remaining matches emit no aggregation row; zero their stats explicitly.
-          (doseq [pid oids
-                  :when (not (contains? updated-pids pid))]
-            (when (mc/find-one-as-map (db) "players" {:_id pid})
-              (mc/update (db) "players"
-                         {:_id pid}
-                         {:$set {:aggregated-stats {:total {:games 0 :goals 0 :assists 0 :titles 0}
-                                                    :by-championship []}
-                                 :updated-at (java.util.Date.)}})))
-          {:status :success :updated (count rows)})
-        (catch Exception e
-          (log/error e "Error updating incremental player stats")
-          (throw e))))))
+  ([player-ids]
+   (update-incremental-player-stats! player-ids {:zero-if-no-matches? true}))
+  ([player-ids opts]
+   (let [oids (distinct-player-object-ids player-ids)
+         zero-missing? (:zero-if-no-matches? opts true)]
+     (if (empty? oids)
+       {:status :success :updated 0}
+       (try
+         (let [rows (vec (or (mc/aggregate (db) "matches" (update-aggregated-stats-pipeline-vec oids)) []))
+               updated-pids (into #{} (keep #(try (->object-id (:player-id %))
+                                                  (catch Exception _ nil))
+                                            rows))]
+           (doseq [player-stats rows]
+             (let [pid (->object-id (:player-id player-stats))]
+               (when-let [player (mc/find-one-as-map (db) "players" {:_id pid})]
+                 (let [existing-stats (:aggregated-stats player)
+                       match-by-championship (get-in player-stats [:aggregated-stats :by-championship] [])
+                       merge-opts (select-keys opts [:drop-stale-without-match-rollups?])
+                       merged-stats (merge-aggregated-stats existing-stats match-by-championship merge-opts)]
+                   (mc/update (db) "players"
+                              {:_id pid}
+                              {:$set {:aggregated-stats merged-stats
+                                     :updated-at (java.util.Date.)}})))))
+           (when zero-missing?
+             ;; Players with no remaining matches emit no aggregation row; zero their stats explicitly.
+             (doseq [pid oids
+                     :when (not (contains? updated-pids pid))]
+               (when (mc/find-one-as-map (db) "players" {:_id pid})
+                 (mc/update (db) "players"
+                            {:_id pid}
+                            {:$set {:aggregated-stats {:total {:games 0 :goals 0 :assists 0 :titles 0}
+                                                     :by-championship []}
+                                    :updated-at (java.util.Date.)}}))))
+           {:status :success :updated (count rows)})
+         (catch Exception e
+           (log/error e "Error updating incremental player stats")
+           (throw e)))))))
 
 (defn update-player-stats-for-match
   "Update aggregated stats for players involved in a specific match (incremental scan)."
