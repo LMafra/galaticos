@@ -26,6 +26,9 @@ services:
     build:
       context: ../..
       dockerfile: config/docker/Dockerfile.prod
+      # VPS: default bridge often hits Connect timed out to repo.clojars.org during `clj -P`.
+      # Host network matches successful `docker build --network host` (see vps-hospedeiro.md §4).
+      network: host
     container_name: galaticos-app-prod
     restart: unless-stopped
     ports:
