@@ -5,16 +5,40 @@
             [galaticos.api :as api]
             [galaticos.state :as state]
             [galaticos.components.common :as common]
+            [galaticos.components.merge-modal :as merge-modal]
             [galaticos.components.charts :as charts]
             [galaticos.effects :as effects]
             [clojure.string :as str]
-            ["lucide-react" :refer [Grid2X2 ListFilter ChartColumn]]))
+            ["lucide-react" :refer [Grid2X2 ListFilter ChartColumn AlertTriangle]]))
 
 (defn- normalize-id [v]
   (cond
     (string? v) v
     (map? v) (or (get v "$oid") (get v :$oid))
     :else nil))
+
+(defn- dup-candidates-seq
+  "Duplicates API may return string keys (`candidates` vs :candidates)."
+  [entry]
+  (let [c (or (:candidates entry) (get entry "candidates"))]
+    (cond
+      (nil? c) []
+      (vector? c) c
+      (sequential? c) (vec c)
+      :else [])))
+
+(defn- normalize-dup-candidate [c]
+  {:id (str (or (:id c) (get c "id")))
+   :name (or (:name c) (get c "name"))
+   :similarity (or (:similarity c) (get c "similarity"))})
+
+(defn- normalize-dup-report-row [r]
+  (let [pid (some-> (or (:player-id r) (get r "player-id")) str not-empty)
+        cands (mapv normalize-dup-candidate (dup-candidates-seq r))]
+    (when (and pid (seq cands))
+      {:player-id pid
+       :name (or (:name r) (get r "name"))
+       :candidates cands})))
 
 (defn- looks-like-object-id? [s]
   (and (string? s)
@@ -42,6 +66,32 @@
         page (r/atom 1)
         page-size 25
         position-catalog (r/atom [])
+        dup-report (r/atom {})
+        merge-ui (r/atom {:active false :initial-ref nil :championship-id nil :roster nil :tick 0})
+        open-merge! (fn [opts]
+                      (swap! merge-ui merge {:active true
+                                             :initial-ref (:initial-ref opts)
+                                             :championship-id (:championship-id opts)
+                                             :roster (:roster opts)
+                                             :tick (inc (:tick @merge-ui))}))
+        close-merge! #(swap! merge-ui assoc :active false :initial-ref nil :championship-id nil :roster nil)
+        refresh-dup-report!
+        (fn []
+          (api/get-player-duplicates
+           (fn [rows]
+             (let [v (cond
+                       (vector? rows) rows
+                       (sequential? rows) (vec rows)
+                       :else [])]
+               (reset! dup-report
+                       (into {}
+                             (keep (fn [r]
+                                     (when-let [row (normalize-dup-report-row r)]
+                                       [(:player-id row) row]))
+                                   v)))))
+           (fn [err _resp]
+             (reset! dup-report {})
+             (when err (state/toast-error! err)))))
         search-backend!
         (fn []
           (state/set-resource-loading! :players true)
@@ -63,6 +113,7 @@
           (when-not (str/blank? (str q))
             (reset! page 1)
             (reset! search (str q))))
+        (refresh-dup-report!)
         (api/get-players {}
                          (fn [result]
                            (reset! position-catalog (api/coerce-player-list result)))
@@ -72,7 +123,8 @@
       :reagent-render
       (fn [_]
         (let [{:keys [authenticated players players-loading?]} @state/app-state
-              positions (position-options (if (seq @position-catalog) @position-catalog players))]
+              positions (position-options (if (seq @position-catalog) @position-catalog players))
+              dup @dup-report]
           [:div {:class "space-y-6"}
            [:div {:class "flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"}
             [:div
@@ -80,6 +132,9 @@
              [:h2 {:class "text-2xl font-semibold text-slate-900 dark:text-slate-100"} "Jogadores"]]
             (when authenticated
               [:div {:class "flex flex-wrap gap-2"}
+               [common/button "Mesclar jogadores"
+                #(open-merge! {:initial-ref nil :championship-id nil :roster nil})
+                :variant :outline]
                [common/button "Novo Jogador" #(rfe/push-state :player-new) :variant :primary]])]
 
            [common/card
@@ -119,7 +174,9 @@
                (if (= @view-mode :cards)
                  [:div {:class "mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"}
                   (for [player players]
-                    (let [id (normalize-id (or (:_id player) (:id player)))]
+                    (let [id (normalize-id (or (:_id player) (:id player)))
+                          dup-entry (when id (get dup id))
+                          dup-btn? (and authenticated dup-entry (seq (:candidates dup-entry)))]
                       ^{:key id}
                       [:div {:class "app-card p-4 transition hover:shadow-md"
                              :on-click #(when id (rfe/push-state :player-detail {:id id}))}
@@ -127,8 +184,19 @@
                         [:div {:class "h-12 w-12 overflow-hidden rounded-xl bg-slate-100"}
                          (when-let [photo (:photo-url player)]
                            [:img {:src photo :alt (:name player) :class "h-full w-full object-cover"}])]
-                        [:div {:class "flex-1"}
-                         [:p {:class "text-base font-semibold text-slate-900 dark:text-slate-100"} (:name player)]
+                        [:div {:class "flex-1 min-w-0"}
+                         [:div {:class "flex items-start gap-2"}
+                           (when dup-btn?
+                             [:button {:type "button"
+                                       :class "mt-0.5 shrink-0 text-amber-500 hover:text-amber-600"
+                                       :aria-label "Possível duplicado — mesclar"
+                                       :on-click (fn [e]
+                                                   (.stopPropagation e)
+                                                   (open-merge! {:initial-ref id
+                                                                 :championship-id nil
+                                                                 :roster nil}))}
+                             [:> AlertTriangle {:size 18}]])
+                          [:p {:class "text-base font-semibold text-slate-900 dark:text-slate-100 truncate"} (:name player)]]
                          [:p {:class "text-xs text-slate-500"} (or (:nickname player) "-")]
                          [common/badge (:position player) :variant :info :class "mt-2"]]]
                        [:div {:class "mt-4 grid grid-cols-3 gap-2 text-center text-xs text-slate-600"}
@@ -142,14 +210,28 @@
                          [:p {:class "text-sm font-semibold text-slate-900 dark:text-slate-100"} (get-in player [:aggregated-stats :total :assists] 0)]
                          [:p "Assistências"]]]]))]
                  [common/table
-                  ["Nome" "Apelido" "Posição" "Partidas" "Gols" "Assistências"]
+                  ["" "Nome" "Apelido" "Posição" "Partidas" "Gols" "Assistências"]
                   (map (fn [player]
-                         [(:name player)
-                          (:nickname player)
-                          [common/badge (:position player) :variant :info]
-                          (get-in player [:aggregated-stats :total :games] 0)
-                          (get-in player [:aggregated-stats :total :goals] 0)
-                          (get-in player [:aggregated-stats :total :assists] 0)])
+                         (let [id (normalize-id (or (:_id player) (:id player)))
+                               dup-entry (when id (get dup id))
+                               dup-btn? (and authenticated dup-entry (seq (:candidates dup-entry)))]
+                           [[:span {:class "inline-flex w-8 justify-center"}
+                             (when dup-btn?
+                               [:button {:type "button"
+                                         :class "text-amber-500 hover:text-amber-600"
+                                         :aria-label "Possível duplicado — mesclar"
+                                         :on-click (fn [e]
+                                                     (.stopPropagation e)
+                                                     (open-merge! {:initial-ref id
+                                                                   :championship-id nil
+                                                                   :roster nil}))}
+                                [:> AlertTriangle {:size 18}]])]
+                            (:name player)
+                            (:nickname player)
+                            [common/badge (:position player) :variant :info]
+                            (get-in player [:aggregated-stats :total :games] 0)
+                            (get-in player [:aggregated-stats :total :goals] 0)
+                            (get-in player [:aggregated-stats :total :assists] 0)]))
                        players)
                   :on-row-click (fn [player]
                                   (if-let [id (normalize-id (or (:_id player) (:id player)))]
@@ -177,7 +259,18 @@
                           (search-backend!)))
                       :variant :outline
                       :disabled (not full-page?)]]]))]
-              :else [:p {:class "app-muted"} "Nenhum jogador encontrado"])]]))})))
+              :else [:p {:class "app-muted"} "Nenhum jogador encontrado"])]
+
+            (when (and (:active @merge-ui) authenticated)
+              ^{:key (:tick @merge-ui)}
+              [merge-modal/merge-workflow-modal
+               {:championship-id (:championship-id @merge-ui)
+                :roster-players (:roster @merge-ui)
+                :initial-reference-id (:initial-ref @merge-ui)
+                :on-close close-merge!
+                :on-success (fn [_]
+                              (refresh-dup-report!)
+                              (search-backend!))}])]))})))
 
 (defn- format-evolution-period [id]
   (when (map? id)

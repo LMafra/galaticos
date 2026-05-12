@@ -114,6 +114,9 @@
           :matches (do
                      (ensure-championships!)
                      (ensure-matches!))
+          :matches-by-championship (do
+                                     (ensure-championships!)
+                                     (ensure-teams!))
           :match-new (do
                        (ensure-championships!)
                        (ensure-teams!))

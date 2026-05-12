@@ -8,6 +8,12 @@
        (filter #(and % (not (str/blank? %))))
        (str/join " ")))
 
+(defn format-match-calendar-date
+  "Format ISO match :date using the UTC calendar day (midnight UTC otherwise shows as prior local day)."
+  [d]
+  (when d
+    (.toLocaleDateString (js/Date. d) js/undefined (clj->js {:timeZone "UTC"}))))
+
 (defn loading-spinner []
   [:div {:class "flex items-center justify-center gap-3 py-10 text-slate-500 dark:text-slate-400"}
    [:div {:class "h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-brand-maroon dark:border-slate-600"}]
@@ -134,6 +140,7 @@
 
 (defn input-field [label value on-change & {:keys [type placeholder class container-class required? error id]}]
   (let [field-id (or id (str "field-" (swap! field-id-counter inc)))
+        is-date? (= type "date")
         border-class (if error
                       "border-rose-500 focus:border-rose-500 focus:ring-rose-500/20"
                       "border-slate-300 focus:border-brand-maroon focus:ring-brand-maroon/20")]
@@ -143,10 +150,12 @@
       (str label (when required? " *"))]
      [:input (merge {:type (or type "text")
                      :id field-id
-                     :value value
-                     :on-change #(on-change (-> % .-target .-value))
                      :placeholder placeholder
+                     :on-change #(on-change (-> % .-target .-value))
                      :class (merge-classes "w-full rounded-lg border bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500" border-class class)}
+                   (if is-date?
+                     {:default-value value}
+                     {:value value})
                    (when error {:aria-invalid "true"}))]]))
 
 (defn select-field [label value options on-change & {:keys [class container-class required? error id]}]
@@ -166,6 +175,50 @@
            (map (fn [[opt-value opt-label]]
                   [:option {:key opt-value :value opt-value} opt-label])
                 options))]))
+
+(defn number-stepper
+  "Stepper with +/- buttons for incrementing/decrementing numeric values."
+  [value on-change & {:keys [min-val max-val]}]
+  (let [min-v (or min-val 0)
+        current (if (number? value) value 0)
+        can-dec? (> current min-v)
+        can-inc? (or (nil? max-val) (< current max-val))
+        btn-style {:width "28px" :height "28px" :border-radius "50%" :min-width "28px" :min-height "28px"}]
+    [:div {:class "inline-flex items-center gap-1"}
+     [:button {:type "button"
+               :style (merge btn-style
+                             (if can-dec?
+                               {:background-color "#e11d48"}
+                               {:background-color "#f1f5f9" :color "#cbd5e1" :cursor "not-allowed"}))
+               :class "flex items-center justify-center text-sm font-medium text-white transition hover:opacity-80"
+               :disabled (not can-dec?)
+               :on-click #(when can-dec? (on-change (dec current)))}
+      "-"]
+     [:span {:class "w-8 text-center text-sm font-medium text-slate-900 dark:text-slate-100"}
+      current]
+     [:button {:type "button"
+               :style (merge btn-style
+                             (if can-inc?
+                               {:background-color "#059669"}
+                               {:background-color "#f1f5f9" :color "#cbd5e1" :cursor "not-allowed"}))
+               :class "flex items-center justify-center text-sm font-medium text-white transition hover:opacity-80"
+               :disabled (not can-inc?)
+               :on-click #(when can-inc? (on-change (inc current)))}
+      "+"]]))
+
+(defn checkbox-field
+  "Checkbox with label."
+  [checked? on-change & {:keys [label id]}]
+  (let [field-id (or id (str "checkbox-" (swap! field-id-counter inc)))]
+    [:label {:for field-id
+             :class "inline-flex cursor-pointer items-center gap-2"}
+     [:input {:type "checkbox"
+              :id field-id
+              :checked (boolean checked?)
+              :on-change #(on-change (-> % .-target .-checked))
+              :class "h-4 w-4 rounded border-slate-300 text-brand-maroon focus:ring-2 focus:ring-brand-maroon/40 dark:border-slate-600 dark:bg-slate-800"}]
+     (when label
+       [:span {:class "text-sm text-slate-700 dark:text-slate-200"} label])]))
 
 (defn modal [{:keys [title content on-close actions]}]
   (let [title-id "modal-title"]

@@ -144,7 +144,7 @@
                                (fn [tid]
                                  (when (= tid team-id)
                                    {:_id team-id :name "T" :active-player-ids [player-id]}))
-                               matches-db/create (fn [_ _] created)
+                               matches-db/create (fn [_ _ _] created)
                                player-stats-jobs/submit-incremental-recalc-after-match! (fn [_] nil)]
                   (handlers/create-match request))
           body (parse-body result)]
@@ -172,7 +172,7 @@
                                (fn [tid]
                                  (when (= tid team-id)
                                    {:_id team-id :name "T" :active-player-ids [player-id]}))
-                               matches-db/create (fn [_ _] created)
+                               matches-db/create (fn [_ _ _] created)
                                seasons-db/add-match (fn [sid mid]
                                                      (when (and (= sid season-id) (= mid (:_id created)))
                                                        (reset! add-match-called true)))
@@ -202,7 +202,7 @@
                    :json-body {:notes "x"}}
           result (with-redefs [matches-db/exists? (fn [x] (= x id))
                                matches-db/find-by-id (fn [x] (when (= x id) existing))
-                               matches-db/update-by-id (fn [_ _] nil)
+                               matches-db/update-by-id (fn [_ _ _] nil)
                                seasons-db/find-by-id (fn [sid]
                                                         (when (= sid season-id)
                                                           {:_id season-id :enrolled-player-ids [player-id]}))

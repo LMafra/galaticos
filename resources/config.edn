@@ -3,5 +3,9 @@
        :jwt-secret "dev-secret-change-in-production"}
  :prod {:database-url "mongodb://mongodb:27017/galaticos"
         :database-name "galaticos"
-        :jwt-secret "change-me-in-production"}}
+        :jwt-secret "change-me-in-production"}
+ :fuzzy-match {:threshold 0.80
+               :algorithm :jaro-winkler
+               :ignore-case true
+               :normalize-accents true}}
 

@@ -2,10 +2,15 @@
   "API routes for player operations"
   (:require [compojure.core :refer [defroutes GET POST PUT DELETE]]
             [galaticos.handlers.players :as handlers]
+            [galaticos.handlers.player-merge :as merge-handlers]
             [galaticos.middleware.auth :refer [wrap-auth]]))
 
 (defroutes player-routes
   (GET "/api/players" request (handlers/list-players request))
+  (GET "/api/players/duplicates" request (merge-handlers/list-player-duplicates request))
+  (POST "/api/players/merge" request ((wrap-auth merge-handlers/merge-players) request))
+  (GET "/api/players/:id/merge-candidates" [id :as request]
+       ((wrap-auth merge-handlers/list-merge-candidates) (assoc-in request [:params :id] id)))
   (GET "/api/players/:id/detail" [id :as request] (handlers/get-player-detail-bundle (assoc request :params {:id id})))
   (GET "/api/players/:id" [id :as request] (handlers/get-player (assoc request :params {:id id})))
   (POST "/api/players" request ((wrap-auth handlers/create-player) request))

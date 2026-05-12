@@ -14,6 +14,7 @@
 (def match-list (lazy/loadable galaticos.components.matches/match-list))
 (def match-form (lazy/loadable galaticos.components.matches/match-form))
 (def match-detail (lazy/loadable galaticos.components.matches/match-detail))
+(def championship-matches-page (lazy/loadable galaticos.components.matches/championship-matches-page))
 (def championship-list (lazy/loadable galaticos.components.championships/championship-list))
 (def championship-form (lazy/loadable galaticos.components.championships/championship-form))
 (def championship-detail (lazy/loadable galaticos.components.championships/championship-detail))

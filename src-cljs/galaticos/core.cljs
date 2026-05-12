@@ -63,6 +63,8 @@
               :player-detail [lazy-p/loadable-route lazy-p/player-detail path-params]
               :player-edit [lazy-p/loadable-route lazy-p/player-form path-params]
               :matches [lazy-p/loadable-route lazy-p/match-list]
+              :matches-by-championship ^{:key (str "matches-champ-" (:championship-id path-params))}
+              [lazy-p/loadable-route lazy-p/championship-matches-page path-params]
               :match-new [lazy-p/loadable-route lazy-p/match-form]
               :match-new-in-championship ^{:key (str "match-new-" (:championship-id path-params))}
               [lazy-p/loadable-route lazy-p/match-form path-params]

@@ -5,10 +5,11 @@
             [galaticos.api :as api]
             [galaticos.state :as state]
             [galaticos.components.common :as common]
+            [galaticos.components.merge-modal :as merge-modal]
             [galaticos.components.player-picker :as player-picker]
             [galaticos.effects :as effects]
             [clojure.string :as str]
-            ["lucide-react" :refer [Trophy]]))
+            ["lucide-react" :refer [Trophy AlertTriangle]]))
 
 (defn- api-get
   "Read API map field with keyword or string key (JSON interop)."
@@ -30,6 +31,24 @@
          " — "
          [:span {:class "font-medium tabular-nums"} (str (get row metric-key 0))]])]
      [:p {:class "app-muted text-sm mt-2"} "Sem dados"])])
+
+(defn- champ-dup-candidates-seq [entry]
+  (let [c (or (:candidates entry) (get entry "candidates"))]
+    (cond (nil? c) [] (vector? c) c (sequential? c) (vec c) :else [])))
+
+(defn- champ-normalize-dup-row [r]
+  (let [pid (some-> (or (:player-id r) (get r "player-id")) str not-empty)
+        cands (mapv (fn [c]
+                      {:id (str (or (:id c) (get c "id")))
+                       :name (or (:name c) (get c "name"))
+                       :similarity (or (:similarity c) (get c "similarity"))})
+                    (champ-dup-candidates-seq r))]
+    (when (and pid (seq cands))
+      {:player-id pid :candidates cands})))
+
+(defn- champ-dup-map-from-rows [rows]
+  (let [v (cond (vector? rows) rows (sequential? rows) (vec rows) :else [])]
+    (into {} (keep (fn [r] (when-let [row (champ-normalize-dup-row r)] [(:player-id row) row])) v))))
 
 (defn championship-list []
   (let [{:keys [championships championships-loading?]} @state/app-state]
@@ -79,7 +98,27 @@
         error (r/atom nil)
         not-found? (r/atom false)
         leaderboards (r/atom nil)
+        champ-dup-report (r/atom {})
+        champ-merge-ui (r/atom {:active false :initial-ref nil :tick 0})
         id (:id params)
+        refresh-champ-dups!
+        (fn []
+          (api/get-player-duplicates
+           {:championship-id id}
+           (fn [rows]
+             (reset! champ-dup-report (champ-dup-map-from-rows rows)))
+           (fn [_ _]
+             (reset! champ-dup-report {}))))
+        on-enrolled-loaded
+        (fn [rows]
+          (reset! enrolled-players rows)
+          (refresh-champ-dups!))
+        open-champ-merge!
+        (fn [opts]
+          (swap! champ-merge-ui merge {:active true
+                                        :initial-ref (:initial-ref opts)
+                                        :tick (inc (:tick @champ-merge-ui))}))
+        close-champ-merge! #(swap! champ-merge-ui assoc :active false :initial-ref nil)
         load! (fn []
                 (reset! error nil)
                 (reset! not-found? false)
@@ -121,9 +160,7 @@
                                                 (let [msg (str "Erro ao carregar temporadas: " err)]
                                                   (reset! error msg)
                                                   (state/toast-error! msg))))
-                (api/get-championship-players id
-                                              (fn [result]
-                                                (reset! enrolled-players result))
+                (api/get-championship-players id on-enrolled-loaded
                                               (fn [err]
                                                 (let [msg (str "Erro ao carregar inscritos: " err)]
                                                   (reset! error msg)
@@ -142,6 +179,7 @@
       :reagent-render
       (fn []
         (let [ch @championship
+              authenticated (:authenticated @state/app-state)
               raw-status (or (api-get ch :status) "indefinido")
               winner-ids (set (map str (or (api-get ch :winner-player-ids) [])))
               winner-names (->> @enrolled-players
@@ -154,8 +192,7 @@
               active-season-id (api-get ch :active-season-id)
               season-options (map (fn [s]
                                     [(str (:_id s))
-                                     (str (:season s) " ("
-                                          (common/status-label (or (:status s) "active")) ")")])
+                                     (str (:season s) " (" (common/status-label (or (:status s) "active")) ")")])
                                   @seasons)]
           [:div {:class "space-y-6"}
            (cond
@@ -307,7 +344,7 @@
                   [common/table
                    ["Data" "Adversário" "Local" "Resultado"]
                    (map (fn [match]
-                          [(.toLocaleDateString (js/Date. (:date match)))
+                          [(or (common/format-match-calendar-date (:date match)) "—")
                            (:opponent match)
                            (:venue match)
                            (common/format-match-result (:result match))])
@@ -328,7 +365,12 @@
                   [leaderboard-mini "Títulos" :titles (:top-titles lb)]]])
 
               [common/card
-               [:h3 {:class "app-section-title"} "Inscrições"]
+               [:div {:class "flex flex-wrap items-center justify-between gap-2"}
+                [:h3 {:class "app-section-title"} "Inscrições"]
+                (when authenticated
+                  [common/button "Mesclar jogadores"
+                   #(open-champ-merge! {:initial-ref nil})
+                   :variant :outline])]
                [:div {:class "mt-3 space-y-3"}
                 [player-picker/player-search-add-panel
                  {:label "Adicionar jogador"
@@ -343,7 +385,7 @@
                        id pid
                        (fn [_result]
                          (api/get-championship-players id
-                                                       #(reset! enrolled-players %)
+                                                       on-enrolled-loaded
                                                        (fn [e]
                                                          (let [msg (str "Erro ao carregar inscritos: " e)]
                                                            (reset! error msg)
@@ -366,7 +408,7 @@
                               (api/get-championship-players
                                id
                                (fn [rows]
-                                 (reset! enrolled-players rows)
+                                 (on-enrolled-loaded rows)
                                  (ok created))
                                (fn [e]
                                  (let [msg (str "Erro ao carregar inscritos: " e)]
@@ -386,7 +428,15 @@
                    (for [player enrolled-sorted]
                      ^{:key (:_id player)}
                      [:div {:class "flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900/80"}
-                      [:div {:class "text-slate-700"} (:name player)]
+                      [:div {:class "flex min-w-0 flex-1 items-center gap-2"}
+                       (when (and authenticated
+                                    (seq (:candidates (get @champ-dup-report (str (:_id player))))))
+                         [:button {:type "button"
+                                   :class "shrink-0 text-amber-500 hover:text-amber-600"
+                                   :aria-label "Possível duplicado — mesclar"
+                                   :on-click #(open-champ-merge! {:initial-ref (str (:_id player))})}
+                          [:> AlertTriangle {:size 18}]])
+                       [:span {:class "truncate text-slate-700"} (:name player)]]
                       [common/button "Remover"
                        (fn []
                           (api/unenroll-player-from-championship
@@ -394,7 +444,7 @@
                           (str (:_id player))
                           (fn [_result]
                             (api/get-championship-players id
-                                                          #(reset! enrolled-players %)
+                                                          on-enrolled-loaded
                                                           (fn [e]
                                                             (let [msg (str "Erro ao carregar inscritos: " e)]
                                                               (reset! error msg)
@@ -458,7 +508,16 @@
                                (reset! error msg)
                                (state/toast-error! msg))))))
                       :variant :primary
-                      :disabled (or @finalizing? (not can-submit?))])])]]]
+                      :disabled (or @finalizing? (not can-submit?))])])]]
+
+              (when (and (:active @champ-merge-ui) authenticated)
+                ^{:key (:tick @champ-merge-ui)}
+                [merge-modal/merge-workflow-modal
+                 {:championship-id id
+                  :roster-players @enrolled-players
+                  :initial-reference-id (:initial-ref @champ-merge-ui)
+                  :on-close close-champ-merge!
+                  :on-success (fn [_] (load!))}])]
 
              :else
              [:p {:class "app-muted"} "Campeonato não encontrado"])]))})))
@@ -552,9 +611,7 @@
                  [common/table
                   ["Data" "Adversário" "Local" "Resultado"]
                   (map (fn [match]
-                         [(if-let [d (:date match)]
-                            (.toLocaleDateString (js/Date. d))
-                            "—")
+                         [(or (common/format-match-calendar-date (:date match)) "—")
                           (:opponent match)
                           (:venue match)
                           (common/format-match-result (:result match))])

@@ -25,6 +25,8 @@
                 :title "Matches"}]
    ["/matches/new" {:name :match-new
                     :title "New Match"}]
+   ["/matches/championship/:championship-id" {:name :matches-by-championship
+                                               :title "Partidas do Campeonato"}]
    ["/matches/by-championship/:championship-id/new" {:name :match-new-in-championship
                                                      :title "New Match"}]
    ["/matches/:id/edit" {:name :match-edit

@@ -185,7 +185,10 @@
       (handle-exception e "Failed to get match"))))
 
 (defn create-match
-  "Create a new match with player statistics"
+  "Create a new match with player statistics.
+  
+  Passes created-by from authenticated admin context for audit trail.
+  Uses atomic upsert to ensure idempotency."
   [request]
   (try
     (let [body (:json-body request)
@@ -198,11 +201,14 @@
               active-season (seasons-db/find-active-by-championship championship-id)
               season-id (when active-season (:_id active-season))
               match-data (cond-> match-data
-                           season-id (assoc :season-id season-id))]
+                           season-id (assoc :season-id season-id))
+              admin-id (get-in request [:admin :_id])]
           (when (seq player-statistics)
             (validate-players-enrolled championship-id season-id (map :player-id player-statistics)))
           (validate-player-team-coherence player-statistics)
-          (let [created (matches-db/create match-data player-statistics)]
+          (let [created (matches-db/create match-data player-statistics
+                                           {:created-by admin-id
+                                            :data-source matches-db/data-source-ui-create})]
             (when season-id
               (seasons-db/add-match season-id (:_id created)))
             (player-stats-jobs/submit-incremental-recalc-after-match!
@@ -215,62 +221,81 @@
       (handle-exception e "Failed to create match"))))
 
 (defn update-match
-  "Update an existing match"
+  "Update an existing match.
+  
+  Protects historical data from Python seed - returns 403 if attempting to
+  modify a match with data-source 'python-seed' without explicit override.
+  
+  Query param ?force=true allows overwriting historical data (use with caution)."
   [request]
   (try
     (let [id (get-in request [:params :id])
           updates (:json-body request)
+          force-update? (= "true" (get-in request [:params :force]))
           {:keys [error data]} (validate-match-body updates false)]
       (if error
         (resp/error error 400)
         (if (matches-db/exists? id)
           (let [existing (matches-db/find-by-id id)
-                championship-id (or (:championship-id data) (:championship-id existing))
-                season-id (or (:season-id data)
-                              (:season-id existing)
-                              (some-> (seasons-db/find-active-by-championship championship-id) :_id))
-                player-statistics (or (:player-statistics data) (:player-statistics existing))]
-            (when (seq player-statistics)
-              (validate-players-enrolled championship-id season-id
-                                         (map :player-id player-statistics)))
-            (validate-player-team-coherence player-statistics)
-            (matches-db/update-by-id id
-                                      (cond-> (assoc data :player-statistics player-statistics)
-                                        season-id (assoc :season-id season-id)))
-            (if-let [updated (matches-db/find-by-id id)]
-              (do
-                (when season-id
-                  (seasons-db/add-match season-id (:_id updated)))
-                (player-stats-jobs/submit-incremental-recalc-after-match!
-                 {:reason :after-match-update
-                  :op :update
-                  :match-id (:_id updated)
-                  :affected-player-ids
-                  (vec (distinct (concat (map :player-id (:player-statistics existing))
-                                         (map :player-id player-statistics))))})
-                (resp/success updated))
-              (resp/server-error "Failed to retrieve updated match")))
+                is-historical? (= (:data-source existing) matches-db/data-source-python-seed)]
+            (if (and is-historical? (not force-update?))
+              (resp/error "Cannot modify historical data (python-seed). Use ?force=true to override." 403)
+              (let [championship-id (or (:championship-id data) (:championship-id existing))
+                    season-id (or (:season-id data)
+                                  (:season-id existing)
+                                  (some-> (seasons-db/find-active-by-championship championship-id) :_id))
+                    player-statistics (or (:player-statistics data) (:player-statistics existing))]
+                (when (seq player-statistics)
+                  (validate-players-enrolled championship-id season-id
+                                             (map :player-id player-statistics)))
+                (validate-player-team-coherence player-statistics)
+                (matches-db/update-by-id id
+                                         (cond-> (assoc data :player-statistics player-statistics)
+                                           season-id (assoc :season-id season-id))
+                                         {:force-overwrite force-update?})
+                (if-let [updated (matches-db/find-by-id id)]
+                  (do
+                    (when season-id
+                      (seasons-db/add-match season-id (:_id updated)))
+                    (player-stats-jobs/submit-incremental-recalc-after-match!
+                     {:reason :after-match-update
+                      :op :update
+                      :match-id (:_id updated)
+                      :affected-player-ids
+                      (vec (distinct (concat (map :player-id (:player-statistics existing))
+                                             (map :player-id player-statistics))))})
+                    (resp/success updated))
+                  (resp/server-error "Failed to retrieve updated match")))))
           (resp/not-found "Match not found"))))
     (catch Exception e
       (handle-exception e "Failed to update match"))))
 
 (defn delete-match
-  "Delete a match"
+  "Delete a match.
+  
+  Protects historical data from Python seed - returns 403 if attempting to
+  delete a match with data-source 'python-seed' without explicit override.
+  
+  Query param ?force=true allows deleting historical data (use with caution)."
   [request]
   (try
-    (let [id (get-in request [:params :id])]
+    (let [id (get-in request [:params :id])
+          force-delete? (= "true" (get-in request [:params :force]))]
       (if (matches-db/exists? id)
         (let [existing (matches-db/find-by-id id)
-              season-id (:season-id existing)]
-          (matches-db/delete-by-id id)
-          (when season-id
-            (seasons-db/remove-match season-id (:_id existing)))
-          (player-stats-jobs/submit-incremental-recalc-after-match!
-           {:reason :after-match-delete
-            :op :delete
-            :match-id (:_id existing)
-            :affected-player-ids (vec (map :player-id (:player-statistics existing)))})
-          (resp/success {:message "Match deleted"}))
+              is-historical? (= (:data-source existing) matches-db/data-source-python-seed)]
+          (if (and is-historical? (not force-delete?))
+            (resp/error "Cannot delete historical data (python-seed). Use ?force=true to override." 403)
+            (let [season-id (:season-id existing)]
+              (matches-db/delete-by-id id)
+              (when season-id
+                (seasons-db/remove-match season-id (:_id existing)))
+              (player-stats-jobs/submit-incremental-recalc-after-match!
+               {:reason :after-match-delete
+                :op :delete
+                :match-id (:_id existing)
+                :affected-player-ids (vec (map :player-id (:player-statistics existing)))})
+              (resp/success {:message "Match deleted"}))))
         (resp/not-found "Match not found")))
     (catch Exception e
       (handle-exception e "Failed to delete match"))))

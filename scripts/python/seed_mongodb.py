@@ -69,6 +69,9 @@ DEFAULT_SEASON = os.getenv("DEFAULT_SEASON", "2025")
 # Championship sheet names to skip (summary/aggregate sheets)
 SKIP_SHEETS = ["Base de dados", "PLACAS"]
 
+# New collections for enriched data
+NEW_COLLECTIONS = ["standings", "records"]
+
 # CSV files under data/ that are not processed as row-layout championship exports
 SKIP_CSV_FILENAMES = frozenset({"galaticos.csv", "base_dados.csv"})
 
@@ -730,6 +733,22 @@ def parse_championship_label(label: str, fallback_name: str) -> Tuple[str, str]:
     return name, season
 
 
+def placeholder_match_date_for_season(season: str) -> datetime:
+    """Placeholder match date 01/01/XXXX (XXXX = season year) in local calendars worldwide.
+
+    Stored as 12:00 UTC on that day so JSON/JS (UTC midnight would shift to prior local
+    evening, e.g. 12/31/2017 in US for 2018-01-01T00:00:00Z).
+    """
+    try:
+        year = int(str(season).strip())
+    except (ValueError, TypeError):
+        try:
+            year = int(str(DEFAULT_SEASON).strip())
+        except (ValueError, TypeError):
+            year = 2025
+    return datetime(year, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+
+
 def normalize_text_basic(value: str) -> str:
     """
     Basic text normalization: strip, collapse spaces, lowercase.
@@ -1324,8 +1343,12 @@ def process_csv_championship_file(
         our_score: int,
         opponent_score: int,
         player_stats: List[Dict],
+        champ_label: Optional[str] = None,
     ) -> None:
         nonlocal matches_created_or_updated
+
+        _, season_str = parse_championship_label(champ_label or "", csv_path.stem)
+        match_date = placeholder_match_date_for_season(season_str)
 
         # Compute home-score from player statistics (our team only)
         home_goals = sum(
@@ -1347,14 +1370,21 @@ def process_csv_championship_file(
         existing = matches_collection.find_one(key_filter)
         if existing:
             # Update player-statistics and scores, keep other fields
+            # Preserve data-source as python-seed for historical data tracking
             update_doc = {
                 "$set": {
                     "player-statistics": player_stats,
                     "home-score": home_goals,
                     "away-score": opponent_score,
+                    "data-source": "python-seed",
                     "updated-at": now,
+                },
+                "$setOnInsert": {
+                    "version": 1,
                 }
             }
+            if existing.get("date") is None:
+                update_doc["$set"]["date"] = match_date
             matches_collection.update_one({"_id": existing["_id"]}, update_doc)
             matches_created_or_updated += 1
         else:
@@ -1362,7 +1392,7 @@ def process_csv_championship_file(
                 "championship-id": championship_id,
                 "home-team-id": team_id,
                 "away-team-id": None,
-                "date": None,
+                "date": match_date,
                 "location": None,
                 "round": phase,
                 "status": "finished",
@@ -1382,6 +1412,8 @@ def process_csv_championship_file(
                 "away-score": opponent_score,
                 "home-score": home_goals,
                 "player-statistics": player_stats,
+                "data-source": "python-seed",
+                "version": 1,
                 "created-at": now,
                 "updated-at": now,
             }
@@ -1580,6 +1612,7 @@ def process_csv_championship_file(
                 our_score=our_score,
                 opponent_score=opp_score,
                 player_stats=player_stats_list,
+                champ_label=current_champ_label,
             )
 
     # Flush accumulated athlete table stats (all blocks / seasons in this file)
@@ -1810,6 +1843,725 @@ def rebuild_aggregated_stats_from_matches(db) -> None:
     print(f"✓ Merged match stats with table stats for {updated_count} players (table values kept when no match data)")
 
 
+def process_excel_tournament_sheets(
+    db,
+    excel_path: Path,
+    sheet_names: List[str],
+    player_map: Dict[str, ObjectId],
+    team_id: ObjectId,
+) -> Tuple[int, int]:
+    """
+    Process tournament sheets from Excel to extract matches into existing matches collection.
+    
+    Returns:
+        (matches_created, matches_updated)
+    """
+    print("\n" + "=" * 60)
+    print("Step 5: Processing tournament sheets for matches")
+    print("=" * 60)
+
+    matches_collection = db.matches
+    seasons_collection = db.seasons
+    championships_collection = db.championships
+    players_collection = db.players
+
+    tournament_sheets = [s for s in sheet_names if s not in SKIP_SHEETS]
+    matches_created = 0
+    matches_updated = 0
+    now = datetime.now(timezone.utc)
+
+    # Cache for player docs
+    player_doc_cache: Dict[ObjectId, Dict] = {}
+
+    def get_player_doc(player_id: ObjectId) -> Optional[Dict]:
+        if player_id in player_doc_cache:
+            return player_doc_cache[player_id]
+        doc = players_collection.find_one(
+            {"_id": player_id}, {"name": 1, "position": 1, "team-id": 1}
+        )
+        if doc:
+            player_doc_cache[player_id] = doc
+        return doc
+
+    def build_player_stat(player_name_raw: str, goals: int) -> Optional[Dict]:
+        player_id = find_player_by_name(player_map, player_name_raw)
+        if not player_id:
+            return None
+        doc = get_player_doc(player_id)
+        if not doc:
+            return None
+        return {
+            "player-id": player_id,
+            "player-name": doc.get("name"),
+            "position": doc.get("position"),
+            "team-id": doc.get("team-id") or team_id,
+            "goals": int(goals),
+            "assists": 0,
+            "yellow-cards": 0,
+            "red-cards": 0,
+            "minutes-played": None,
+        }
+
+    for sheet_name in tournament_sheets:
+        try:
+            df = pd.read_excel(excel_path, sheet_name=sheet_name, header=None, engine="openpyxl")
+        except Exception as e:
+            print(f"  ⚠ Error reading sheet '{sheet_name}': {e}")
+            continue
+
+        if df.empty:
+            continue
+
+        num_rows, num_cols = df.shape
+        current_tournament_label: Optional[str] = None
+        current_phase: Optional[str] = None
+        sheet_matches = 0
+
+        for row_idx in range(num_rows):
+            row = [str(df.iat[row_idx, col]).strip() if pd.notna(df.iat[row_idx, col]) else "" for col in range(num_cols)]
+            row = [cell if cell.lower() != "nan" else "" for cell in row]
+
+            if not any(row):
+                continue
+
+            # Detect tournament label with year (e.g., "AABR Society 2020")
+            for cell in row:
+                if cell and re.search(r"20\d{2}", cell):
+                    current_tournament_label = cell
+                    break
+
+            # Detect phase markers
+            joined_text = " ".join(row)
+            if re.search(r"(?i)1a?\s*fase", joined_text):
+                current_phase = "1a fase"
+            elif re.search(r"(?i)quartas?\s*de\s*final", joined_text):
+                current_phase = "Quartas de Final"
+            elif re.search(r"(?i)semi\s*final", joined_text):
+                current_phase = "Semi Final"
+            elif re.search(r"(?i)oitavas?\s*de\s*final", joined_text):
+                current_phase = "Oitavas de Final"
+            elif re.search(r"(?i)final", joined_text) and "quartas" not in joined_text.lower() and "semi" not in joined_text.lower():
+                current_phase = "Final"
+
+            # Detect match rows (contains "GALÁTICOS")
+            has_galaticos = any(re.search(r"(?i)gal[áa]ticos", cell) for cell in row if cell)
+            if not has_galaticos:
+                continue
+
+            # Find score
+            score_idx = None
+            our_score = None
+            opp_score = None
+            for idx, cell in enumerate(row):
+                parsed = parse_score(cell)
+                if parsed:
+                    score_idx = idx
+                    our_score, opp_score = parsed
+                    break
+
+            if score_idx is None or our_score is None or opp_score is None:
+                continue
+
+            # Find opponent (usually after score)
+            opponent = ""
+            if score_idx + 1 < len(row):
+                opponent = row[score_idx + 1].strip()
+            if not opponent:
+                opponent = "Unknown"
+
+            # Find goals description
+            goals_text = ""
+            for idx in range(score_idx + 2, len(row)):
+                if row[idx]:
+                    goals_text = row[idx]
+                    break
+
+            # Parse tournament name and season
+            if current_tournament_label:
+                champ_name, season = parse_championship_label(current_tournament_label, sheet_name)
+            else:
+                champ_name = sheet_name
+                season = DEFAULT_SEASON
+
+            champ_name = canonical_championship_name(champ_name)
+            format_type = infer_championship_format(champ_name)
+            match_date = placeholder_match_date_for_season(season)
+
+            # Get or create championship
+            championship = championships_collection.find_one({"name": champ_name})
+            if not championship:
+                championship_doc = {
+                    "name": champ_name,
+                    "format": format_type,
+                    "season-ids": [],
+                    "created-at": now,
+                    "updated-at": now,
+                }
+                result = championships_collection.insert_one(championship_doc)
+                championship_id = result.inserted_id
+            else:
+                championship_id = championship["_id"]
+
+            # Get or create season
+            season_doc = seasons_collection.find_one({
+                "championship-id": championship_id,
+                "season": season
+            })
+            if not season_doc:
+                try:
+                    year = int(season)
+                    start_dt = datetime(year, 1, 1)
+                    end_dt = datetime(year, 12, 31, 23, 59, 59)
+                except:
+                    start_dt = datetime(2025, 1, 1)
+                    end_dt = datetime(2025, 12, 31, 23, 59, 59)
+
+                new_season = {
+                    "championship-id": championship_id,
+                    "championship-name": champ_name,
+                    "season": season,
+                    "format": format_type,
+                    "status": "completed",
+                    "enrolled-player-ids": [],
+                    "match-ids": [],
+                    "winner-player-ids": [],
+                    "titles-award-count": 0,
+                    "titles-count": 0,
+                    "start-date": start_dt,
+                    "end-date": end_dt,
+                    "finished-at": now,
+                    "created-at": now,
+                    "updated-at": now,
+                }
+                result = seasons_collection.insert_one(new_season)
+                season_id = result.inserted_id
+                championships_collection.update_one(
+                    {"_id": championship_id},
+                    {"$addToSet": {"season-ids": season_id}, "$set": {"updated-at": now}},
+                )
+            else:
+                season_id = season_doc["_id"]
+
+            # Build player statistics from goals text
+            goals_entries = parse_goals_string(goals_text)
+            player_stats: List[Dict] = []
+            for player_name_raw, goals in goals_entries:
+                stat = build_player_stat(player_name_raw, goals)
+                if stat:
+                    player_stats.append(stat)
+
+            # Determine walkover
+            walkover = False
+            if our_score == 3 and opp_score == 0 and not player_stats:
+                walkover = True
+
+            # Compute outcome
+            if our_score > opp_score:
+                outcome = "win"
+            elif our_score < opp_score:
+                outcome = "loss"
+            else:
+                outcome = "draw"
+
+            # Upsert match using natural key
+            match_filter = {
+                "season-id": season_id,
+                "opponent": opponent,
+                "round": current_phase,
+                "home-score": our_score,
+                "away-score": opp_score,
+            }
+
+            existing_match = matches_collection.find_one(match_filter)
+            if existing_match:
+                update_fields = {
+                    "player-statistics": player_stats,
+                    "walkover": walkover,
+                    "data-source": "excel-seed",
+                    "updated-at": now,
+                }
+                if existing_match.get("date") is None:
+                    update_fields["date"] = match_date
+                matches_collection.update_one(
+                    {"_id": existing_match["_id"]},
+                    {"$set": update_fields},
+                )
+                matches_updated += 1
+            else:
+                match_doc = {
+                    "championship-id": championship_id,
+                    "season-id": season_id,
+                    "home-team-id": team_id,
+                    "away-team-id": None,
+                    "opponent": opponent,
+                    "date": match_date,
+                    "location": None,
+                    "round": current_phase,
+                    "status": "finished",
+                    "home-score": our_score,
+                    "away-score": opp_score,
+                    "result": {
+                        "our-score": our_score,
+                        "opponent-score": opp_score,
+                        "outcome": outcome,
+                    },
+                    "player-statistics": player_stats,
+                    "walkover": walkover,
+                    "data-source": "excel-seed",
+                    "version": 1,
+                    "created-at": now,
+                    "updated-at": now,
+                }
+                result = matches_collection.insert_one(match_doc)
+                # Link match to season
+                seasons_collection.update_one(
+                    {"_id": season_id},
+                    {"$addToSet": {"match-ids": result.inserted_id}, "$set": {"updated-at": now}},
+                )
+                matches_created += 1
+            sheet_matches += 1
+
+        if sheet_matches > 0:
+            print(f"  ✓ {sheet_name}: {sheet_matches} matches processed")
+
+    print(f"\n✓ Tournament sheets: {matches_created} created, {matches_updated} updated")
+    return matches_created, matches_updated
+
+
+def compute_season_performance(db) -> int:
+    """
+    Compute and update performance stats for each season based on matches.
+    
+    Returns:
+        Number of seasons updated
+    """
+    print("\n" + "=" * 60)
+    print("Step 6: Computing season performance stats")
+    print("=" * 60)
+
+    seasons_collection = db.seasons
+    matches_collection = db.matches
+    now = datetime.now(timezone.utc)
+    updated_count = 0
+
+    # Get all seasons
+    for season in seasons_collection.find({}):
+        season_id = season["_id"]
+        
+        # Get matches for this season
+        matches = list(matches_collection.find({"season-id": season_id}))
+        if not matches:
+            continue
+
+        games = len(matches)
+        wins = 0
+        draws = 0
+        losses = 0
+        goals_for = 0
+        goals_against = 0
+
+        for match in matches:
+            home_score = match.get("home-score", 0) or 0
+            away_score = match.get("away-score", 0) or 0
+            goals_for += home_score
+            goals_against += away_score
+
+            if home_score > away_score:
+                wins += 1
+            elif home_score < away_score:
+                losses += 1
+            else:
+                draws += 1
+
+        win_rate = round(wins / games, 3) if games > 0 else 0.0
+
+        performance = {
+            "games": games,
+            "wins": wins,
+            "draws": draws,
+            "losses": losses,
+            "goals-for": goals_for,
+            "goals-against": goals_against,
+            "win-rate": win_rate,
+        }
+
+        seasons_collection.update_one(
+            {"_id": season_id},
+            {"$set": {"performance": performance, "updated-at": now}},
+        )
+        updated_count += 1
+
+    print(f"✓ Updated performance stats for {updated_count} seasons")
+    return updated_count
+
+
+def parse_asbac_standings(
+    db,
+    excel_path: Path,
+) -> int:
+    """
+    Parse ASBAC sheet SIMULADOR section for league standings.
+    
+    Returns:
+        Number of standings documents created
+    """
+    print("\n" + "=" * 60)
+    print("Step 7: Parsing ASBAC standings (SIMULADOR)")
+    print("=" * 60)
+
+    try:
+        df = pd.read_excel(excel_path, sheet_name="ASBAC", header=None, engine="openpyxl")
+    except Exception as e:
+        print(f"  ⚠ Could not read ASBAC sheet: {e}")
+        return 0
+
+    if df.empty:
+        print("  ⚠ ASBAC sheet is empty")
+        return 0
+
+    standings_collection = db.standings
+    now = datetime.now(timezone.utc)
+    created_count = 0
+
+    # Find SIMULADOR section
+    num_rows, num_cols = df.shape
+    simulador_row = None
+    simulador_col = None
+
+    for i in range(num_rows):
+        for j in range(num_cols):
+            cell = df.iat[i, j]
+            if pd.notna(cell) and "SIMULADOR" in str(cell).upper():
+                simulador_row = i
+                simulador_col = j
+                break
+        if simulador_row is not None:
+            break
+
+    if simulador_row is None:
+        print("  ⚠ SIMULADOR section not found in ASBAC")
+        return 0
+
+    # Parse header row (should be right after SIMULADOR)
+    header_row = simulador_row + 1
+    if header_row >= num_rows:
+        print("  ⚠ No data after SIMULADOR header")
+        return 0
+
+    # Parse standings data (rows after header)
+    teams_data: List[Dict] = []
+    for i in range(header_row + 1, min(header_row + 20, num_rows)):  # Max 20 teams
+        row = [df.iat[i, j] if pd.notna(df.iat[i, j]) else "" for j in range(simulador_col, min(simulador_col + 8, num_cols))]
+        
+        if not row or not row[0]:
+            continue
+
+        # Expected format: position, team, V, E, D, PTS, SG
+        try:
+            position = safe_int(row[0], 0)
+            if position == 0:
+                continue
+            team_name = str(row[1]).strip() if len(row) > 1 else ""
+            if not team_name:
+                continue
+
+            wins = safe_int(row[2], 0) if len(row) > 2 else 0
+            draws = safe_int(row[3], 0) if len(row) > 3 else 0
+            losses = safe_int(row[4], 0) if len(row) > 4 else 0
+            points = safe_int(row[5], 0) if len(row) > 5 else 0
+            goal_diff = safe_int(row[6], 0) if len(row) > 6 else 0
+
+            teams_data.append({
+                "position": position,
+                "name": team_name,
+                "points": points,
+                "wins": wins,
+                "draws": draws,
+                "losses": losses,
+                "goal-diff": goal_diff,
+            })
+        except Exception:
+            continue
+
+    if not teams_data:
+        print("  ⚠ No standings data found")
+        return 0
+
+    # Determine tournament name (look for year in nearby cells)
+    tournament = "ASBAC Society"
+    for i in range(max(0, simulador_row - 5), simulador_row):
+        for j in range(num_cols):
+            cell = df.iat[i, j]
+            if pd.notna(cell):
+                cell_str = str(cell)
+                m = re.search(r"20\d{2}", cell_str)
+                if m:
+                    tournament = f"ASBAC Society {m.group(0)}"
+                    break
+
+    # Upsert standings document
+    existing = standings_collection.find_one({"tournament": tournament})
+    if existing:
+        standings_collection.update_one(
+            {"_id": existing["_id"]},
+            {"$set": {"teams": teams_data, "updated-at": now}},
+        )
+        print(f"  ✓ Updated standings for {tournament}: {len(teams_data)} teams")
+    else:
+        standings_doc = {
+            "tournament": tournament,
+            "teams": teams_data,
+            "created-at": now,
+            "updated-at": now,
+        }
+        standings_collection.insert_one(standings_doc)
+        created_count += 1
+        print(f"  ✓ Created standings for {tournament}: {len(teams_data)} teams")
+
+    return created_count
+
+
+def parse_asbac_records(
+    db,
+    excel_path: Path,
+    player_map: Dict[str, ObjectId],
+) -> int:
+    """
+    Parse ASBAC sheet CURIOSIDADES section for records.
+    
+    Returns:
+        Number of records documents created
+    """
+    print("\n" + "=" * 60)
+    print("Step 8: Parsing ASBAC records (CURIOSIDADES)")
+    print("=" * 60)
+
+    try:
+        df = pd.read_excel(excel_path, sheet_name="ASBAC", header=None, engine="openpyxl")
+    except Exception as e:
+        print(f"  ⚠ Could not read ASBAC sheet: {e}")
+        return 0
+
+    if df.empty:
+        return 0
+
+    records_collection = db.records
+    now = datetime.now(timezone.utc)
+    created_count = 0
+
+    # Find CURIOSIDADES section
+    num_rows, num_cols = df.shape
+    curiosidades_row = None
+    curiosidades_col = None
+
+    for i in range(num_rows):
+        for j in range(num_cols):
+            cell = df.iat[i, j]
+            if pd.notna(cell) and "CURIOSIDADES" in str(cell).upper():
+                curiosidades_row = i
+                curiosidades_col = j
+                break
+        if curiosidades_row is not None:
+            break
+
+    if curiosidades_row is None:
+        print("  ⚠ CURIOSIDADES section not found in ASBAC")
+        return 0
+
+    # Parse records (rows after CURIOSIDADES header)
+    record_types = {
+        "artilheiro": "top-scorer",
+        "maior artilheiro": "top-scorer",
+        "garçom": "top-assister",
+        "maior vitória": "biggest-win",
+        "maior vitoria": "biggest-win",
+        "pior derrota": "worst-loss",
+        "invicto": "unbeaten-streak",
+        "sequência": "streak",
+    }
+
+    for i in range(curiosidades_row + 1, min(curiosidades_row + 15, num_rows)):
+        row = [df.iat[i, j] if pd.notna(df.iat[i, j]) else "" for j in range(curiosidades_col, min(curiosidades_col + 6, num_cols))]
+        
+        if not row:
+            continue
+
+        for col_idx, cell in enumerate(row):
+            cell_str = str(cell).strip().lower()
+            for pt_key, en_type in record_types.items():
+                if pt_key in cell_str:
+                    # Extract value from adjacent cells
+                    value_parts = []
+                    for k in range(col_idx + 1, min(col_idx + 4, len(row))):
+                        if row[k]:
+                            value_parts.append(str(row[k]).strip())
+                    
+                    if not value_parts:
+                        continue
+
+                    description = " ".join(value_parts)
+                    value = value_parts[0] if value_parts else ""
+
+                    # Try to find player ID if it's a player record
+                    player_id = None
+                    if en_type in ("top-scorer", "top-assister"):
+                        for part in value_parts:
+                            pid = find_player_by_name(player_map, part)
+                            if pid:
+                                player_id = pid
+                                break
+
+                    # Upsert record
+                    record_filter = {"type": en_type, "tournament": "ASBAC"}
+                    existing = records_collection.find_one(record_filter)
+                    
+                    record_doc = {
+                        "type": en_type,
+                        "description": description,
+                        "tournament": "ASBAC",
+                        "value": value,
+                        "updated-at": now,
+                    }
+                    if player_id:
+                        record_doc["player-id"] = player_id
+
+                    if existing:
+                        records_collection.update_one(
+                            {"_id": existing["_id"]},
+                            {"$set": record_doc},
+                        )
+                    else:
+                        record_doc["created-at"] = now
+                        records_collection.insert_one(record_doc)
+                        created_count += 1
+                        print(f"  ✓ Created record: {en_type} - {description[:50]}")
+                    break
+
+    print(f"✓ Processed {created_count} new records")
+    return created_count
+
+
+def update_season_winners_from_excel(
+    db,
+    excel_path: Path,
+    sheet_names: List[str],
+    player_map: Dict[str, ObjectId],
+) -> int:
+    """
+    Update seasons.winner-player-ids from Excel sheet title columns.
+    
+    Returns:
+        Number of seasons updated
+    """
+    print("\n" + "=" * 60)
+    print("Step 9: Updating season winners from Excel")
+    print("=" * 60)
+
+    seasons_collection = db.seasons
+    championships_collection = db.championships
+    now = datetime.now(timezone.utc)
+    updated_count = 0
+
+    tournament_sheets = [s for s in sheet_names if s not in SKIP_SHEETS]
+
+    for sheet_name in tournament_sheets:
+        try:
+            df = pd.read_excel(excel_path, sheet_name=sheet_name, header=None, engine="openpyxl")
+        except Exception:
+            continue
+
+        if df.empty:
+            continue
+
+        num_rows, num_cols = df.shape
+        current_tournament_label: Optional[str] = None
+
+        # Find tournament label with year
+        for i in range(min(5, num_rows)):
+            for j in range(min(15, num_cols)):
+                cell = df.iat[i, j]
+                if pd.notna(cell):
+                    cell_str = str(cell)
+                    if re.search(r"20\d{2}", cell_str):
+                        current_tournament_label = cell_str
+                        break
+            if current_tournament_label:
+                break
+
+        if not current_tournament_label:
+            continue
+
+        champ_name, season = parse_championship_label(current_tournament_label, sheet_name)
+        champ_name = canonical_championship_name(champ_name)
+
+        # Find championship and season
+        championship = championships_collection.find_one({"name": champ_name})
+        if not championship:
+            continue
+
+        season_doc = seasons_collection.find_one({
+            "championship-id": championship["_id"],
+            "season": season
+        })
+        if not season_doc:
+            continue
+
+        # Find header row with "Títulos" column
+        header_row_idx = None
+        titles_col_idx = None
+        player_col_idx = None
+
+        for i in range(min(10, num_rows)):
+            row = [str(df.iat[i, j]).strip().lower() if pd.notna(df.iat[i, j]) else "" for j in range(num_cols)]
+            for j, cell in enumerate(row):
+                if "atleta" in cell and player_col_idx is None:
+                    player_col_idx = j
+                    header_row_idx = i
+                if "título" in cell or "titulos" in cell:
+                    titles_col_idx = j
+            if header_row_idx is not None and titles_col_idx is not None:
+                break
+
+        if header_row_idx is None or titles_col_idx is None or player_col_idx is None:
+            continue
+
+        # Find players with titles > 0
+        winner_ids: List[ObjectId] = []
+        for i in range(header_row_idx + 1, num_rows):
+            player_cell = df.iat[i, player_col_idx]
+            titles_cell = df.iat[i, titles_col_idx]
+
+            if not pd.notna(player_cell):
+                continue
+
+            player_name = normalize_player_name(str(player_cell))
+            if not player_name:
+                continue
+
+            titles = safe_int(titles_cell, 0)
+            if titles > 0:
+                player_id = find_player_by_name(player_map, player_name)
+                if player_id and player_id not in winner_ids:
+                    winner_ids.append(player_id)
+
+        if winner_ids:
+            seasons_collection.update_one(
+                {"_id": season_doc["_id"]},
+                {
+                    "$set": {
+                        "winner-player-ids": winner_ids,
+                        "titles-count": 1,
+                        "titles-award-count": 1,
+                        "updated-at": now,
+                    }
+                },
+            )
+            updated_count += 1
+
+    print(f"✓ Updated winners for {updated_count} seasons")
+    return updated_count
+
+
 def clear_database(db, keep_admins: bool = False) -> None:
     """
     Clear all seed data from database
@@ -1827,7 +2579,9 @@ def clear_database(db, keep_admins: bool = False) -> None:
         "players": "Players",
         "championships": "Championships",
         "seasons": "Seasons",
-        "matches": "Matches"
+        "matches": "Matches",
+        "standings": "Standings",
+        "records": "Records",
     }
     
     if not keep_admins:
@@ -1880,6 +2634,15 @@ Examples:
 
   # Re-enable old imports from Excel championship tabs and/or data/*.csv
   python seed_mongodb.py --import-excel-championships --import-data-csv
+
+  # Import matches from tournament sheets + compute season performance
+  python seed_mongodb.py --import-tournament-matches
+
+  # Import ASBAC standings and records
+  python seed_mongodb.py --import-asbac-data
+
+  # Full enrichment (all new features)
+  python seed_mongodb.py --reset --import-tournament-matches --import-asbac-data
         """
     )
     parser.add_argument(
@@ -1911,6 +2674,16 @@ Examples:
         "--import-data-csv",
         action="store_true",
         help="Legacy: import championships/matches from data/*.csv (excl. galaticos, BASE_DADOS)",
+    )
+    parser.add_argument(
+        "--import-tournament-matches",
+        action="store_true",
+        help="Parse match results from Excel tournament sheets into matches collection",
+    )
+    parser.add_argument(
+        "--import-asbac-data",
+        action="store_true",
+        help="Parse ASBAC standings (SIMULADOR) and records (CURIOSIDADES)",
     )
 
     args = parser.parse_args()
@@ -2095,6 +2868,37 @@ Examples:
         db, player_map, team_id, DEFAULT_SEASON, canonical_df, canonical_source
     )
 
+    # Step 5: Process tournament sheets for matches (if flag set)
+    matches_from_sheets = 0
+    if args.import_tournament_matches:
+        matches_created, matches_updated = process_excel_tournament_sheets(
+            db, excel_path, sheet_names, player_map, team_id
+        )
+        matches_from_sheets = matches_created + matches_updated
+
+        # Step 6: Compute season performance stats
+        compute_season_performance(db)
+
+        # Step 9: Update season winners from Excel
+        update_season_winners_from_excel(db, excel_path, sheet_names, player_map)
+    else:
+        print("\n" + "=" * 60)
+        print("Step 5: Tournament sheet match import")
+        print("=" * 60)
+        print("  Skipped. Use --import-tournament-matches to parse matches from Excel sheets.")
+
+    # Step 7-8: Parse ASBAC special data (if flag set)
+    standings_count = 0
+    records_count = 0
+    if args.import_asbac_data:
+        standings_count = parse_asbac_standings(db, excel_path)
+        records_count = parse_asbac_records(db, excel_path, player_map)
+    else:
+        print("\n" + "=" * 60)
+        print("Step 7-8: ASBAC special data import")
+        print("=" * 60)
+        print("  Skipped. Use --import-asbac-data to parse standings and records.")
+
     # Step 4: Update team with active player IDs
     print("\n" + "=" * 60)
     print("Step 4: Updating team with active players")
@@ -2123,6 +2927,11 @@ Examples:
     print(f"✓ Players processed: {len(player_map)}")
     print(f"✓ Championships processed: {championships_created}")
     print(f"✓ Total player-championship records: {total_players_processed}")
+    if args.import_tournament_matches:
+        print(f"✓ Matches from tournament sheets: {matches_from_sheets}")
+    if args.import_asbac_data:
+        print(f"✓ Standings documents: {standings_count}")
+        print(f"✓ Records documents: {records_count}")
     print("\n--- Admin credentials (dev) ---")
     print(f"  Username: {admin_user}")
     print(f"  Password: {admin_pass}")

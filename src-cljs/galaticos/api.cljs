@@ -220,6 +220,24 @@
 (defn delete-player [id on-success on-error]
   (delete-request (str "/api/players/" id) on-success on-error))
 
+(defn get-player-duplicates
+  ([on-success on-error]
+   (get-request "/api/players/duplicates" {} on-success on-error))
+  ([opts on-success on-error]
+   (let [params (cond-> {}
+                   (seq (:championship-id opts))
+                   (assoc :championship-id (:championship-id opts)))]
+     (get-request "/api/players/duplicates" params on-success on-error))))
+
+(defn get-merge-candidates [player-id opts on-success on-error]
+  (let [params (cond-> {}
+                  (:championship-id opts) (assoc :championship-id (:championship-id opts))
+                  (some? (:min-similarity opts)) (assoc :min-similarity (:min-similarity opts)))]
+    (get-request (str "/api/players/" player-id "/merge-candidates") params on-success on-error)))
+
+(defn merge-players [payload on-success on-error]
+  (post-request "/api/players/merge" payload on-success on-error))
+
 ;; Championships API
 (defn get-championships [params on-success on-error]
   (get-request "/api/championships" params on-success on-error))
