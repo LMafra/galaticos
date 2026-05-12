@@ -106,9 +106,15 @@ Sintoma: `RUN clj -P` falha com **Connect timed out** a `repo.clojars.org`, enqu
 
 Causa típica: rede do **bridge** do Docker na VPS (MTU, rota ou limite de concorrência) comporta-se pior que a rede do host.
 
-### Opção A — `docker build` com rede do host
+### Opção A (preferida) — `docker compose build` com rede do host no Compose
 
-O Compose pode não aceitar `docker compose build --network host`. Usar:
+O [docker-compose.prod.yml](../../../config/docker/docker-compose.prod.yml) define `build.network: host` no serviço `app`, para que `docker compose … build app` e `./bin/galaticos docker:prod deploy(:clean)` usem a rede do host durante o build (evita o timeout ao Clojars na maioria das VPS).
+
+Se ainda falhar, usar a **Opção A′** (`docker build --network host`) ou as opções B/C abaixo.
+
+### Opção A′ — `docker build` com rede do host (manual)
+
+Se precisares de construir a imagem sem Compose ou com etiqueta explícita, usar:
 
 ```bash
 cd /opt/galaticos
