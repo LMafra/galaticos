@@ -126,6 +126,15 @@
       (log/error e user-message)
       (resp/server-error user-message))))
 
+(defn- enrolled-object-id-set
+  "ObjectIds enrolled on a championship or season doc. Tolerates legacy scalar :enrolled-player-ids."
+  [m]
+  (let [raw (:enrolled-player-ids m [])]
+    (set (cond
+           (sequential? raw) raw
+           (some? raw) [raw]
+           :else []))))
+
 (defn list-championships
   "List all championships"
   [request]
@@ -249,7 +258,7 @@
         (resp/error "Championship ID and player ID are required" 400)
         (if-let [_player (players-db/find-by-id player-id)]
           (if-let [active-season (seasons-db/find-active-by-championship championship-id)]
-            (let [enrolled (set (:enrolled-player-ids active-season []))
+            (let [enrolled (enrolled-object-id-set active-season)
                   max-players (:max-players active-season)
                   already-enrolled? (contains? enrolled (resp/->object-id player-id))]
               (if (and max-players (>= (count enrolled) max-players) (not already-enrolled?))
@@ -258,7 +267,7 @@
                   (seasons-db/add-player (:_id active-season) player-id)
                   (resp/success {:message "Player enrolled"}))))
             (if-let [championship (championships-db/find-by-id championship-id)]
-              (let [enrolled (set (:enrolled-player-ids championship []))
+              (let [enrolled (enrolled-object-id-set championship)
                     max-players (:max-players championship)
                     already-enrolled? (contains? enrolled (resp/->object-id player-id))]
                 (if (and max-players (>= (count enrolled) max-players) (not already-enrolled?))

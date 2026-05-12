@@ -99,6 +99,24 @@
         (is (thrown-with-msg? clojure.lang.ExceptionInfo #"already exists"
                               (seasons/create {:championship-id cid :season "2026"})))))))
 
+(deftest create-leaves-enrolled-vector-when-enrolled-nil
+  "Regression: handler may pass :enrolled-player-ids nil; merge must not store BSON null
+  (Mongo $addToSet on null throws and breaks championship enroll)."
+  (let [last-doc (atom nil)
+        {:keys [find-one find-maps insert update remove] :as st} (mc-store-fixture [])
+        capture-insert (fn [db coll doc]
+                         (reset! last-doc doc)
+                         (insert db coll doc))]
+    (with-redefs [db-core/db (constantly :db)
+                  mc/find-one-as-map find-one
+                  mc/find-maps find-maps
+                  mc/insert capture-insert
+                  mc/update update
+                  mc/remove remove
+                  championships-db/add-season-id (fn [_ _])]
+      (seasons/create {:championship-id cid :season "2099-reg-nil-enroll" :enrolled-player-ids nil})
+      (is (= [] (:enrolled-player-ids @last-doc))))))
+
 (deftest update-and-delete-by-id
   (let [sid (ObjectId.)
         doc {:_id sid :season "A" :championship-id cid-oid :status "inactive"}

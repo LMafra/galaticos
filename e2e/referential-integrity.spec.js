@@ -1,16 +1,24 @@
 const { test, expect } = require('@playwright/test');
-const { saveCoverage } = require('./_helpers');
+const { getAdminToken, saveCoverage } = require('./_helpers');
 
-async function apiJson(page, token, method, url, data = undefined) {
-  const response = await page.request.fetch(url, {
+/**
+ * @param {import('@playwright/test').APIRequestContext} request
+ * @param {string} token
+ * @param {string} method
+ * @param {string} path
+ * @param {Record<string, unknown>} [data]
+ */
+async function apiJson(request, token, method, path, data = undefined) {
+  const opts = {
     method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    data,
-  });
-  const body = await response.json();
+    headers: { Authorization: `Bearer ${token}` },
+  };
+  if (data !== undefined && method !== 'GET') {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.data = data;
+  }
+  const response = await request.fetch(path, opts);
+  const body = await response.json().catch(() => ({}));
   return { response, body };
 }
 
@@ -44,56 +52,51 @@ test.describe('Referential integrity - delete protection', { tag: '@integrity' }
     }
   });
 
-  test('deleting championship with matches shows error message', async ({ page }, testInfo) => {
+  test('deleting championship with matches shows error message', async ({ page, request }, testInfo) => {
     try {
-      const loginResponse = await page.request.post('/api/auth/login', {
-        data: { username: 'admin', password: 'admin' },
-      });
-      expect(loginResponse.ok()).toBeTruthy();
-      const loginBody = await loginResponse.json();
-      const token = loginBody?.data?.token;
-      expect(token).toBeTruthy();
+      const token = await getAdminToken(request);
+      expect(token, 'admin token (db:seed-smoke: admin/admin)').toBeTruthy();
 
-      const unique = Date.now();
+      const unique = `${Date.now()}-${testInfo.parallelIndex}-${testInfo.retry}`;
       const { body: createdChampionshipBody, response: createdChampionshipResponse } = await apiJson(
-        page,
+        request,
         token,
         'POST',
         '/api/championships',
         { name: `Campeonato Integridade E2E ${unique}`, season: '2026', 'titles-count': 0 }
       );
-      expect(createdChampionshipResponse.ok()).toBeTruthy();
+      expect(createdChampionshipResponse.ok(), JSON.stringify(createdChampionshipBody)).toBeTruthy();
       const championshipId = createdChampionshipBody?.data?._id;
       expect(championshipId).toBeTruthy();
 
       const { body: createdTeamBody, response: createdTeamResponse } = await apiJson(
-        page,
+        request,
         token,
         'POST',
         '/api/teams',
         { name: `Time Integridade E2E ${unique}` }
       );
-      expect(createdTeamResponse.ok()).toBeTruthy();
+      expect(createdTeamResponse.ok(), JSON.stringify(createdTeamBody)).toBeTruthy();
       const teamId = createdTeamBody?.data?._id;
       expect(teamId).toBeTruthy();
 
       const { body: createdPlayerBody, response: createdPlayerResponse } = await apiJson(
-        page,
+        request,
         token,
         'POST',
         '/api/players',
         {
           name: `Jogador Integridade E2E ${unique}`,
           position: 'Atacante',
-          'team-id': teamId,
+          'team-id': String(teamId),
         }
       );
-      expect(createdPlayerResponse.ok()).toBeTruthy();
+      expect(createdPlayerResponse.ok(), JSON.stringify(createdPlayerBody)).toBeTruthy();
       const playerId = createdPlayerBody?.data?._id;
       expect(playerId).toBeTruthy();
 
       const { response: enrollResponse } = await apiJson(
-        page,
+        request,
         token,
         'POST',
         `/api/championships/${championshipId}/enroll/${playerId}`,
@@ -102,22 +105,24 @@ test.describe('Referential integrity - delete protection', { tag: '@integrity' }
       expect(enrollResponse.ok()).toBeTruthy();
 
       const { response: createMatchResponse } = await apiJson(
-        page,
+        request,
         token,
         'POST',
         '/api/matches',
         {
-          'championship-id': championshipId,
-          'home-team-id': teamId,
+          'championship-id': String(championshipId),
+          'home-team-id': String(teamId),
           date: '2026-03-26',
           opponent: 'Adversário Integridade E2E',
-          'player-statistics': [{ 'player-id': playerId, 'team-id': teamId, goals: 0 }],
+          'player-statistics': [
+            { 'player-id': String(playerId), 'team-id': String(teamId), goals: 0 },
+          ],
         }
       );
       expect(createMatchResponse.ok()).toBeTruthy();
 
       await page.goto(`/#/championships/${championshipId}`);
-      await expect(page.getByRole('heading', { name: /Campeonato Integridade E2E/ })).toBeVisible();
+      await expect(page.getByRole('heading', { name: new RegExp(`Campeonato Integridade E2E ${unique}`) })).toBeVisible();
       await expect(page.getByRole('button', { name: 'Deletar' })).toBeVisible({ timeout: 5000 });
       page.on('dialog', (dialog) => dialog.accept());
       await page.getByRole('button', { name: 'Deletar' }).click();

@@ -54,6 +54,7 @@
     (let [id (ObjectId.)
           created-at (now)
           status (or status "inactive")
+          ;; Do not let nil :enrolled-player-ids from callers overwrite the default []; Mongo $addToSet fails on null.
           doc (merge {:championship-id (->object-id championship-id)
                        :season season
                        :status status
@@ -68,7 +69,9 @@
                        :finished-at nil
                        :created-at created-at
                        :updated-at created-at}
-                      season-data
+                      (dissoc season-data :enrolled-player-ids)
+                      (when (some? (:enrolled-player-ids season-data))
+                        {:enrolled-player-ids (:enrolled-player-ids season-data)})
                       {:_id id
                        :championship-id (->object-id championship-id)})]
       (mc/insert (db) collection-name doc)
