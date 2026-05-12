@@ -37,10 +37,16 @@ Para operações típicas em **VPS + domínio externo** (SSH, localização do `
 Para atualizar só a aplicação após alterações de código:
 
 ```bash
-docker compose -f config/docker/docker-compose.prod.yml up -d --build app
+./bin/galaticos docker:prod deploy
 ```
 
-(Isto reconstrói e reinicia o serviço `app`; o MongoDB e o volume `mongodb-data-prod` permanecem.)
+(Isto faz `docker build --network host` no `Dockerfile.prod` e recria o serviço `app`; o MongoDB e o volume `mongodb-data-prod` permanecem. Em VPS com timeouts ao Clojars, **não** substituir por `docker compose … build` sem rede host — ver [vps-hospedeiro.md §4](vps-hospedeiro.md).)
+
+Alternativa equivalente em termos de Compose (pode falhar na VPS se o build não usar rede host de ponta a ponta):
+
+```bash
+docker compose -f config/docker/docker-compose.prod.yml up -d --build app
+```
 
 ## Seed e scripts de dados
 
@@ -123,7 +129,7 @@ Sem `--drop`, o `mongorestore` **funde** com dados existentes. Com `--drop`, **s
 | Ação | Comando / nota |
 |------|----------------|
 | Subir stack | `./bin/galaticos docker:prod start` |
-| Redeploy só app | `docker compose -f config/docker/docker-compose.prod.yml up -d --build app` |
+| Redeploy só app | `./bin/galaticos docker:prod deploy` (ou `deploy:clean` se mudaram deps); ver [vps-hospedeiro.md §4](vps-hospedeiro.md) se `docker compose … build` falhar ao Clojars |
 | Índices | `MONGO_URI=... DB_NAME=galaticos ./bin/galaticos db:setup` |
 | Seed sem wipe | `GALATICOS_ENV=production MONGO_URI=... ./bin/galaticos db:seed` |
 | Backup | `MONGO_URI=... ./bin/galaticos db:backup` |

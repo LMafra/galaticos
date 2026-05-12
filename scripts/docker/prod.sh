@@ -32,12 +32,8 @@ fi
 
 case "$COMMAND" in
     build)
-        log_info "Building production Docker images..."
-        $DOCKER_COMPOSE_CMD -f "$COMPOSE_FILE" build || {
-            log_error "Failed to build Docker images"
-            exit 1
-        }
-        log_success "Build complete!"
+        log_info "Building production app image (docker build --network host; reliable Clojars on VPS)…"
+        exec "$SCRIPT_DIR/prod-vps-build-app.sh" host
         ;;
     start)
         log_info "Starting Docker production environment..."
@@ -68,36 +64,54 @@ case "$COMMAND" in
         log_success "Services restarted!"
         ;;
     deploy)
-        log_info "Building app image (MongoDB untouched)..."
-        $DOCKER_COMPOSE_CMD -f "$COMPOSE_FILE" build app || {
-            log_error "Failed to build app image"
-            exit 1
-        }
-        log_info "Recreating app container..."
-        $DOCKER_COMPOSE_CMD -f "$COMPOSE_FILE" up -d --force-recreate --no-deps app || {
-            log_error "Failed to recreate app container"
-            exit 1
-        }
-        log_success "Deploy complete! Monitor with: ./bin/galaticos docker:prod logs"
+        log_info "Deploy: host-network Docker build + recreate app (MongoDB untouched; avoids Clojars timeouts from compose/BuildKit)…"
+        exec "$SCRIPT_DIR/prod-vps-build-app.sh" host-deploy
         ;;
     deploy:clean)
-        log_info "Building app image without cache (MongoDB untouched)..."
-        $DOCKER_COMPOSE_CMD -f "$COMPOSE_FILE" build --no-cache app || {
-            log_error "Failed to build app image"
-            exit 1
-        }
-        log_info "Recreating app container..."
-        $DOCKER_COMPOSE_CMD -f "$COMPOSE_FILE" up -d --force-recreate --no-deps app || {
-            log_error "Failed to recreate app container"
-            exit 1
-        }
-        log_success "Deploy complete! Monitor with: ./bin/galaticos docker:prod logs"
+        log_info "Deploy (no cache): host-network Docker build + recreate app…"
+        exec "$SCRIPT_DIR/prod-vps-build-app.sh" host-deploy --no-cache
         ;;
     clean)
         log_info "Removing stopped app container and dangling images..."
         $DOCKER_COMPOSE_CMD -f "$COMPOSE_FILE" rm -f app || true
         docker image prune -f
         log_success "Cleanup complete!"
+        ;;
+    build:app)
+        shift
+        exec "$SCRIPT_DIR/prod-vps-build-app.sh" host "$@"
+        ;;
+    build:app:clean)
+        exec "$SCRIPT_DIR/prod-vps-build-app.sh" host --no-cache
+        ;;
+    deploy:app)
+        shift
+        exec "$SCRIPT_DIR/prod-vps-build-app.sh" host-deploy "$@"
+        ;;
+    deploy:app:clean)
+        exec "$SCRIPT_DIR/prod-vps-build-app.sh" host-deploy --no-cache
+        ;;
+    build:app:compose)
+        shift
+        exec "$SCRIPT_DIR/prod-vps-build-app.sh" compose "$@"
+        ;;
+    deploy:app:compose)
+        shift
+        exec "$SCRIPT_DIR/prod-vps-build-app.sh" compose-deploy "$@"
+        ;;
+    build:vps-host)
+        shift
+        exec "$SCRIPT_DIR/prod-vps-build-app.sh" host "$@"
+        ;;
+    deploy:vps-host)
+        shift
+        exec "$SCRIPT_DIR/prod-vps-build-app.sh" host-deploy "$@"
+        ;;
+    hint:vps-docker-mtu)
+        exec "$SCRIPT_DIR/prod-vps-build-app.sh" mtu-hint
+        ;;
+    hint:vps-ci-build)
+        exec "$SCRIPT_DIR/prod-vps-build-app.sh" ci-hint
         ;;
     logs)
         log_info "Showing Docker logs (Ctrl+C to exit)..."
@@ -113,9 +127,19 @@ case "$COMMAND" in
         echo "Usage: ./bin/galaticos docker:prod [command]"
         echo ""
         echo "Commands:"
-        echo "  deploy       - Build app image (layer cache) and recreate app container only"
-        echo "  deploy:clean - Build app image without cache (use when deps changed) and recreate"
-        echo "  build        - Build all production images"
+        echo "  deploy         - docker build --network host + recreate app (default; Clojars-safe on VPS)"
+        echo "  deploy:clean   - Same with --no-cache (deps / Dockerfile changes)"
+        echo "  build          - Host-network build of app image only (same Dockerfile as deploy)"
+        echo "  build:app      - Same as build (optional --no-cache)"
+        echo "  build:app:clean - build:app with --no-cache"
+        echo "  deploy:app     - Same as deploy (optional --no-cache)"
+        echo "  deploy:app:clean - Same as deploy:clean"
+        echo "  build:app:compose   - docker compose build app (bridge; may timeout to Clojars on VPS)"
+        echo "  deploy:app:compose  - compose build + recreate app"
+        echo "  build:vps-host  - Same as build:app (explicit name)"
+        echo "  deploy:vps-host - Same as deploy (override tag: PROD_APP_IMAGE=...)"
+        echo "  hint:vps-docker-mtu - print MTU 1400 /etc/docker/daemon.json hint"
+        echo "  hint:vps-ci-build   - print CI + registry offload hint"
         echo "  start        - Start all services"
         echo "  stop         - Stop all services"
         echo "  restart      - Restart all services"

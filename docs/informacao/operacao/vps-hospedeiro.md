@@ -90,11 +90,10 @@ Fluxo correto após `git pull`:
 ```bash
 cd /opt/galaticos
 git fetch origin && git checkout main && git pull origin main
-docker compose -f config/docker/docker-compose.prod.yml build --no-cache app
-docker compose -f config/docker/docker-compose.prod.yml up -d --force-recreate app
+./bin/galaticos docker:prod deploy:clean
 ```
 
-Se o plugin `docker compose build` **não** suportar `--network host`, usar `docker build` diretamente (ver secção 4).
+(`deploy:clean` usa `docker build --network host` e evita timeouts ao Clojars a meio do Dockerfile; ver secção 4. Para só cache incremental: `./bin/galaticos docker:prod deploy`.)
 
 O MongoDB e o volume `mongodb-data-prod` mantêm-se; ver [runbook-producao.md](runbook-producao.md) para o que **nunca** fazer (`down -v` sem backup).
 
@@ -102,19 +101,32 @@ O MongoDB e o volume `mongodb-data-prod` mantêm-se; ver [runbook-producao.md](r
 
 ## 4. Build na VPS: timeout ao Clojars (`repo.clojars.org`)
 
-Sintoma: `RUN clj -P` falha com **Connect timed out** a `repo.clojars.org`, enquanto no **host** `curl https://repo.clojars.org` funciona.
+**Scripts (a partir da raiz do repo):** ver [`scripts/docker/prod-vps-build-app.sh`](../../../scripts/docker/prod-vps-build-app.sh) e o wrapper `./bin/galaticos docker:prod …`:
+
+| Situação | Comando típico |
+|----------|------------------|
+| Deploy normal (build em **rede host** + recriar `app`) | `./bin/galaticos docker:prod deploy` ou `deploy:clean` |
+| Só construir imagem `app` (rede host) | `./bin/galaticos docker:prod build` / `build:app` / `build:app:clean` |
+| Build **só** com `docker compose build app` (rede bridge; pode falhar a meio do Dockerfile no VPS) | `./bin/galaticos docker:prod build:app:compose` |
+| Deploy com compose build (não recomendado na VPS com timeouts) | `./bin/galaticos docker:prod deploy:app:compose` |
+| Dica MTU / daemon.json | `./bin/galaticos docker:prod hint:vps-docker-mtu` |
+| Dica build em CI + registry | `./bin/galaticos docker:prod hint:vps-ci-build` |
+
+Sintoma: `RUN clj …` no Dockerfile falha com **Connect timed out** a `repo.clojars.org` (por exemplo em `clj -M:build:frontend` **depois** de `clj -P` já ter passado), enquanto no **host** `curl https://repo.clojars.org` funciona.
 
 Causa típica: rede do **bridge** do Docker na VPS (MTU, rota ou limite de concorrência) comporta-se pior que a rede do host.
 
-### Opção A (preferida) — `docker compose build` com rede do host no Compose
+### Opção A (preferida) — `./bin/galaticos docker:prod deploy`
 
-O [docker-compose.prod.yml](../../../config/docker/docker-compose.prod.yml) define `build.network: host` no serviço `app`, para que `docker compose … build app` e `./bin/galaticos docker:prod deploy(:clean)` usem a rede do host durante o build (evita o timeout ao Clojars na maioria das VPS).
+Os comandos **`deploy`**, **`deploy:clean`**, **`build`**, **`build:app`**, **`deploy:app`** usam **`docker build --network host`** (script [`prod-vps-build-app.sh`](../../../scripts/docker/prod-vps-build-app.sh)), para que **todos** os passos `RUN clj …` do [Dockerfile.prod](../../../config/docker/Dockerfile.prod) vejam a rede do host. Isto evita o caso em que `docker compose build` + `build.network: host` no YAML ainda deixa **algum** passo BuildKit na bridge e o `clj -M:build:frontend` volta a dar **Connect timed out** ao Clojars.
 
-Se ainda falhar, usar a **Opção A′** (`docker build --network host`) ou as opções B/C abaixo.
+Para forçar o caminho antigo (`docker compose build app`), usar **`build:app:compose`** / **`deploy:app:compose`** (não recomendado na VPS com timeouts).
 
-### Opção A′ — `docker build` com rede do host (manual)
+### Opção A′ (YAML) — `build.network: host` no Compose
 
-Se precisares de construir a imagem sem Compose ou com etiqueta explícita, usar:
+O [docker-compose.prod.yml](../../../config/docker/docker-compose.prod.yml) pode definir `build.network: host` no serviço `app`; ajuda quem corre **`docker compose … build app`** manualmente, mas **não** é tão fiável como o `docker build --network host` dos scripts acima em todas as versões Docker/BuildKit.
+
+### Manual (sem `./bin/galaticos`, equivalente ao deploy com rede host)
 
 ```bash
 cd /opt/galaticos
@@ -128,10 +140,10 @@ docker build --network host --no-cache \
   -f config/docker/Dockerfile.prod \
   -t docker-app:latest \
   .
-docker compose -f config/docker/docker-compose.prod.yml up -d --force-recreate app
+docker compose -f config/docker/docker-compose.prod.yml up -d --force-recreate --no-deps app
 ```
 
-Ajustar `-t` ao nome que o Compose espera, se for diferente.
+Ajustar `-t` ao nome que o Compose espera, se for diferente (ou `PROD_APP_IMAGE=…` ao usar o script).
 
 ### Opção B — MTU do Docker
 
