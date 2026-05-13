@@ -1,40 +1,35 @@
 {:deps {:aliases [:frontend]}
  :builds
  {:app {:target :browser
-        ;; Required for shadow.lazy + :modules: injects shadow$modules and shadow.loader.init on the main chunk.
-        :module-loader true
+        ;; Single module: avoids shadow.loader + second GET /js/compiled/pages.js (cache / proxy / flaky loads).
         :output-dir "resources/public/js/compiled"
         :asset-path "/js/compiled"
         :modules {:app {:init-fn galaticos.core/init
-                        :entries [galaticos.core]}
-                  :pages {:entries [galaticos.components.dashboard
-                                    galaticos.components.aggregations
-                                    galaticos.components.players
-                                    galaticos.components.matches
-                                    galaticos.components.championships
-                                    galaticos.components.teams]
-                          :depends-on #{:app}}}
+                        :entries [galaticos.core
+                                  galaticos.components.dashboard
+                                  galaticos.components.aggregations
+                                  galaticos.components.players
+                                  galaticos.components.matches
+                                  galaticos.components.championships
+                                  galaticos.components.teams]}}
         :devtools {:after-load galaticos.core/reload
                    :watch-dir "resources/public"}
         :dev {:compiler-options {:source-map true}}
         :release {:compiler-options {:optimizations :advanced
-                                     :source-map false
-                                     :pretty-print false}}}
+                                    :source-map false
+                                    :pretty-print false}}}
   :app-coverage {:target :browser
-                 :module-loader true
                  :output-dir "resources/public/js/compiled"
                  :asset-path "/js/compiled"
                  :modules {:app {:init-fn galaticos.core/init
-                                 :entries [galaticos.core]}
-                           :pages {:entries [galaticos.components.dashboard
-                                             galaticos.components.aggregations
-                                             galaticos.components.players
-                                             galaticos.components.matches
-                                             galaticos.components.championships
-                                             galaticos.components.teams]
-                                   :depends-on #{:app}}}
+                                 :entries [galaticos.core
+                                           galaticos.components.dashboard
+                                           galaticos.components.aggregations
+                                           galaticos.components.players
+                                           galaticos.components.matches
+                                           galaticos.components.championships
+                                           galaticos.components.teams]}}
                  :devtools {:after-load galaticos.core/reload
                             :watch-dir "resources/public"}
                  :compiler-options {:instrument true}
                  :dev {:compiler-options {:source-map true}}}}}
-

@@ -53,7 +53,7 @@
         (rfe/push-state :dashboard)
         [:div {:style {:text-align "center" :padding "40px"}} "Redirecionando..."])
       
-      ;; Authenticated routes (heavy pages load async via shadow.lazy / :pages chunk)
+      ;; Authenticated routes (page components bundled in main release chunk)
       match (case route-name
               :home [lazy-p/loadable-route lazy-p/dashboard]
               :dashboard [lazy-p/loadable-route lazy-p/dashboard]
