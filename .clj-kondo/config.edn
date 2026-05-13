@@ -1,5 +1,2 @@
 {:linters {:unresolved-symbol {:level :warning}
-           :unresolved-namespace {:level :warning}}
- ;; lazy_pages: qualified syms for shadow.lazy/loadable (no :require — keeps :pages chunk); with-let bindings.
- :config-in-ns {galaticos.lazy-pages {:linters {:unresolved-namespace {:level :off}
-                                                :unresolved-symbol {:level :off}}}}}
+           :unresolved-namespace {:level :warning}}}
