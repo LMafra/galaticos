@@ -37,12 +37,14 @@
 (defn- championship-id= [a b]
   (= (agg-entity-id-str a) (agg-entity-id-str b)))
 
-(defn- match-player-id-str-set
+(defn- ^{:clj-kondo/ignore [:unused-private-var]}
+  match-player-id-str-set
   "Ids from match player-statistics for comparing to aggregation :player-id (ObjectId vs string)."
   [player-ids]
   (into #{} (comp (remove nil?) (map str)) player-ids))
 
-(defn- stats-row-for-match-players?
+(defn- ^{:clj-kondo/ignore [:unused-private-var]}
+  stats-row-for-match-players?
   [player-stats match-pid-str-set]
   (let [pid (:player-id player-stats)]
     (boolean (and pid (contains? match-pid-str-set (str pid))))))

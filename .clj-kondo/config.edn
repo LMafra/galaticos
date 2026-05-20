@@ -1,2 +1,14 @@
-{:linters {:unresolved-symbol {:level :warning}
-           :unresolved-namespace {:level :warning}}}
+{:lint-as {monger.operators/$set clojure.core/identity
+           monger.operators/$setOnInsert clojure.core/identity
+           monger.operators/$inc clojure.core/identity
+           monger.operators/$push clojure.core/identity
+           monger.operators/$elemMatch clojure.core/identity
+           monger.operators/$in clojure.core/identity}
+ :linters {:unresolved-symbol {:level :warning}
+           :unresolved-namespace {:level :warning}
+           :unresolved-var {:exclude #{monger.operators/$set
+                                       monger.operators/$setOnInsert
+                                       monger.operators/$inc
+                                       monger.operators/$push
+                                       monger.operators/$elemMatch
+                                       monger.operators/$in}}}}

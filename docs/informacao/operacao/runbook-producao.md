@@ -2,7 +2,7 @@
 
 Este documento descreve como fazer deploy e manutenção do Galáticos em produção **sem perder dados** no MongoDB.
 
-Para operações típicas em **VPS + domínio externo** (SSH, localização do `.env`, Nginx, timeouts do Clojars no `docker build`, seed com `MONGO_URI`), ver [vps-hospedeiro.md](vps-hospedeiro.md).
+Para operações típicas em **VPS + domínio externo** (SSH, localização do `.env`, Nginx, timeouts do Clojars no `docker build`, seed com `MONGO_URI`), ver [vps-hospedeiro.md](vps-hospedeiro.md). Para uma **cronologia sintética** de um incidente real (maio/2026) nesse ambiente, ver [incidente-deploy-vps-frontend-2026-05.md](incidente-deploy-vps-frontend-2026-05.md).
 
 ## Princípios
 

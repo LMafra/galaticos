@@ -347,7 +347,7 @@
                           [(or (common/format-match-calendar-date (:date match)) "—")
                            (:opponent match)
                            (:venue match)
-                           (common/format-match-result (:result match))])
+                           (common/format-match-result match)])
                         @matches)
                    :sortable? true
                    :dense? true]
@@ -614,7 +614,7 @@
                          [(or (common/format-match-calendar-date (:date match)) "—")
                           (:opponent match)
                           (:venue match)
-                          (common/format-match-result (:result match))])
+                          (common/format-match-result match)])
                        @matches)
                   :sortable? true
                   :dense? true]
