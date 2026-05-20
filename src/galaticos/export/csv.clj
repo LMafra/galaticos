@@ -76,8 +76,10 @@
 
 (defn- score-text [match]
   (let [result (:result match)
-        our (if (map? result) (get result :our-score (get result "our-score")) nil)
-        opp (if (map? result) (get result :opponent-score (get result "opponent-score")) nil)]
+        our (or (when (map? result) (or (:our-score result) (get result "our-score")))
+                (:home-score match))
+        opp (or (when (map? result) (or (:opponent-score result) (get result "opponent-score")))
+                (:away-score match))]
     (if (and (some? our) (some? opp))
       (str our " x " opp)
       "")))
@@ -115,7 +117,7 @@
                                                name (or (:player-name stat) (:name player) "")]
                                            (str/lower-case (as-str name))))
                                        all-player-ids))
-            matches (sort-by :date #(compare %1 %2) (matches-db/find-by-championship championship-id))
+            matches (matches-db/find-by-championship championship-id)
             round-rows (round-marker-rows matches)
             matches-rows (map match-row matches)
             combined-right-rows (concat round-rows matches-rows)

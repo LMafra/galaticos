@@ -37,6 +37,7 @@ Referência estável: visão, processos, modelos e como medir.
 
 - [runbook-producao.md](informacao/operacao/runbook-producao.md) — deploy, backup, seed e índices em produção sem perda de dados.
 - [vps-hospedeiro.md](informacao/operacao/vps-hospedeiro.md) — SSH, `.env` do Compose, Nginx/HTTPS, build Docker na VPS (Clojars/MTU), seed com Excel e checklist de deploy.
+- [incidente-deploy-vps-frontend-2026-05.md](informacao/operacao/incidente-deploy-vps-frontend-2026-05.md) — nota pós-incidente: Mongo/seed, Clojars na VPS, cache de deploy, browser, remoção do chunk lazy `pages.js`.
 
 ### Domínio (`docs/informacao/dominio/`)
 

@@ -14,6 +14,16 @@
   (when d
     (.toLocaleDateString (js/Date. d) js/undefined (clj->js {:timeZone "UTC"}))))
 
+(defn match-date-for-input
+  "Value for HTML `<input type=\"date\">` from API :date (ISO instant or YYYY-MM-DD)."
+  [d]
+  (when d
+    (let [s (str d)]
+      (when-not (str/blank? s)
+        (if (>= (count s) 10)
+          (subs s 0 10)
+          s)))))
+
 (defn loading-spinner []
   [:div {:class "flex items-center justify-center gap-3 py-10 text-slate-500 dark:text-slate-400"}
    [:div {:class "h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-brand-maroon dark:border-slate-600"}]
@@ -123,18 +133,27 @@
   (= "active" (normalize-status-code raw)))
 
 (defn format-match-result
-  "Format match result for display. result can be a map with :our-score/:opponent-score
-   (or :result.our-score from API) or nil. Returns e.g. \"3 x 1\" or \"-\"."
-  [result]
-  (cond
-    (nil? result) "-"
-    (map? result)
-    (let [our (get result :our-score (get result "our-score"))
-          opp (get result :opponent-score (get result "opponent-score"))]
-      (if (and (some? our) (some? opp))
-        (str our " x " opp)
-        "-"))
-    :else "-"))
+  "Format match score for display. Prefers :result (our-score/opponent-score); falls back
+   to :home-score/:away-score for UI-created matches. Returns e.g. \"3 x 1\" or \"-\"."
+  [match-or-result]
+  (let [match (when (and (map? match-or-result)
+                         (or (contains? match-or-result :home-score)
+                             (contains? match-or-result :away-score)
+                             (contains? match-or-result "home-score")
+                             (contains? match-or-result "away-score")))
+               match-or-result)
+        result (if match (:result match) match-or-result)
+        our (or (when (map? result)
+                (or (:our-score result) (get result "our-score")))
+                (when match
+                  (or (:home-score match) (get match "home-score"))))
+        opp (or (when (map? result)
+                (or (:opponent-score result) (get result "opponent-score")))
+                (when match
+                  (or (:away-score match) (get match "away-score"))))]
+    (if (and (some? our) (some? opp))
+      (str our " x " opp)
+      "-")))
 
 (defonce field-id-counter (atom 0))
 

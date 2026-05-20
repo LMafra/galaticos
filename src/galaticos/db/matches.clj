@@ -10,7 +10,9 @@
             [monger.operators :refer [$set $setOnInsert $inc $push]]
             [galaticos.db.core :refer [db]]
             [galaticos.util.response :refer [->object-id]])
-  (:import [org.bson.types ObjectId]))
+  (:import [java.time Instant LocalDate LocalTime ZoneOffset]
+           [java.util Date]
+           [org.bson.types ObjectId]))
 
 (def collection-name "matches")
 
@@ -37,6 +39,37 @@
     :else
     (try (int (long value))
          (catch Exception _ 0))))
+
+(defn coerce-match-date
+  "Normalize match :date to java.util.Date.
+  Accepts Date, ISO calendar date (YYYY-MM-DD), or ISO instant string."
+  [value]
+  (cond
+    (nil? value) nil
+    (instance? Date value) value
+    (string? value)
+    (let [s (str/trim value)]
+      (when-not (str/blank? s)
+        (try
+          (if (re-matches #"\d{4}-\d{2}-\d{2}" s)
+            (Date/from (.toInstant (.atTime (LocalDate/parse s)
+                                            (LocalTime/of 12 0))
+                                   (ZoneOffset/UTC)))
+            (Date/from (Instant/parse s)))
+          (catch Exception _ nil))))
+    :else nil))
+
+(defn match-date-epoch-ms
+  "Epoch millis for sorting match :date; nil/invalid values sort last."
+  [value]
+  (if-let [d (coerce-match-date value)]
+    (.getTime ^Date d)
+    Long/MIN_VALUE))
+
+(defn sort-matches-by-date-desc
+  "Sort matches newest-first, tolerant of mixed string/Date :date values."
+  [matches]
+  (sort-by #(match-date-epoch-ms (:date %)) #(compare %2 %1) matches))
 
 (defn normalize-player-statistics
   "Force goals/assists/cards/minutes to numeric ints on each player line (API may send strings).
@@ -76,6 +109,21 @@
     {:home-score home-score
      :away-score away-score}))
 
+(defn- match-result
+  [home-score away-score]
+  {:our-score home-score
+   :opponent-score away-score
+   :outcome (cond
+              (> home-score away-score) "win"
+              (< home-score away-score) "loss"
+              :else "draw")})
+
+(defn- scores-with-result
+  [match-data player-statistics]
+  (let [{:keys [home-score away-score] :as scores}
+        (calculate-scores match-data player-statistics)]
+    (assoc scores :result (match-result home-score away-score))))
+
 (defn create
   "Create a new match with player statistics using atomic upsert.
   
@@ -91,8 +139,11 @@
    (let [player-statistics (normalize-player-statistics player-statistics)
          now (java.util.Date.)
          id (ObjectId.)
-         scores (calculate-scores match-data player-statistics)
+         scores (scores-with-result match-data player-statistics)
          source (or data-source data-source-ui-create)
+         match-data (if (contains? match-data :date)
+                      (update match-data :date coerce-match-date)
+                      match-data)
          mutable-fields (merge (dissoc match-data :_id :created-at :created-by :data-source :version)
                                scores
                                {:player-statistics player-statistics
@@ -124,16 +175,16 @@
 (defn find-by-championship
   "Find matches by championship ID, ordered by date descending"
   [championship-id]
-  (sort-by :date #(compare %2 %1)
-           (mc/find-maps (db) collection-name
-                         {:championship-id (->object-id championship-id)})))
+  (sort-matches-by-date-desc
+   (mc/find-maps (db) collection-name
+                 {:championship-id (->object-id championship-id)})))
 
 (defn find-by-season
   "Find matches by season ID, ordered by date descending"
   [season-id]
-  (sort-by :date #(compare %2 %1)
-           (mc/find-maps (db) collection-name
-                         {:season-id (->object-id season-id)})))
+  (sort-matches-by-date-desc
+   (mc/find-maps (db) collection-name
+                 {:season-id (->object-id season-id)})))
 
 (defn find-by-date-range
   "Find matches within date range"
@@ -160,10 +211,12 @@
    (let [safe-updates (if force-overwrite
                         (dissoc updates :_id :created-at :version)
                         (apply dissoc updates protected-fields))
-         safe-updates (if (contains? safe-updates :player-statistics)
-                        (update safe-updates :player-statistics
+         safe-updates (cond-> safe-updates
+                        (contains? safe-updates :player-statistics)
+                        (update :player-statistics
                                 (fn [ps] (if (sequential? ps) (normalize-player-statistics ps) ps)))
-                        safe-updates)
+                        (contains? safe-updates :date)
+                        (update :date coerce-match-date))
          match (when (or (contains? safe-updates :player-statistics)
                          (contains? safe-updates :home-team-id)
                          (contains? safe-updates :away-score))
@@ -172,7 +225,7 @@
                                   safe-updates)
          scores (when (or (contains? safe-updates :player-statistics)
                           (contains? safe-updates :away-score))
-                  (calculate-scores merged-for-scores (:player-statistics merged-for-scores)))
+                  (scores-with-result merged-for-scores (:player-statistics merged-for-scores)))
          final-updates (merge safe-updates scores {:updated-at (java.util.Date.)})]
      (mc/update (db) collection-name
                 {:_id (->object-id id)}
