@@ -54,7 +54,7 @@
           (if (re-matches #"\d{4}-\d{2}-\d{2}" s)
             (Date/from (.toInstant (.atTime (LocalDate/parse s)
                                             (LocalTime/of 12 0))
-                                   (ZoneOffset/UTC)))
+                                   ZoneOffset/UTC))
             (Date/from (Instant/parse s)))
           (catch Exception _ nil))))
     :else nil))

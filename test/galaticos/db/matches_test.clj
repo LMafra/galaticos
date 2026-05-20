@@ -27,7 +27,7 @@
 (deftest sort-matches-by-date-desc-handles-mixed-types
   (let [older (Date/from (.toInstant (.atTime (LocalDate/parse "2023-06-01")
                                                 (LocalTime/of 12 0))
-                                      (ZoneOffset/UTC)))
+                                      ZoneOffset/UTC))
         newer-str "2024-06-15"
         matches [{:date older :_id 1} {:date newer-str :_id 2}]
         sorted (matches/sort-matches-by-date-desc matches)]

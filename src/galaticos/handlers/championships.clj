@@ -7,8 +7,7 @@
             [galaticos.util.response :as resp]
             [clojure.tools.logging :as log]
             [clojure.string :as str])
-  (:import [org.bson.types ObjectId]
-           [java.util Date]))
+  (:import [java.util Date]))
 
 (def ^:private allowed-championship-fields
   #{:name :season :status :format :start-date :end-date :location :notes :titles-count
