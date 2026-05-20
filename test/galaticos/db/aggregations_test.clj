@@ -31,7 +31,7 @@
     (is (= 1 (get-in merged [:total :goals])))))
 
 (deftest merge-aggregated-stats-preserves-baseline
-  (testing "championships absent from full match rollup get match stats zeroed; titles kept"
+  (testing "historical table stats add to match rollups; championships without matches keep baseline"
     (let [existing {:total {:games 12 :goals 9 :assists 5 :titles 3}
                     :by-championship [{:championship-id "c1"
                                        :championship-name "Champ 1"
@@ -55,32 +55,59 @@
                           :games 1
                           :goals 1
                           :assists 0}]
-          merged (#'agg/merge-aggregated-stats existing match-derived)]
+          merged (#'agg/merge-aggregated-stats existing match-derived)
+          c1 (first (filter #(= "c1" (:championship-id %)) (:by-championship merged)))
+          c2 (first (filter #(= "c2" (:championship-id %)) (:by-championship merged)))
+          c3 (first (filter #(= "c3" (:championship-id %)) (:by-championship merged)))]
       (is (= 3 (count (:by-championship merged))))
       (is (= 3 (get-in merged [:total :titles])))
-      (is (= 4 (get-in merged [:total :games])))
-      (is (= 3 (get-in merged [:total :goals])))
-      (is (= {:championship-id "c1"
-              :championship-name "Champ 1"
-              :games 3
-              :goals 2
-              :assists 1
-              :titles 2}
-             (first (filter #(= "c1" (:championship-id %)) (:by-championship merged)))))
-      (is (= {:championship-id "c2"
-              :championship-name "Champ 2"
-              :games 0
-              :goals 0
-              :assists 0
-              :titles 1}
-             (first (filter #(= "c2" (:championship-id %)) (:by-championship merged)))))
-      (is (= {:championship-id "c3"
-              :championship-name "Champ 3"
-              :games 1
-              :goals 1
-              :assists 0
-              :titles 0}
-             (first (filter #(= "c3" (:championship-id %)) (:by-championship merged))))))))
+      (is (= 16 (get-in merged [:total :games])))
+      (is (= 12 (get-in merged [:total :goals])))
+      (is (= 13 (:games c1)))
+      (is (= 10 (:games (:pre-match-stats c1))))
+      (is (= 2 (:games c2)))
+      (is (= 1 (:games c3))))))
+
+(deftest merge-aggregated-stats-additive-idempotent
+  (testing "second merge with larger match rollup does not double-count baseline"
+    (let [existing {:total {:games 10 :goals 8 :assists 4 :titles 2}
+                    :by-championship [{:championship-id "c1"
+                                       :championship-name "Champ 1"
+                                       :games 10
+                                       :goals 8
+                                       :assists 4
+                                       :titles 2}]}
+          first-match [{:championship-id "c1"
+                        :championship-name "Champ 1"
+                        :games 1
+                        :goals 1
+                        :assists 0}]
+          after-first (#'agg/merge-aggregated-stats existing first-match)
+          second-match [{:championship-id "c1"
+                         :championship-name "Champ 1"
+                         :games 2
+                         :goals 3
+                         :assists 1}]
+          after-second (#'agg/merge-aggregated-stats after-first second-match)
+          row (first (:by-championship after-second))]
+      (is (= 11 (:games (first (:by-championship after-first)))))
+      (is (= 10 (:games (:pre-match-stats row))))
+      (is (= 12 (:games row)))
+      (is (= 11 (:goals row))))))
+
+(deftest merge-aggregated-stats-preserves-total-only-baseline
+  (testing "seed total without by-championship rows is kept as pre-match-total"
+    (let [existing {:total {:games 50 :goals 20 :assists 5 :titles 3}
+                    :by-championship []}
+          match-derived [{:championship-id "c1"
+                          :championship-name "C"
+                          :games 1
+                          :goals 2
+                          :assists 0}]
+          merged (#'agg/merge-aggregated-stats existing match-derived)]
+      (is (= {:games 50 :goals 20 :assists 5 :titles 3} (:pre-match-total merged)))
+      (is (= 51 (get-in merged [:total :games])))
+      (is (= 22 (get-in merged [:total :goals]))))))
 
 (deftest merge-aggregated-stats-merges-match-into-season-scoped-rows
   (testing "by-championship rows with :season absorb match rollups keyed by same championship+season"
@@ -100,12 +127,12 @@
                           :assists 2}]
           merged (#'agg/merge-aggregated-stats existing match-derived)
           row (first (:by-championship merged))]
-      (is (= 9 (:games row)))
-      (is (= 5 (:goals row)))
+      (is (= 11 (:games row)))
+      (is (= 7 (:goals row)))
       (is (= 2 (:assists row)))
       (is (= "2024" (:season row)))
-      (is (= 9 (get-in merged [:total :games])))
-      (is (= 5 (get-in merged [:total :goals]))))))
+      (is (= 11 (get-in merged [:total :games])))
+      (is (= 7 (get-in merged [:total :goals]))))))
 
 (deftest merge-aggregated-stats-fans-out-unscoped-to-sole-season-row
   (testing "nil-season match rollup merges into the only by-championship row for that championship"
@@ -153,11 +180,12 @@
       (is (= 1 (count (:by-championship merged))))
       (is (= cid-str (str (:championship-id row))))
       (is (= 200 (:goals row)))
+      (is (= 7 (:games row)))
       (is (= "2025" (:season row)))
       (is (= 200 (get-in merged [:total :goals]))))))
 
 (deftest merge-aggregated-stats-ambiguous-unscoped-adds-orphan-row
-  (testing "unscoped match rollup: season-scoped existing rows with no DB bucket get match stats zeroed; orphan c1| row carries the rollup"
+  (testing "unscoped match rollup adds orphan row; season-scoped rows keep baseline"
     (let [existing {:total {:games 2 :goals 0 :assists 0 :titles 0}
                     :by-championship [{:championship-id "c1" :season "2024"
                                        :championship-name "C" :games 1 :goals 0 :assists 0 :titles 0}
@@ -168,7 +196,7 @@
           merged (#'agg/merge-aggregated-stats existing match-derived)
           by (:by-championship merged)]
       (is (= 3 (count by)))
-      (is (= 3 (get-in merged [:total :games])))
+      (is (= 5 (get-in merged [:total :games])))
       (is (= 2 (get-in merged [:total :goals]))))))
 
 (deftest merge-aggregated-stats-distinguishes-seasons-same-championship
@@ -187,15 +215,15 @@
           r24 (first (filter #(= "2024" (:season %)) by))
           r25 (first (filter #(= "2025" (:season %)) by))]
       (is (= 2 (count by)))
-      (is (= 3 (:games r24)))
-      (is (= 2 (:goals r24)))
-      (is (= 1 (:games r25)))
-      (is (= 1 (:goals r25)))
-      (is (= 4 (get-in merged [:total :games])))
-      (is (= 3 (get-in merged [:total :goals]))))))
+      (is (= 5 (:games r24)))
+      (is (= 3 (:goals r24)))
+      (is (= 3 (:games r25)))
+      (is (= 3 (:goals r25)))
+      (is (= 8 (get-in merged [:total :games])))
+      (is (= 6 (get-in merged [:total :goals]))))))
 
 (deftest merge-aggregated-stats-keeps-table-cache-when-drop-stale-disabled
-  (testing "after player merge incremental: rows absent from match rollup keep games/goals/assists"
+  (testing "default merge preserves championships absent from match rollup (same as drop-stale false)"
     (let [existing {:total {:games 12 :goals 9 :assists 5 :titles 3}
                     :by-championship [{:championship-id "c1"
                                        :championship-name "Champ 1"
@@ -219,15 +247,10 @@
                           :games 1
                           :goals 1
                           :assists 0}]
-          merged (#'agg/merge-aggregated-stats existing match-derived
-                                               {:drop-stale-without-match-rollups? false})]
-      (is (= {:championship-id "c2"
-              :championship-name "Champ 2"
-              :games 2
-              :goals 1
-              :assists 1
-              :titles 1}
-             (first (filter #(= "c2" (:championship-id %)) (:by-championship merged))))))))
+          merged (#'agg/merge-aggregated-stats existing match-derived)
+          c2 (first (filter #(= "c2" (:championship-id %)) (:by-championship merged)))]
+      (is (= 2 (:games c2)))
+      (is (= 1 (:goals c2))))))
 
 (deftest combine-players-aggregated-stats-sums-disjoint-championships
   (let [p1 {:aggregated-stats {:total {:games 7 :goals 1 :assists 0 :titles 0}

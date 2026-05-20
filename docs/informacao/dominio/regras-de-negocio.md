@@ -509,7 +509,7 @@ Este documento lista todas as regras de negócio implementadas no sistema Galát
 - **Arquivo**: `src/galaticos/handlers/matches.clj`; `src/galaticos/analytics/player_stats_jobs.clj`
 - **Comportamento**:
   - Após inserir partida, aciona `submit-incremental-recalc-after-match!` com `{:reason :after-match-create, :op :create, :match-id, :affected-player-ids}`; o worker aplica, por padrão, recompute **incremental** (`update-incremental-player-stats!`) no executor de thread única, sem bloquear a resposta (exceto se `GALATICOS_PLAYER_STATS_SYNC=true`)
-  - Atualiza `aggregated-stats` dos jogadores impactados, via `merge-aggregated-stats` em `galaticos.db.aggregations`. `GALATICOS_PLAYER_STATS_FORCE_FULL=true` força recompute completo
+  - Atualiza `aggregated-stats` dos jogadores impactados via `merge-aggregated-stats` em `galaticos.db.aggregations` (**modelo híbrido**): estatísticas históricas da planilha/seed ficam em `:pre-match-stats` (por campeonato) ou `:pre-match-total` (totais órfãos); jogos/gols/assistências exibidos = baseline + rollup das partidas. Campeonatos sem partidas mantêm o baseline; títulos vêm sempre da tabela, nunca das partidas. `GALATICOS_PLAYER_STATS_FORCE_FULL=true` força recompute completo
   - **Operação:** reintentos com limite e backoff (`GALATICOS_PLAYER_STATS_MAX_ATTEMPTS`, `GALATICOS_PLAYER_STATS_RETRY_BACKOFF_MS`); o último job concluído com sucesso fica em MongoDB (`player_stats_job_meta` via `player-stats-job-store`); leitura autenticada em `GET /api/aggregations/player-stats-jobs` (ver [technical-evolution (parcial)](../../parcial/analytics/technical-evolution.md))
 
 ### RN-MATCH-06: Recalculo Automático de Estatísticas na Atualização
@@ -574,8 +574,8 @@ Este documento lista todas as regras de negócio implementadas no sistema Galát
   - Desdobra estatísticas de jogadores das partidas
   - Agrupa por jogador e campeonato
   - Faz lookup de informações de campeonatos
-  - Calcula totais gerais e por campeonato
-  - Estrutura: `{total: {...}, by-championship: [...]}`
+  - Calcula totais gerais e por campeonato a partir dos rollups de partidas
+  - Estrutura: `{total: {...}, by-championship: [...], pre-match-total?: {...}}`; cada linha em `by-championship` pode incluir `:pre-match-stats` (baseline histórico) somado ao rollup de partidas em `merge-aggregated-stats`
 
 ### RN-STATS-05: Atualização de Estatísticas de Todos os Jogadores
 - **Descrição**: Sistema pode recalcular estatísticas de todos os jogadores.
@@ -591,8 +591,9 @@ Este documento lista todas as regras de negócio implementadas no sistema Galát
 - **Implementação**: `update-player-stats-for-match`, `update-incremental-player-stats!` em `src/galaticos/db/aggregations.clj`
 - **Comportamento**:
   - Identifica jogadores envolvidos na partida
-  - Executa pipeline de agregação completo
-  - Atualiza apenas jogadores da partida específica
+  - Executa pipeline de agregação filtrado por esses jogadores
+  - Atualiza apenas jogadores da partida específica, preservando `:pre-match-stats` / `:pre-match-total` e somando rollups de partidas (não substitui baseline histórico)
+  - Jogadores sem partidas restantes mas com baseline histórico revertem para baseline-only (não são zerados)
   - Otimização para evitar recalcular tudo
 
 ### RN-STATS-07: Busca Avançada de Jogadores

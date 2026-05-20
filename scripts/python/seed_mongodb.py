@@ -139,6 +139,45 @@ def safe_int(value, default=0):
     except (ValueError, TypeError):
         return default
 
+
+def _pre_match_stat_triple(games: int, goals: int, assists: int) -> Dict[str, int]:
+    """Historical games/goals/assists before match tracking (aligned with Clojure merge)."""
+    return {"games": games, "goals": goals, "assists": assists}
+
+
+def _table_championship_row(
+    championship_id: ObjectId,
+    championship_name: str,
+    games: int,
+    goals: int,
+    assists: int,
+    titles: int,
+    season: Optional[str] = None,
+) -> Dict:
+    """Build a by-championship row with explicit pre-match-stats baseline."""
+    baseline = _pre_match_stat_triple(games, goals, assists)
+    row = {
+        "championship-id": championship_id,
+        "championship-name": championship_name,
+        "pre-match-stats": baseline,
+        "games": games,
+        "goals": goals,
+        "assists": assists,
+        "titles": titles,
+    }
+    if season is not None:
+        row["season"] = season
+    return row
+
+
+def _pre_match_total_from_stats(stats: Dict) -> Dict[str, int]:
+    return {
+        "games": safe_int(stats.get("games"), 0),
+        "goals": safe_int(stats.get("goals"), 0),
+        "assists": safe_int(stats.get("assists"), 0),
+        "titles": safe_int(stats.get("titles"), 0),
+    }
+
 # Championship format mapping
 CHAMPIONSHIP_FORMATS = {
     "society": "society-7",
@@ -336,6 +375,7 @@ def create_players(db, players_df: pd.DataFrame, team_id: ObjectId) -> Dict[str,
 
             updated_stats = {
                 "total": new_total,
+                "pre-match-total": _pre_match_total_from_stats(new_total),
                 # Keep by-championship as-is; detailed per-champ data is handled later
                 "by-championship": existing_stats.get("by-championship", []),
             }
@@ -365,6 +405,7 @@ def create_players(db, players_df: pd.DataFrame, team_id: ObjectId) -> Dict[str,
             "active": True,
             "aggregated-stats": {
                 "total": sheet_stats,
+                "pre-match-total": _pre_match_total_from_stats(sheet_stats),
                 "by-championship": [],
             },
             "created-at": now,
@@ -650,22 +691,19 @@ def process_championship_sheet(
                 break
         
         if champ_stats:
+            baseline = _pre_match_stat_triple(games, goals, assists)
             champ_stats.update({
                 "championship-name": sheet_name,
+                "pre-match-stats": baseline,
                 "games": games,
                 "goals": goals,
                 "assists": assists,
                 "titles": titles
             })
         else:
-            by_championship.append({
-                "championship-id": championship_id,
-                "championship-name": sheet_name,
-                "games": games,
-                "goals": goals,
-                "assists": assists,
-                "titles": titles
-            })
+            by_championship.append(_table_championship_row(
+                championship_id, sheet_name, games, goals, assists, titles
+            ))
         
         aggregated_stats["by-championship"] = by_championship
         
@@ -833,7 +871,9 @@ def _update_player_stats_from_table(
     found = False
     for entry in by_champ:
         if entry.get("championship-id") == championship_id and entry.get("season") == season:
+            baseline = _pre_match_stat_triple(games, goals, assists)
             entry["championship-name"] = championship_name
+            entry["pre-match-stats"] = baseline
             entry["games"] = games
             entry["goals"] = goals
             entry["assists"] = assists
@@ -841,15 +881,9 @@ def _update_player_stats_from_table(
             found = True
             break
     if not found:
-        by_champ.append({
-            "championship-id": championship_id,
-            "championship-name": championship_name,
-            "season": season,
-            "games": games,
-            "goals": goals,
-            "assists": assists,
-            "titles": titles,
-        })
+        by_champ.append(_table_championship_row(
+            championship_id, championship_name, games, goals, assists, titles, season=season
+        ))
     aggregated["by-championship"] = by_champ
     aggregated["total"] = {
         "games": sum(e.get("games", 0) for e in by_champ),
@@ -1699,17 +1733,16 @@ def rebuild_aggregated_stats_from_matches(db) -> None:
     """
     Merge match-derived stats with table (initial columns) stats.
 
-    - Table values (from abas iniciais / CSV/Excel table) are the baseline.
-    - Match data serves as validator: where we have match data for a (player, championship),
-      we use match-derived games/goals/assists; titles always come from the table (matches
-      don't have title info).
-    - When there is no or insufficient match data for a championship, table values are kept.
+    - Table values (from abas iniciais / CSV/Excel table) are stored in pre-match-stats.
+    - Displayed games/goals/assists = pre-match-stats baseline + match rollup (additive).
+    - Titles always come from the table (matches don't have title info).
+    - When there is no match data for a championship, table baseline values are kept.
     """
     matches_collection = db.matches
     players_collection = db.players
 
     print("\n" + "=" * 60)
-    print("Step 3.6: Merging match stats with table stats (matches as validators)")
+    print("Step 3.6: Merging match stats with table stats (baseline + match rollups)")
     print("=" * 60)
 
     pipeline = [
@@ -1750,7 +1783,108 @@ def rebuild_aggregated_stats_from_matches(db) -> None:
         },
     ]
 
-    # Build map: player_id -> list of { championship-id, championship-name, games, goals, assists } from matches
+    def _safe_int(v, default=0):
+        if v is None:
+            return default
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            return default
+
+    def _baseline_from_entry(entry: Dict) -> Dict[str, int]:
+        pm = entry.get("pre-match-stats")
+        if pm:
+            return _pre_match_stat_triple(
+                _safe_int(pm.get("games"), 0),
+                _safe_int(pm.get("goals"), 0),
+                _safe_int(pm.get("assists"), 0),
+            )
+        g = _safe_int(entry.get("games"), 0)
+        gl = _safe_int(entry.get("goals"), 0)
+        a = _safe_int(entry.get("assists"), 0)
+        if g > 0 or gl > 0 or a > 0:
+            return _pre_match_stat_triple(g, gl, a)
+        return _pre_match_stat_triple(0, 0, 0)
+
+    def _merge_additive(existing: Dict, match_by_champ: List[Dict]) -> Dict:
+        current_by = existing.get("by-championship", [])
+        pre_match_total = existing.get("pre-match-total")
+        if not pre_match_total and not current_by:
+            total = existing.get("total", {})
+            if any(_safe_int(total.get(k), 0) > 0 for k in ("games", "goals", "assists", "titles")):
+                pre_match_total = _pre_match_total_from_stats(total)
+
+        match_by_champ_map = {
+            e.get("championship-id"): e for e in match_by_champ if e.get("championship-id")
+        }
+        match_champ_ids = set(match_by_champ_map.keys())
+        merged_by = []
+
+        for entry in current_by:
+            cid = entry.get("championship-id")
+            baseline = _baseline_from_entry(entry)
+            if cid in match_by_champ_map:
+                md = match_by_champ_map[cid]
+                md_games = _safe_int(md.get("games"), 0)
+                md_goals = _safe_int(md.get("goals"), 0)
+                md_assists = _safe_int(md.get("assists"), 0)
+                merged_by.append({
+                    "championship-id": cid,
+                    "championship-name": md.get("championship-name", entry.get("championship-name", "")),
+                    "pre-match-stats": baseline,
+                    "games": baseline["games"] + md_games,
+                    "goals": baseline["goals"] + md_goals,
+                    "assists": baseline["assists"] + md_assists,
+                    "titles": _safe_int(entry.get("titles"), 0),
+                    **({"season": entry["season"]} if entry.get("season") is not None else {}),
+                })
+            else:
+                merged_by.append({
+                    **dict(entry),
+                    "pre-match-stats": baseline,
+                    "games": baseline["games"],
+                    "goals": baseline["goals"],
+                    "assists": baseline["assists"],
+                    "titles": _safe_int(entry.get("titles"), 0),
+                })
+
+        for cid in match_champ_ids:
+            if not any(e.get("championship-id") == cid for e in merged_by):
+                md = match_by_champ_map.get(cid, {})
+                zero = _pre_match_stat_triple(0, 0, 0)
+                merged_by.append({
+                    "championship-id": cid,
+                    "championship-name": md.get("championship-name", ""),
+                    "pre-match-stats": zero,
+                    "games": _safe_int(md.get("games"), 0),
+                    "goals": _safe_int(md.get("goals"), 0),
+                    "assists": _safe_int(md.get("assists"), 0),
+                    "titles": 0,
+                })
+
+        total_games = sum(_safe_int(e.get("games"), 0) for e in merged_by)
+        total_goals = sum(_safe_int(e.get("goals"), 0) for e in merged_by)
+        total_assists = sum(_safe_int(e.get("assists"), 0) for e in merged_by)
+        total_titles = sum(_safe_int(e.get("titles"), 0) for e in merged_by)
+        if pre_match_total:
+            total_games += _safe_int(pre_match_total.get("games"), 0)
+            total_goals += _safe_int(pre_match_total.get("goals"), 0)
+            total_assists += _safe_int(pre_match_total.get("assists"), 0)
+            total_titles += _safe_int(pre_match_total.get("titles"), 0)
+
+        aggregated = {
+            "total": {
+                "games": total_games,
+                "goals": total_goals,
+                "assists": total_assists,
+                "titles": total_titles,
+            },
+            "by-championship": merged_by,
+        }
+        if pre_match_total:
+            aggregated["pre-match-total"] = pre_match_total
+        return aggregated
+
     match_derived_by_player: Dict[ObjectId, List[Dict]] = {}
     for doc in matches_collection.aggregate(pipeline):
         player_id = doc.get("_id")
@@ -1758,7 +1892,6 @@ def rebuild_aggregated_stats_from_matches(db) -> None:
         if player_id and by_champ:
             match_derived_by_player[player_id] = by_champ
 
-    # For each player that has match-derived data, merge with current (table) aggregated-stats
     updated_count = 0
     for player_id, match_by_champ in match_derived_by_player.items():
         player = players_collection.find_one(
@@ -1768,66 +1901,7 @@ def rebuild_aggregated_stats_from_matches(db) -> None:
         if not player:
             continue
         current = player.get("aggregated-stats", {})
-        current_by = current.get("by-championship", [])
-        match_champ_ids = {e.get("championship-id") for e in match_by_champ if e.get("championship-id")}
-        match_by_champ_map = {e.get("championship-id"): e for e in match_by_champ if e.get("championship-id")}
-
-        def _safe_int(v, default=0):
-            if v is None:
-                return default
-            try:
-                return int(v)
-            except (TypeError, ValueError):
-                return default
-
-        merged_by = []
-        for entry in current_by:
-            cid = entry.get("championship-id")
-            if cid in match_by_champ_map:
-                # Use match-derived as validator; fall back to table when match data is missing/zero
-                md = match_by_champ_map[cid]
-                md_games = _safe_int(md.get("games"), 0)
-                md_goals = _safe_int(md.get("goals"), 0)
-                md_assists = _safe_int(md.get("assists"), 0)
-                tbl_games = _safe_int(entry.get("games"), 0)
-                tbl_goals = _safe_int(entry.get("goals"), 0)
-                tbl_assists = _safe_int(entry.get("assists"), 0)
-                # Prefer match-derived when present; otherwise keep table (jogos/gols/assistências da tabela)
-                games = md_games if md_games > 0 else tbl_games
-                goals = md_goals if md_goals > 0 else tbl_goals
-                assists = md_assists if md_assists > 0 else tbl_assists  # partidas não têm assistências, manter tabela
-                merged_by.append({
-                    "championship-id": cid,
-                    "championship-name": md.get("championship-name", entry.get("championship-name", "")),
-                    "games": games,
-                    "goals": goals,
-                    "assists": assists,
-                    "titles": _safe_int(entry.get("titles"), 0),
-                })
-            else:
-                # No match data for this championship: keep table values
-                merged_by.append(dict(entry))
-        # Add championships that exist only in match-derived (no table entry)
-        for cid in match_champ_ids:
-            if not any(e.get("championship-id") == cid for e in merged_by):
-                md = match_by_champ_map.get(cid, {})
-                merged_by.append({
-                    "championship-id": cid,
-                    "championship-name": md.get("championship-name", ""),
-                    "games": _safe_int(md.get("games"), 0),
-                    "goals": _safe_int(md.get("goals"), 0),
-                    "assists": _safe_int(md.get("assists"), 0),
-                    "titles": 0,
-                })
-
-        total_games = sum(e.get("games", 0) for e in merged_by)
-        total_goals = sum(e.get("goals", 0) for e in merged_by)
-        total_assists = sum(e.get("assists", 0) for e in merged_by)
-        total_titles = sum(e.get("titles", 0) for e in merged_by)
-        aggregated_stats = {
-            "total": {"games": total_games, "goals": total_goals, "assists": total_assists, "titles": total_titles},
-            "by-championship": merged_by,
-        }
+        aggregated_stats = _merge_additive(current, match_by_champ)
         players_collection.update_one(
             {"_id": player_id},
             {
@@ -1839,8 +1913,7 @@ def rebuild_aggregated_stats_from_matches(db) -> None:
         )
         updated_count += 1
 
-    # Players with only table data (no match-derived) are left unchanged
-    print(f"✓ Merged match stats with table stats for {updated_count} players (table values kept when no match data)")
+    print(f"✓ Merged match stats with table stats for {updated_count} players (baseline + match rollups)")
 
 
 def process_excel_tournament_sheets(
