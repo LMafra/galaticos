@@ -26,7 +26,7 @@
        [:p {:class "text-sm font-semibold text-slate-900 dark:text-slate-100"} (:opponent match)]
        [:p {:class "text-xs text-slate-500 dark:text-slate-400"} (str (or (common/format-match-calendar-date (:date match)) "-") " • " (or (:venue match) "-"))]]]
      [:div {:class "flex items-center gap-3"}
-      [common/badge (common/format-match-result (:result match)) :variant :info]
+      [common/badge (common/format-match-result match) :variant :info]
       (when authenticated?
         [:<>
          [:button {:class "rounded-lg border border-slate-200 p-2 text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800"
@@ -102,7 +102,7 @@
                  (or (common/format-match-calendar-date (:date @match)) "-")]
                 [:p [:span {:class "font-medium text-slate-800"} "Local: "] (or (:venue @match) "-")]
                 [:p [:span {:class "font-medium text-slate-800"} "Resultado: "]
-                 (common/format-match-result (:result @match))]
+                 (common/format-match-result @match)]
                 [:p [:span {:class "font-medium text-slate-800"} "Gols (jogadores): "] total-goals]
                 [:p [:span {:class "font-medium text-slate-800"} "Assistências: "] total-assists]]]
 
@@ -206,7 +206,7 @@
         form-error (r/atom nil)
         field-errors (r/atom {})
         parse-int (fn [v]
-                    (let [trimmed (str/trim (or v ""))]
+                    (let [trimmed (str/trim (str (or v "")))]
                       (when (not-empty trimmed)
                         (js/parseInt trimmed 10))))
         init-player-stats (fn [players existing]
@@ -275,7 +275,7 @@
                                            (reset! existing-stats match-stats)
                                            (reset! form-data {:championship-id (if (:championship-id result) (str (:championship-id result)) "")
                                                               :home-team-id (if (:home-team-id result) (str (:home-team-id result)) "")
-                                                              :date (or (:date result) "")
+                                                              :date (or (common/match-date-for-input (:date result)) "")
                                                               :opponent (or (:opponent result) "")
                                                               :away-score (if (some? (:away-score result)) (js/parseInt (str (:away-score result)) 10) 0)
                                                               :venue (or (:venue result) "")

@@ -2,6 +2,8 @@
 
 Runbook prático das interações típicas entre **máquina local**, **painel do hospedeiro** e **servidor Ubuntu** onde o Galáticos roda em Docker de produção. Complementa o [runbook-producao.md](runbook-producao.md), que foca em dados e comandos genéricos.
 
+**Nota pós-incidente (maio/2026):** cadeia real na VPS (Mongo/seed, timeouts ao Clojars, `deploy` só com cache, cache no browser, falhas do chunk `pages.js`) e decisões tomadas — ver [incidente-deploy-vps-frontend-2026-05.md](incidente-deploy-vps-frontend-2026-05.md).
+
 **Premissas usadas neste guia**
 
 - Código em `/opt/galaticos` na VPS.
