@@ -34,6 +34,9 @@
   (GET "/api/aggregations/championships/comparison" request (agg-handlers/championship-comparison request))
   (GET "/api/aggregations/players/top" request (agg-handlers/top-players request))
   (POST "/api/aggregations/reconcile" request ((wrap-auth agg-handlers/reconcile-stats) request))
+  (POST "/api/aggregations/players/:player-id/reconcile" [player-id :as request]
+    ((wrap-auth agg-handlers/reconcile-player-stats)
+     (assoc request :params {:player-id player-id})))
   (GET "/api/aggregations/player-stats-jobs" request ((wrap-auth agg-handlers/player-stats-jobs-status) request))
    (GET "/api/exports/dashboard.csv" request ((wrap-auth export-handlers/export-dashboard-csv) request))
    (GET "/api/exports/championships/:id.csv" [id :as request]

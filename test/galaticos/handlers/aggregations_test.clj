@@ -118,6 +118,22 @@
       (is (= 202 (:status result)))
       (is (= "jid-1" (get-in body [:data :job-id]))))))
 
+(deftest reconcile-player-stats
+  (testing "success with player-id"
+    (let [player-id (str (ObjectId.))
+          request {:params {:player-id player-id}}
+          result (with-redefs [agg/update-incremental-player-stats! (fn [ids] (is (= [player-id] ids)) {:updated 1})]
+                  (handlers/reconcile-player-stats request))
+          body (parse-body result)]
+      (is (= 200 (:status result)))
+      (is (= 1 (get-in body [:data :updated])))
+      (is (string? (get-in body [:data :message])))))
+  (testing "error when player-id missing"
+    (let [result (handlers/reconcile-player-stats {:params {}})
+          body (parse-body result)]
+      (is (= 400 (:status result)))
+      (is (= "Player ID required" (:error body))))))
+
 (deftest player-stats-jobs-status-handler
   (let [result (with-redefs [job-store/fetch-doc (fn [] {:_id "player-stats-jobs"
                                                         :last-incremental {:job-id "j1"}

@@ -289,6 +289,7 @@
         error (r/atom nil)
         not-found? (r/atom false)
         deleting? (r/atom false)
+        reconciling? (r/atom false)
         active-tab (r/atom :info)
         evolution (r/atom nil)
         evolution-loading? (r/atom false)
@@ -326,7 +327,20 @@
                                                (reset! deleting? false)
                                                (let [msg (str "Erro ao deletar jogador: " err)]
                                                  (reset! error msg)
-                                                 (state/toast-error! msg))))))]
+                                                 (state/toast-error! msg))))))
+        reconcile-player! (fn []
+                            (when-not @reconciling?
+                              (reset! reconciling? true)
+                              (api/reconcile-player-stats!
+                               id
+                               (fn [data]
+                                 (reset! reconciling? false)
+                                 (let [msg (or (:message data) "Reconciliação concluída.")]
+                                   (state/toast-success! msg)
+                                   (load-player!)))
+                               (fn [err _]
+                                 (reset! reconciling? false)
+                                 (state/toast-error! (str err))))))]
     (r/create-class
      {:component-did-mount (fn []
                              (effects/ensure-teams!)
@@ -362,6 +376,10 @@
                       (when authenticated
                         [:div {:class "flex flex-wrap gap-2"}
                          [common/button "Editar" #(rfe/push-state :player-edit {:id id}) :variant :outline]
+                         [common/button "Reconciliar estatísticas" reconcile-player!
+                          :variant :outline
+                          :disabled @reconciling?
+                          :aria-label "Recalcular estatísticas agregadas deste jogador"]
                          [common/button "Deletar" delete-player! :variant :danger :disabled @deleting?]])]
 
                      [:div {:class "grid gap-4 md:grid-cols-2 xl:grid-cols-4"}
@@ -390,6 +408,8 @@
                           [:p [:span {:class "font-medium text-slate-800"} "Número: "] (or (:shirt-number @player) "-")]]]
                         :stats
                         [:div {:class "mt-4 space-y-6"}
+                         [:p {:class "text-xs text-slate-600 dark:text-slate-400"}
+                          "Recalcula os totais a partir das partidas guardadas. Use após corrigir ou apagar partidas."]
                          [common/card
                           [:h3 {:class "app-section-title"} "Performance por campeonato"]
                           (if (seq by-champ)

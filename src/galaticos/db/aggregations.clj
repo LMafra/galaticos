@@ -71,16 +71,67 @@
    :goals (safe-int (:goals entry))
    :assists (safe-int (:assists entry))})
 
+(defn- subtract-stat-triples
+  [current match]
+  {:games (max 0 (- (safe-int (:games current)) (safe-int (:games match))))
+   :goals (max 0 (- (safe-int (:goals current)) (safe-int (:goals match))))
+   :assists (max 0 (- (safe-int (:assists current)) (safe-int (:assists match))))})
+
+(defn- add-stat-triples
+  [baseline delta]
+  {:games (+ (safe-int (:games baseline)) (safe-int (:games delta)))
+   :goals (+ (safe-int (:goals baseline)) (safe-int (:goals delta)))
+   :assists (+ (safe-int (:assists baseline)) (safe-int (:assists delta)))})
+
+(defn- infer-baseline-match-rollup
+  "Match games already represented in table/pre-match display (import overlap).
+  When display exceeds pre-match by the full match rollup, treat all current matches as imported."
+  [existing-entry match-entry]
+  (when (and existing-entry match-entry (:pre-match-stats existing-entry))
+    (let [pre (stat-triple (:pre-match-stats existing-entry))
+          disp (stat-triple existing-entry)
+          match (stat-triple match-entry)
+          inflation (subtract-stat-triples disp pre)]
+      (if (>= (:games inflation) (:games match))
+        match
+        (subtract-stat-triples match inflation)))))
+
+(defn- resolve-baseline-match-rollup
+  [existing-entry match-entry]
+  (or (:baseline-match-rollup existing-entry)
+      (infer-baseline-match-rollup existing-entry match-entry)
+      (zero-baseline-stats)))
+
+(defn- sum-match-derived-triple
+  [match-derived]
+  {:games (sum-stat match-derived :games)
+   :goals (sum-stat match-derived :goals)
+   :assists (sum-stat match-derived :assists)})
+
+(defn- display-likely-includes-match-rollups?
+  "Heuristic: stored totals that already embed most of the match rollup should not be
+  snapshotted wholesale as baseline (would double-count on additive merge).
+  Requires a substantial match count (>= 10 games) so small table rows are not misread."
+  [display-triple match-triple]
+  (let [dg (safe-int (:games display-triple))
+        mg (safe-int (:games match-triple))]
+    (and (pos? dg) (>= mg 10) (>= dg mg) (> (/ (double mg) (double dg)) 0.4))))
+
 (defn- baseline-from-entry
-  "Historical stats before match tracking. Uses explicit :pre-match-stats when present;
-  otherwise snapshots current row values once (migration for seeded/table data)."
-  [entry]
-  (if-let [pm (:pre-match-stats entry)]
-    (stat-triple pm)
-    (let [{:keys [games goals assists] :as triple} (stat-triple entry)]
-      (if (or (pos? games) (pos? goals) (pos? assists))
-        triple
-        (zero-baseline-stats)))))
+  "Historical stats before match tracking. Uses explicit :pre-match-stats when present.
+  When inferring without it, subtracts match rollups only if display likely already
+  includes them (migration / total-only rows); otherwise treats display as table baseline."
+  ([entry]
+   (baseline-from-entry entry nil))
+  ([entry match-entry]
+   (if-let [pm (:pre-match-stats entry)]
+     (stat-triple pm)
+     (let [current (stat-triple entry)]
+       (if-not (or (pos? (:games current)) (pos? (:goals current)) (pos? (:assists current)))
+         (zero-baseline-stats)
+         (if (and match-entry (display-likely-includes-match-rollups? current (stat-triple match-entry)))
+           (subtract-stat-triples current (stat-triple match-entry))
+           current))))))
 
 (defn- season-key-suffix
   "Normalized non-blank season label for merge keys, or nil when absent/unscoped."
@@ -91,19 +142,21 @@
 
 (defn- merge-championship-entry
   [existing-entry match-entry]
-  (let [baseline (baseline-from-entry existing-entry)
-        match-games (safe-int (:games match-entry))
-        match-goals (safe-int (:goals match-entry))
-        match-assists (safe-int (:assists match-entry))
+  (let [baseline (baseline-from-entry existing-entry match-entry)
+        frozen (resolve-baseline-match-rollup existing-entry match-entry)
+        match-triple (stat-triple match-entry)
+        delta (subtract-stat-triples match-triple frozen)
+        display (add-stat-triples baseline delta)
         season (or (:season existing-entry) (:season match-entry))
         base {:championship-id (:championship-id existing-entry)
               :championship-name (or (:championship-name match-entry)
                                      (:championship-name existing-entry)
                                      "")
               :pre-match-stats baseline
-              :games (+ (:games baseline) match-games)
-              :goals (+ (:goals baseline) match-goals)
-              :assists (+ (:assists baseline) match-assists)
+              :baseline-match-rollup frozen
+              :games (:games display)
+              :goals (:goals display)
+              :assists (:assists display)
               :titles (safe-int (:titles existing-entry))}]
     (cond-> base
       (some? season) (assoc :season season))))
@@ -125,33 +178,41 @@
 (defn- match-only-entry
   [entry]
   (let [baseline (zero-baseline-stats)
-        match-games (safe-int (:games entry))
-        match-goals (safe-int (:goals entry))
-        match-assists (safe-int (:assists entry))]
+        frozen (zero-baseline-stats)
+        match-triple (stat-triple entry)
+        display (add-stat-triples baseline match-triple)]
     (cond-> {:championship-id (:championship-id entry)
              :championship-name (or (:championship-name entry) "")
              :pre-match-stats baseline
-             :games match-games
-             :goals match-goals
-             :assists match-assists
+             :baseline-match-rollup frozen
+             :games (:games display)
+             :goals (:goals display)
+             :assists (:assists display)
              :titles 0}
       (some? (season-key-suffix (:season entry)))
       (assoc :season (:season entry)))))
 
 (defn- capture-pre-match-total
   "Orphan historical totals (seed `total` without `by-championship` rows) preserved at player level."
-  [existing existing-by]
+  [existing existing-by match-derived]
   (or (:pre-match-total existing)
       (when (empty? existing-by)
-        (let [total (or (:total existing) {})]
+        (let [total (or (:total existing) {})
+              total-triple {:games (safe-int (:games total))
+                            :goals (safe-int (:goals total))
+                            :assists (safe-int (:assists total))}
+              match-triple (sum-match-derived-triple match-derived)]
           (when (some pos? [(safe-int (:games total))
                             (safe-int (:goals total))
                             (safe-int (:assists total))
                             (safe-int (:titles total))])
-            {:games (safe-int (:games total))
-             :goals (safe-int (:goals total))
-             :assists (safe-int (:assists total))
-             :titles (safe-int (:titles total))})))))
+            (let [baseline (if (display-likely-includes-match-rollups? total-triple match-triple)
+                             (subtract-stat-triples total-triple match-triple)
+                             total-triple)]
+              {:games (safe-int (:games baseline))
+               :goals (safe-int (:goals baseline))
+               :assists (safe-int (:assists baseline))
+               :titles (safe-int (:titles total))}))))))
 
 (defn- player-has-baseline-stats?
   [stats]
@@ -168,6 +229,18 @@
   "Composite key for merging table/hybrid rows (championship + optional season label) with match rollups."
   [championship-id season]
   (str (agg-entity-id-str championship-id) "|" (or (season-key-suffix season) "")))
+
+(defn- sum-stat-entries
+  "Sum games/goals/assists from two match rollup maps (same championship scope)."
+  [a b]
+  (let [ta (stat-triple a)
+        tb (stat-triple b)]
+    (cond-> {:championship-id (or (:championship-id a) (:championship-id b))
+             :championship-name (or (:championship-name a) (:championship-name b) "")
+             :games (+ (:games ta) (:games tb))
+             :goals (+ (:goals ta) (:goals tb))
+             :assists (+ (:assists ta) (:assists tb))}
+      (or (:season a) (:season b)) (assoc :season (or (:season a) (:season b))))))
 
 (defn- fanout-unscoped-rollups-into-match-map
   "Matches without season-id roll up with nil :season (key cid|). If the player has exactly
@@ -194,7 +267,9 @@
                  scoped-k (match-aggregate-key cid sole)
                  unscoped-k (match-aggregate-key cid nil)]
              (if (contains? mm scoped-k)
-               mm
+               (-> mm
+                   (assoc scoped-k (sum-stat-entries (get mm scoped-k) entry))
+                   (dissoc unscoped-k))
                (-> mm
                    (assoc scoped-k entry)
                    (dissoc unscoped-k))))))))
@@ -226,7 +301,7 @@
    (let [drop-stale-without-match? (:drop-stale-without-match-rollups? opts false)
          existing (or existing {})
          existing-by (vec (or (:by-championship existing) []))
-         pre-match-total (capture-pre-match-total existing existing-by)
+         pre-match-total (capture-pre-match-total existing existing-by match-derived)
          match-map (-> (into {}
                              (keep (fn [entry]
                                      (when-let [cid (:championship-id entry)]

@@ -372,6 +372,11 @@
   [on-success on-error]
   (post-request "/api/aggregations/reconcile" {} on-success on-error))
 
+(defn reconcile-player-stats!
+  "POST /api/aggregations/players/:id/reconcile — recalcula aggregated-stats de um jogador a partir de matches."
+  [player-id on-success on-error]
+  (post-request (str "/api/aggregations/players/" player-id "/reconcile") {} on-success on-error))
+
 (defn download-csv!
   "Download CSV file from API endpoint."
   [url filename on-success on-error]

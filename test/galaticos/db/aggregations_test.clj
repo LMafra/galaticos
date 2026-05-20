@@ -109,6 +109,85 @@
       (is (= 51 (get-in merged [:total :games])))
       (is (= 22 (get-in merged [:total :goals]))))))
 
+(deftest merge-aggregated-stats-avoids-double-count-when-total-already-includes-matches
+  (testing "total-only row whose display already embeds match rollups is not added again"
+    (let [existing {:total {:games 119 :goals 145 :assists 0 :titles 0}
+                    :by-championship []}
+          match-derived [{:championship-id "c1"
+                          :championship-name "C"
+                          :games 58
+                          :goals 35
+                          :assists 0}]
+          merged (#'agg/merge-aggregated-stats existing match-derived)]
+      (is (= 61 (get-in merged [:pre-match-total :games])))
+      (is (= 110 (get-in merged [:pre-match-total :goals])))
+      (is (= 119 (get-in merged [:total :games])))
+      (is (= 145 (get-in merged [:total :goals])))
+      (let [after-one-more (#'agg/merge-aggregated-stats merged
+                                                         [{:championship-id "c1"
+                                                           :championship-name "C"
+                                                           :games 59
+                                                           :goals 36
+                                                           :assists 0}])]
+        (is (= 120 (get-in after-one-more [:total :games])))
+        (is (= 146 (get-in after-one-more [:total :goals])))))))
+
+(deftest merge-aggregated-stats-skips-imported-match-overlap-on-seeded-rows
+  (testing "seeded table baseline already includes imported matches; only new match growth adds"
+    (let [seeded {:total {:games 8 :goals 6 :assists 0 :titles 0}
+                  :by-championship [{:championship-id "c1"
+                                     :championship-name "SARRADA"
+                                     :season "2025"
+                                     :pre-match-stats {:games 8 :goals 6 :assists 0}
+                                     :games 8
+                                     :goals 6
+                                     :assists 0
+                                     :titles 0}]}
+          imported [{:championship-id "c1"
+                     :championship-name "SARRADA"
+                     :season "2025"
+                     :games 4
+                     :goals 4
+                     :assists 0}]
+          after-import (#'agg/merge-aggregated-stats seeded imported)
+          row (first (:by-championship after-import))]
+      (is (= 8 (:games row)))
+      (is (= 6 (:goals row)))
+      (is (= 4 (get-in row [:baseline-match-rollup :games])))
+      (let [after-new-match (#'agg/merge-aggregated-stats after-import
+                                                          [{:championship-id "c1"
+                                                            :championship-name "SARRADA"
+                                                            :season "2025"
+                                                            :games 5
+                                                            :goals 5
+                                                            :assists 0}])
+            row2 (first (:by-championship after-new-match))]
+        (is (= 9 (:games row2)))
+        (is (= 7 (:goals row2)))))))
+
+(deftest merge-aggregated-stats-repairs-inflated-display-from-prior-additive-merge
+  (testing "corrupted display (table + full match rollup) is repaired on reconcile"
+    (let [corrupted {:total {:games 12 :goals 10 :assists 0 :titles 0}
+                     :by-championship [{:championship-id "c1"
+                                        :championship-name "SARRADA"
+                                        :season "2025"
+                                        :pre-match-stats {:games 8 :goals 6 :assists 0}
+                                        :games 12
+                                        :goals 10
+                                        :assists 0
+                                        :titles 0}]}
+          match-derived [{:championship-id "c1"
+                          :championship-name "SARRADA"
+                          :season "2025"
+                          :games 4
+                          :goals 4
+                          :assists 0}]
+          merged (#'agg/merge-aggregated-stats corrupted match-derived)
+          row (first (:by-championship merged))]
+      (is (= 8 (:games row)))
+      (is (= 6 (:goals row)))
+      (is (= 4 (get-in row [:baseline-match-rollup :games]))))))
+
 (deftest merge-aggregated-stats-merges-match-into-season-scoped-rows
   (testing "by-championship rows with :season absorb match rollups keyed by same championship+season"
     (let [existing {:total {:games 2 :goals 2 :assists 0 :titles 1}
@@ -183,6 +262,37 @@
       (is (= 7 (:games row)))
       (is (= "2025" (:season row)))
       (is (= 200 (get-in merged [:total :goals]))))))
+
+(deftest merge-aggregated-stats-fanout-adds-unscoped-into-existing-scoped-rollup
+  (testing "when scoped and unscoped rollups coexist, unscoped games merge into the season row"
+    (let [existing {:total {:games 8 :goals 6 :assists 0 :titles 2}
+                    :by-championship [{:championship-id "c1"
+                                       :season "2025"
+                                       :championship-name "SARRADA"
+                                       :pre-match-stats {:games 8 :goals 6 :assists 0}
+                                       :baseline-match-rollup {:games 4 :goals 4 :assists 0}
+                                       :games 8
+                                       :goals 6
+                                       :assists 0
+                                       :titles 2}]}
+          match-derived [{:championship-id "c1"
+                          :season "2025"
+                          :championship-name "SARRADA"
+                          :games 4
+                          :goals 4
+                          :assists 0}
+                         {:championship-id "c1"
+                          :season nil
+                          :championship-name "SARRADA"
+                          :games 1
+                          :goals 1
+                          :assists 0}]
+          merged (#'agg/merge-aggregated-stats existing match-derived)
+          row (first (:by-championship merged))]
+      (is (= 9 (:games row)))
+      (is (= 7 (:goals row)))
+      (is (= 9 (get-in merged [:total :games])))
+      (is (= 7 (get-in merged [:total :goals]))))))
 
 (deftest merge-aggregated-stats-ambiguous-unscoped-adds-orphan-row
   (testing "unscoped match rollup adds orphan row; season-scoped rows keep baseline"

@@ -82,7 +82,7 @@
    championship.enrolled-player-ids if no season info exists."
   [championship-id season-id player-ids]
   (let [season (or (when season-id (seasons-db/find-by-id season-id))
-                   (seasons-db/find-active-by-championship championship-id))]
+                   (seasons-db/find-default-for-championship championship-id))]
     (if season
       (let [enrolled-ids (set (:enrolled-player-ids season []))
             not-enrolled (remove enrolled-ids player-ids)]
@@ -99,6 +99,19 @@
             (throw (ex-info (str "Players not enrolled in championship: "
                                  (str/join ", " (map str not-enrolled)))
                             {:status 400}))))))))
+
+(defn- validate-season-for-new-match!
+  "New matches require an active season. Returns the resolved season document."
+  [championship-id season-id]
+  (let [season (seasons-db/find-for-new-match championship-id season-id)]
+    (cond
+      (nil? season)
+      (throw (ex-info "No active season for this championship" {:status 400}))
+
+      (not (seasons-db/season-accepts-new-matches? season))
+      (throw (ex-info "Cannot create matches in a completed season" {:status 403}))
+
+      :else season)))
 
 (defn- validate-match-body
   ([body] (validate-match-body body true))
@@ -130,11 +143,14 @@
              {:error (.getMessage e)})))))))
 
 (defn- handle-exception [e user-message]
-  (if (= 400 (-> e ex-data :status))
-    (resp/error (or user-message (.getMessage e)) 400)
-    (do
-      (log/error e user-message)
-      (resp/server-error user-message))))
+  (let [status (-> e ex-data :status)]
+    (cond
+      (= 400 status) (resp/error (.getMessage e) 400)
+      (= 403 status) (resp/error (.getMessage e) 403)
+      :else
+      (do
+        (log/error e user-message)
+        (resp/server-error user-message)))))
 
 (defn- enrich-match-view
   "Attach :player-name and :team-name to each player-statistics row for read APIs (not persisted)."
@@ -198,10 +214,9 @@
         (let [match-data (dissoc data :player-statistics)
               player-statistics (:player-statistics data)
               championship-id (:championship-id match-data)
-              active-season (seasons-db/find-active-by-championship championship-id)
-              season-id (when active-season (:_id active-season))
-              match-data (cond-> match-data
-                           season-id (assoc :season-id season-id))
+              season (validate-season-for-new-match! championship-id (:season-id match-data))
+              season-id (:_id season)
+              match-data (assoc match-data :season-id season-id)
               admin-id (get-in request [:admin :_id])]
           (when (seq player-statistics)
             (validate-players-enrolled championship-id season-id (map :player-id player-statistics)))
@@ -209,8 +224,7 @@
           (let [created (matches-db/create match-data player-statistics
                                            {:created-by admin-id
                                             :data-source matches-db/data-source-ui-create})]
-            (when season-id
-              (seasons-db/add-match season-id (:_id created)))
+            (seasons-db/add-match season-id (:_id created))
             (player-stats-jobs/submit-incremental-recalc-after-match!
              {:reason :after-match-create
               :op :create
@@ -243,7 +257,7 @@
               (let [championship-id (or (:championship-id data) (:championship-id existing))
                     season-id (or (:season-id data)
                                   (:season-id existing)
-                                  (some-> (seasons-db/find-active-by-championship championship-id) :_id))
+                                  (some-> (seasons-db/find-default-for-championship championship-id) :_id))
                     player-statistics (or (:player-statistics data) (:player-statistics existing))]
                 (when (seq player-statistics)
                   (validate-players-enrolled championship-id season-id

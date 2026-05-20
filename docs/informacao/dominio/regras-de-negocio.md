@@ -533,6 +533,16 @@ Este documento lista todas as regras de negócio implementadas no sistema Galát
   - Query param `championship-id` filtra resultados
   - Resultados ordenados por data (decrescente)
 
+### RN-MATCH-09: Bloqueio de Nova Partida em Temporada Concluída
+- **Descrição**: Novas partidas só podem ser criadas em temporadas com status `active`.
+- **Arquivo**: `src/galaticos/handlers/matches.clj`; `src/galaticos/db/seasons.clj`; `src-cljs/galaticos/components/matches.cljs`
+- **Comportamento**:
+  - `POST /api/matches` resolve a temporada alvo via `:season-id` explícito ou `find-active-by-championship`
+  - Sem temporada ativa → `400` (`No active season for this championship`)
+  - Temporada não ativa (ex.: `completed`, `inactive`) → `403` (`Cannot create matches in a completed season`)
+  - Atualização e exclusão de partidas existentes **não** são bloqueadas por status da temporada
+  - UI oculta botões "Nova Partida" quando não há temporada ativa e desabilita o formulário de criação
+
 ---
 
 ## Estatísticas e Agregações

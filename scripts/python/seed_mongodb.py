@@ -1734,7 +1734,8 @@ def rebuild_aggregated_stats_from_matches(db) -> None:
     Merge match-derived stats with table (initial columns) stats.
 
     - Table values (from abas iniciais / CSV/Excel table) are stored in pre-match-stats.
-    - Displayed games/goals/assists = pre-match-stats baseline + match rollup (additive).
+    - Displayed games/goals/assists = pre-match-stats + (match rollup - baseline-match-rollup).
+      baseline-match-rollup captures imported matches already represented in the table.
     - Titles always come from the table (matches don't have title info).
     - When there is no match data for a championship, table baseline values are kept.
     """
@@ -1791,7 +1792,70 @@ def rebuild_aggregated_stats_from_matches(db) -> None:
         except (TypeError, ValueError):
             return default
 
-    def _baseline_from_entry(entry: Dict) -> Dict[str, int]:
+    def _subtract_triple(current: Dict[str, int], match: Dict[str, int]) -> Dict[str, int]:
+        return {
+            "games": max(0, _safe_int(current.get("games"), 0) - _safe_int(match.get("games"), 0)),
+            "goals": max(0, _safe_int(current.get("goals"), 0) - _safe_int(match.get("goals"), 0)),
+            "assists": max(0, _safe_int(current.get("assists"), 0) - _safe_int(match.get("assists"), 0)),
+        }
+
+    def _add_triple(baseline: Dict[str, int], delta: Dict[str, int]) -> Dict[str, int]:
+        return {
+            "games": _safe_int(baseline.get("games"), 0) + _safe_int(delta.get("games"), 0),
+            "goals": _safe_int(baseline.get("goals"), 0) + _safe_int(delta.get("goals"), 0),
+            "assists": _safe_int(baseline.get("assists"), 0) + _safe_int(delta.get("assists"), 0),
+        }
+
+    def _infer_baseline_match_rollup(entry: Dict, match_entry: Optional[Dict]) -> Optional[Dict[str, int]]:
+        pm = entry.get("pre-match-stats")
+        if not pm or not match_entry:
+            return None
+        pre = _pre_match_stat_triple(
+            _safe_int(pm.get("games"), 0),
+            _safe_int(pm.get("goals"), 0),
+            _safe_int(pm.get("assists"), 0),
+        )
+        disp = _pre_match_stat_triple(
+            _safe_int(entry.get("games"), 0),
+            _safe_int(entry.get("goals"), 0),
+            _safe_int(entry.get("assists"), 0),
+        )
+        match = _pre_match_stat_triple(
+            _safe_int(match_entry.get("games"), 0),
+            _safe_int(match_entry.get("goals"), 0),
+            _safe_int(match_entry.get("assists"), 0),
+        )
+        inflation = _subtract_triple(disp, pre)
+        if inflation["games"] >= match["games"]:
+            return match
+        return _subtract_triple(match, inflation)
+
+    def _resolve_baseline_match_rollup(entry: Dict, match_entry: Optional[Dict]) -> Dict[str, int]:
+        frozen = entry.get("baseline-match-rollup")
+        if frozen:
+            return _pre_match_stat_triple(
+                _safe_int(frozen.get("games"), 0),
+                _safe_int(frozen.get("goals"), 0),
+                _safe_int(frozen.get("assists"), 0),
+            )
+        inferred = _infer_baseline_match_rollup(entry, match_entry)
+        if inferred:
+            return inferred
+        return _pre_match_stat_triple(0, 0, 0)
+
+    def _sum_match_triple(match_by_champ: List[Dict]) -> Dict[str, int]:
+        return {
+            "games": sum(_safe_int(e.get("games"), 0) for e in match_by_champ),
+            "goals": sum(_safe_int(e.get("goals"), 0) for e in match_by_champ),
+            "assists": sum(_safe_int(e.get("assists"), 0) for e in match_by_champ),
+        }
+
+    def _display_likely_includes_match_rollups(display: Dict[str, int], match: Dict[str, int]) -> bool:
+        dg = _safe_int(display.get("games"), 0)
+        mg = _safe_int(match.get("games"), 0)
+        return dg > 0 and mg >= 10 and dg >= mg and (mg / dg) > 0.4
+
+    def _baseline_from_entry(entry: Dict, match_entry: Optional[Dict] = None) -> Dict[str, int]:
         pm = entry.get("pre-match-stats")
         if pm:
             return _pre_match_stat_triple(
@@ -1799,20 +1863,43 @@ def rebuild_aggregated_stats_from_matches(db) -> None:
                 _safe_int(pm.get("goals"), 0),
                 _safe_int(pm.get("assists"), 0),
             )
-        g = _safe_int(entry.get("games"), 0)
-        gl = _safe_int(entry.get("goals"), 0)
-        a = _safe_int(entry.get("assists"), 0)
-        if g > 0 or gl > 0 or a > 0:
-            return _pre_match_stat_triple(g, gl, a)
-        return _pre_match_stat_triple(0, 0, 0)
+        current = {
+            "games": _safe_int(entry.get("games"), 0),
+            "goals": _safe_int(entry.get("goals"), 0),
+            "assists": _safe_int(entry.get("assists"), 0),
+        }
+        if not any(current.values()):
+            return _pre_match_stat_triple(0, 0, 0)
+        if match_entry:
+            match = {
+                "games": _safe_int(match_entry.get("games"), 0),
+                "goals": _safe_int(match_entry.get("goals"), 0),
+                "assists": _safe_int(match_entry.get("assists"), 0),
+            }
+            if _display_likely_includes_match_rollups(current, match):
+                return _subtract_triple(current, match)
+        return _pre_match_stat_triple(current["games"], current["goals"], current["assists"])
 
     def _merge_additive(existing: Dict, match_by_champ: List[Dict]) -> Dict:
         current_by = existing.get("by-championship", [])
         pre_match_total = existing.get("pre-match-total")
+        match_triple = _sum_match_triple(match_by_champ)
         if not pre_match_total and not current_by:
             total = existing.get("total", {})
             if any(_safe_int(total.get(k), 0) > 0 for k in ("games", "goals", "assists", "titles")):
-                pre_match_total = _pre_match_total_from_stats(total)
+                total_triple = {
+                    "games": _safe_int(total.get("games"), 0),
+                    "goals": _safe_int(total.get("goals"), 0),
+                    "assists": _safe_int(total.get("assists"), 0),
+                }
+                if _display_likely_includes_match_rollups(total_triple, match_triple):
+                    baseline = _subtract_triple(total_triple, match_triple)
+                    pre_match_total = {
+                        **baseline,
+                        "titles": _safe_int(total.get("titles"), 0),
+                    }
+                else:
+                    pre_match_total = _pre_match_total_from_stats(total)
 
         match_by_champ_map = {
             e.get("championship-id"): e for e in match_by_champ if e.get("championship-id")
@@ -1822,19 +1909,25 @@ def rebuild_aggregated_stats_from_matches(db) -> None:
 
         for entry in current_by:
             cid = entry.get("championship-id")
-            baseline = _baseline_from_entry(entry)
+            baseline = _baseline_from_entry(entry, match_by_champ_map.get(cid))
             if cid in match_by_champ_map:
                 md = match_by_champ_map[cid]
-                md_games = _safe_int(md.get("games"), 0)
-                md_goals = _safe_int(md.get("goals"), 0)
-                md_assists = _safe_int(md.get("assists"), 0)
+                frozen = _resolve_baseline_match_rollup(entry, md)
+                match_triple = _pre_match_stat_triple(
+                    _safe_int(md.get("games"), 0),
+                    _safe_int(md.get("goals"), 0),
+                    _safe_int(md.get("assists"), 0),
+                )
+                delta = _subtract_triple(match_triple, frozen)
+                display = _add_triple(baseline, delta)
                 merged_by.append({
                     "championship-id": cid,
                     "championship-name": md.get("championship-name", entry.get("championship-name", "")),
                     "pre-match-stats": baseline,
-                    "games": baseline["games"] + md_games,
-                    "goals": baseline["goals"] + md_goals,
-                    "assists": baseline["assists"] + md_assists,
+                    "baseline-match-rollup": frozen,
+                    "games": display["games"],
+                    "goals": display["goals"],
+                    "assists": display["assists"],
                     "titles": _safe_int(entry.get("titles"), 0),
                     **({"season": entry["season"]} if entry.get("season") is not None else {}),
                 })
@@ -1856,6 +1949,7 @@ def rebuild_aggregated_stats_from_matches(db) -> None:
                     "championship-id": cid,
                     "championship-name": md.get("championship-name", ""),
                     "pre-match-stats": zero,
+                    "baseline-match-rollup": zero,
                     "games": _safe_int(md.get("games"), 0),
                     "goals": _safe_int(md.get("goals"), 0),
                     "assists": _safe_int(md.get("assists"), 0),

@@ -94,28 +94,37 @@
     (let [champ-id (ObjectId.)
           team-id (ObjectId.)
           player-id (ObjectId.)
+          season-id (ObjectId.)
           request {:json-body {:championship-id (str champ-id)
                                :player-statistics [{:player-id (str player-id) :team-id (str team-id)}]}}
-          result (with-redefs [seasons-db/find-active-by-championship (fn [_] nil)
+          result (with-redefs [seasons-db/find-active-by-championship (fn [_] {:_id season-id :status "active"})
                                championships-db/find-by-id (fn [_]
                                                              {:enrolled-player-ids [player-id]})
+                               seasons-db/find-by-id (fn [sid]
+                                                      (when (= sid season-id)
+                                                        {:_id season-id :status "active"
+                                                         :enrolled-player-ids [player-id]}))
                                players-db/find-by-ids (fn [_] [])
                                teams-db/find-by-id (fn [_] {:_id team-id :active-player-ids [player-id]})]
                   (handlers/create-match request))
           body (parse-body result)]
       (is (= 400 (:status result)))
-      ;; handle-exception prefers user-message over ex-message for {:status 400}
-      (is (str/includes? (:error body) "Failed to create match"))))
+      (is (str/includes? (:error body) "Player not found"))))
   (testing "wrong team-id for player"
     (let [champ-id (ObjectId.)
           team-id (ObjectId.)
           other-team (ObjectId.)
           player-id (ObjectId.)
+          season-id (ObjectId.)
           request {:json-body {:championship-id (str champ-id)
                                :player-statistics [{:player-id (str player-id) :team-id (str team-id)}]}}
-          result (with-redefs [seasons-db/find-active-by-championship (fn [_] nil)
+          result (with-redefs [seasons-db/find-active-by-championship (fn [_] {:_id season-id :status "active"})
                                championships-db/find-by-id (fn [_]
                                                              {:enrolled-player-ids [player-id]})
+                               seasons-db/find-by-id (fn [sid]
+                                                      (when (= sid season-id)
+                                                        {:_id season-id :status "active"
+                                                         :enrolled-player-ids [player-id]}))
                                players-db/find-by-ids
                                (fn [_] [{:_id player-id :name "P" :team-id other-team}])
                                teams-db/find-by-id (fn [tid]
@@ -124,15 +133,46 @@
                   (handlers/create-match request))
           body (parse-body result)]
       (is (= 400 (:status result)))
-      (is (str/includes? (:error body) "Failed to create match"))))
-  (testing "success with minimal player-statistics"
+      (is (str/includes? (:error body) "Invalid team-id"))))
+  (testing "rejects create when no active season"
     (let [champ-id (ObjectId.)
           team-id (ObjectId.)
           player-id (ObjectId.)
           request {:json-body {:championship-id (str champ-id)
                                :player-statistics [{:player-id (str player-id) :team-id (str team-id)}]}}
+          result (with-redefs [seasons-db/find-active-by-championship (fn [_] nil)]
+                  (handlers/create-match request))
+          body (parse-body result)]
+      (is (= 400 (:status result)))
+      (is (str/includes? (:error body) "No active season"))))
+  (testing "rejects create when explicit season-id is completed"
+    (let [champ-id (ObjectId.)
+          team-id (ObjectId.)
+          player-id (ObjectId.)
+          season-id (ObjectId.)
+          request {:json-body {:championship-id (str champ-id)
+                               :season-id (str season-id)
+                               :player-statistics [{:player-id (str player-id) :team-id (str team-id)}]}}
+          result (with-redefs [seasons-db/find-by-id (fn [sid]
+                                                       (when (= sid season-id)
+                                                         {:_id season-id :status "completed"}))]
+                  (handlers/create-match request))
+          body (parse-body result)]
+      (is (= 403 (:status result)))
+      (is (str/includes? (:error body) "completed season"))))
+  (testing "success with minimal player-statistics requires active season"
+    (let [champ-id (ObjectId.)
+          team-id (ObjectId.)
+          player-id (ObjectId.)
+          season-id (ObjectId.)
+          request {:json-body {:championship-id (str champ-id)
+                               :player-statistics [{:player-id (str player-id) :team-id (str team-id)}]}}
           created {:_id (ObjectId.)}
-          result (with-redefs [seasons-db/find-active-by-championship (fn [_] nil)
+          result (with-redefs [seasons-db/find-active-by-championship (fn [_] {:_id season-id :status "active"})
+                               seasons-db/find-by-id (fn [sid]
+                                                      (when (= sid season-id)
+                                                        {:_id season-id :status "active"
+                                                         :enrolled-player-ids [player-id]}))
                                championships-db/find-by-id (fn [x]
                                                              (when (or (= x (str champ-id))
                                                                        (= x champ-id))
@@ -145,6 +185,7 @@
                                  (when (= tid team-id)
                                    {:_id team-id :name "T" :active-player-ids [player-id]}))
                                matches-db/create (fn [_ _ _] created)
+                               seasons-db/add-match (fn [_ _] nil)
                                player-stats-jobs/submit-incremental-recalc-after-match! (fn [_] nil)]
                   (handlers/create-match request))
           body (parse-body result)]
@@ -160,10 +201,13 @@
           request {:json-body {:championship-id (str champ-id)
                                :player-statistics [{:player-id (str player-id) :team-id (str team-id)}]}}
           result (with-redefs [seasons-db/find-active-by-championship (fn [_] {:_id season-id
+                                                                               :status "active"
                                                                                :enrolled-player-ids [player-id]})
                                seasons-db/find-by-id (fn [sid]
                                                         (when (= sid season-id)
-                                                          {:_id season-id :enrolled-player-ids [player-id]}))
+                                                          {:_id season-id
+                                                           :status "active"
+                                                           :enrolled-player-ids [player-id]}))
                                championships-db/find-by-id (fn [_]
                                                              {:enrolled-player-ids [player-id]})
                                players-db/find-by-ids

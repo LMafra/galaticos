@@ -336,3 +336,21 @@
     (catch Exception e
       (log/error e "Error during stats reconciliation")
       (resp/server-error (str "Falha na reconciliação: " (.getMessage e))))))
+
+(defn reconcile-player-stats
+  "Incremental reconciliation for a single player: recompute aggregated-stats from matches."
+  [request]
+  (try
+    (let [player-id (get-in request [:params :player-id])]
+      (if (str/blank? (str player-id))
+        (resp/error "Player ID required" 400)
+        (do
+          (log/info "Player stats reconciliation started" {:player-id (str player-id)})
+          (let [{:keys [updated]} (agg/update-incremental-player-stats! [player-id])
+                n (or updated 0)]
+            (log/info "Player stats reconciliation completed" {:player-id (str player-id) :updated n})
+            (resp/success {:updated n
+                           :message (str "Reconciliação concluída. Estatísticas do jogador atualizadas.")})))))
+    (catch Exception e
+      (log/error e "Error during player stats reconciliation")
+      (resp/server-error (str "Falha na reconciliação: " (.getMessage e))))))

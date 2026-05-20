@@ -187,6 +187,28 @@
                       [:div {:class "mt-1"}
                        [common/badge (common/status-label status) :variant (common/status-variant status)]])]]]))])]]))))
 
+(defn- player-stat-row
+  [form-data player stats-map]
+  (let [pid (str (:_id player))
+        stat (get stats-map pid {:goals 0 :assists 0 :played? false})]
+    [:tr {:class "hover:bg-slate-50 dark:hover:bg-slate-800/80"}
+     [:td {:class "px-4 py-3 text-sm font-medium text-slate-900 dark:text-slate-100"}
+      (:name player)]
+     [:td {:class "px-4 py-3 text-center"}
+      [common/number-stepper
+       (:goals stat)
+       #(swap! form-data assoc-in [:player-statistics pid :goals] %)
+       :min-val 0]]
+     [:td {:class "px-4 py-3 text-center"}
+      [common/number-stepper
+       (:assists stat)
+       #(swap! form-data assoc-in [:player-statistics pid :assists] %)
+       :min-val 0]]
+     [:td {:class "px-4 py-3 text-center"}
+      [common/checkbox-field
+       (:played? stat)
+       #(swap! form-data assoc-in [:player-statistics pid :played?] %)]]]))
+
 (defn match-form [params]
   (let [id (:id params)
         is-edit? (some? id)
@@ -205,6 +227,8 @@
         submitting? (r/atom false)
         form-error (r/atom nil)
         field-errors (r/atom {})
+        championship-seasons (r/atom [])
+        seasons-loading? (r/atom false)
         parse-int (fn [v]
                     (let [trimmed (str/trim (str (or v "")))]
                       (when (not-empty trimmed)
@@ -265,6 +289,19 @@
                                   (reset! form-error msg)
                                   (state/toast-error! msg))
                                 (reset! players-loading? false))))))
+        load-seasons! (fn [championship-id]
+                        (if (str/blank? championship-id)
+                          (reset! championship-seasons [])
+                          (do
+                            (reset! seasons-loading? true)
+                            (api/get-championship-seasons
+                             championship-id
+                             (fn [result]
+                               (reset! championship-seasons result)
+                               (reset! seasons-loading? false))
+                             (fn [_err]
+                               (reset! championship-seasons [])
+                               (reset! seasons-loading? false))))))
         load-match! (fn []
                       (when is-edit?
                         (reset! form-error nil)
@@ -287,23 +324,43 @@
                                          (let [msg (str "Erro ao carregar partida: " err)]
                                            (reset! form-error msg)
                                            (state/toast-error! msg))
-                                         (reset! match-loading? false)))))]
+                                         (reset! match-loading? false)))))
+        mark-all-participation! (fn []
+                                  (swap! form-data update :player-statistics
+                                         (fn [stats]
+                                           (reduce (fn [m player]
+                                                     (let [pid (str (:_id player))
+                                                           current (get m pid {:goals 0 :assists 0 :played? false})]
+                                                       (assoc m pid (assoc current :played? true))))
+                                                   stats
+                                                   @enrolled-players))))]
     (r/create-class
      {:component-did-mount (fn []
                              (load-match!)
                              (when (and (not is-edit?)
                                         (not (str/blank? preset-championship-id)))
-                               (load-enrolled! preset-championship-id)))
+                               (load-enrolled! preset-championship-id)
+                               (load-seasons! preset-championship-id)))
       :reagent-render
       (fn []
         (let [championships (:championships @state/app-state)
               teams (:teams @state/app-state)
-              active-championship (first (filter #(common/status-active? (:status %)) championships))
+              selected-champ-id (:championship-id @form-data)
+              selected-championship (when-not (str/blank? selected-champ-id)
+                                      (first (filter #(= (str (:_id %)) selected-champ-id) championships)))
+              active-championship (or selected-championship
+                                      (first (filter #(common/status-active? (:status %)) championships)))
               active-champ-id (when active-championship (str (:_id active-championship)))
               active-champ-name (when active-championship (:name active-championship))
+              has-active-season? (boolean (some #(common/status-active? (:status %)) @championship-seasons))
+              create-locked? (and (not is-edit?)
+                                  (not (str/blank? selected-champ-id))
+                                  (not @seasons-loading?)
+                                  (not has-active-season?))
               _ (when (and active-champ-id (str/blank? (:championship-id @form-data)))
                   (swap! form-data assoc :championship-id active-champ-id)
-                  (load-enrolled! active-champ-id))
+                  (load-enrolled! active-champ-id)
+                  (load-seasons! active-champ-id))
               galaticos-team (first (filter #(= "Galáticos" (:name %)) teams))
               galaticos-id (when galaticos-team (str (:_id galaticos-team)))
               _ (when (and galaticos-id (str/blank? (:home-team-id @form-data)))
@@ -376,10 +433,15 @@
               [common/card
                [:div {:class "flex flex-wrap items-center justify-between gap-3"}
                 [:h3 {:class "app-section-title"} "Estatísticas dos jogadores"]
-                [:div {:class "text-xs text-slate-500"}
-                 (str "Gols: " total-goals " • Assistências: " total-assists " • Placar: " home-score " x " away-score)]]
+                [:div {:class "flex flex-wrap items-center gap-2"}
+                 (when (seq sorted-players)
+                   [common/button "Marcar participação de todos"
+                    mark-all-participation!
+                    :variant :outline])
+                 [:div {:class "text-xs text-slate-500"}
+                  (str "Gols: " total-goals " • Assistências: " total-assists " • Placar: " home-score " x " away-score)]]]
                (cond
-                 (str/blank? (:championship-id @form-data))
+                 (and (not is-edit?) (str/blank? (:championship-id @form-data)))
                  [:p {:class "mt-3 text-sm text-amber-600 dark:text-amber-400"} "Nenhum campeonato ativo encontrado."]
 
                  @players-loading?
@@ -389,43 +451,29 @@
                  [:p {:class "mt-3 text-sm text-amber-600 dark:text-amber-400"} "Nenhum jogador inscrito neste campeonato."]
 
                  :else
-                [:div {:class "mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"}
-                 [:table {:class "min-w-full divide-y divide-slate-200 dark:divide-slate-700"}
-                  [:thead {:class "bg-slate-50 dark:bg-slate-800/80"}
-                   [:tr
-                    [:th {:class "px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"} "Nome"]
-                    [:th {:class "px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"} "Gols"]
-                    [:th {:class "px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"} "Assistências"]
-                    [:th {:class "px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"} "Participação"]]]
-                  [:tbody {:class "divide-y divide-slate-100 dark:divide-slate-800"}
-                   (doall
-                    (for [player sorted-players]
-                      (let [pid (str (:_id player))
-                            stat (get stats-map pid {:goals 0 :assists 0 :played? false})]
-                        ^{:key pid}
-                        [:tr {:class "hover:bg-slate-50 dark:hover:bg-slate-800/80"}
-                         [:td {:class "px-4 py-3 text-sm font-medium text-slate-900 dark:text-slate-100"}
-                          (:name player)]
-                         [:td {:class "px-4 py-3 text-center"}
-                          [common/number-stepper
-                           (:goals stat)
-                           #(swap! form-data assoc-in [:player-statistics pid :goals] %)
-                           :min-val 0]]
-                         [:td {:class "px-4 py-3 text-center"}
-                          [common/number-stepper
-                           (:assists stat)
-                           #(swap! form-data assoc-in [:player-statistics pid :assists] %)
-                           :min-val 0]]
-                         [:td {:class "px-4 py-3 text-center"}
-                          [common/checkbox-field
-                           (:played? stat)
-                           #(swap! form-data assoc-in [:player-statistics pid :played?] %)]]])))]]])]
+                 [:div {:class "mt-4 space-y-3"}
+                  (when (and (not is-edit?) create-locked?)
+                    [:p {:class "text-sm text-amber-600 dark:text-amber-400"}
+                     "Temporada concluída — novas partidas não podem ser criadas. Ative uma temporada ou edite partidas existentes."])
+                  [:div {:class "overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"}
+                   [:table {:class "min-w-full divide-y divide-slate-200 dark:divide-slate-700"}
+                    [:thead {:class "bg-slate-50 dark:bg-slate-800/80"}
+                     [:tr
+                      [:th {:class "px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"} "Nome"]
+                      [:th {:class "px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"} "Gols"]
+                      [:th {:class "px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"} "Assistências"]
+                      [:th {:class "px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"} "Participação"]]]
+                    [:tbody {:class "divide-y divide-slate-100 dark:divide-slate-800"}
+                     (doall
+                      (for [player sorted-players]
+                        ^{:key (:_id player)}
+                        (player-stat-row form-data player stats-map)))]]]])]
 
               [:div {:class "flex flex-wrap gap-2"}
                [common/button (if @submitting? "Salvando..." (if is-edit? "Atualizar" "Criar Partida"))
                 nil
                 :type "submit"
-                :disabled @submitting?
+                :disabled (or @submitting? (and (not is-edit?) create-locked?))
                 :variant :primary]
                [common/button "Cancelar" #(rfe/push-state :matches) :variant :outline]]])]))})))
 
@@ -450,7 +498,7 @@
             (when-let [status (:status season)]
               [common/badge (common/status-label status) :variant (common/status-variant status)])]]
           [:div {:class "flex items-center gap-2"}
-           (when authenticated?
+           (when (and authenticated? (common/status-active? (:status season)))
              [common/button "Nova Partida"
               (fn [e]
                 (.stopPropagation e)
@@ -466,7 +514,10 @@
                (for [m sorted-matches]
                  ^{:key (:_id m)}
                  [match-row m delete-match! authenticated?])]
-              [:p {:class "app-muted"} "Nenhuma partida nesta temporada."])])]))))
+              [:p {:class "app-muted"}
+               (if (common/status-active? (:status season))
+                 "Nenhuma partida nesta temporada."
+                 "Temporada concluída — novas partidas não podem ser criadas.")])])]))))
 
 (defn championship-matches-page
   "Page showing all matches for a championship, organized by season."
@@ -518,6 +569,7 @@
       :reagent-render
       (fn []
         (let [{:keys [authenticated]} @state/app-state
+              has-active-season? (boolean (some #(common/status-active? (:status %)) @seasons))
               delete-match! (fn [match-id]
                               (when (js/confirm "Tem certeza que deseja deletar esta partida?")
                                 (api/delete-match
@@ -536,7 +588,7 @@
               [:p {:class "text-sm text-slate-500"} "Partidas do campeonato"]
               [:h2 {:class "text-2xl font-semibold text-slate-900 dark:text-slate-100"}
                (or (:name @championship) "Carregando...")]]]
-            (when authenticated
+            (when (and authenticated has-active-season?)
               [:div {:class "flex flex-wrap gap-2"}
                [common/button "Nova Partida"
                 #(rfe/push-state :match-new-in-championship {:championship-id championship-id})
