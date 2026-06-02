@@ -1,0 +1,38 @@
+---
+description: MongoDB and Monger conventions in db layer
+globs: "src/galaticos/db/**/*.clj"
+alwaysApply: false
+---
+
+# MongoDB Data Layer
+
+## Collections
+
+`championships`, `seasons`, `players`, `matches`, `teams`, `admins`
+
+## Embedding vs referencing
+
+- **Embed** — per-match player stats inside `matches`
+- **Cache** — aggregated per-season stats on `players`
+- **Reference** — `season-id`, `championship-id`, `player-id` as ObjectIds
+
+## Monger
+
+- Connection/helpers: `galaticos.db.core`
+- Use `monger.collection` for CRUD; `monger.operators` for `$set`, `$inc`, `$push`, `$elemMatch`, `$in`
+- clj-kondo aliases these operators — see `.clj-kondo/config.edn`
+
+## Aggregations
+
+`src/galaticos/db/aggregations.clj` — Mongo cursors are **single-pass**; realize results before counting or re-iterating.
+
+## Schema changes
+
+When changing document shape:
+
+1. Update `docs/informacao/dominio/mongodb-schema.md`
+2. Add indexes in `config/database/init-indexes.js` if query paths change
+
+## IDs
+
+Convert string IDs to ObjectId via `galaticos.util.response/->object-id` at handler boundary, not ad hoc in every db fn.

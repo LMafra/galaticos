@@ -1,0 +1,41 @@
+---
+description: Tests, Cloverage gate, and PR quality bar
+globs: "{test,test-cljs,e2e}/**/*"
+alwaysApply: false
+---
+
+# Testing and Quality
+
+## Backend unit tests
+
+- `clojure.test` in `test/galaticos/` — suffix `*_test.clj`
+- Run: `./bin/galaticos test` or `clojure -M:test`
+
+## ClojureScript unit tests
+
+- `test-cljs/` — run `clojure -M:cljs-test`
+
+## E2E
+
+- Playwright specs in `e2e/` — auth, CRUD, dashboard flows
+- Run via npm/playwright scripts in `package.json`
+
+## Coverage (PR blocker)
+
+Cloverage alias `:coverage` in `deps.edn`:
+
+- Fails when **min(% lines, % forms)** below **70**
+- Some ns excluded via `:ns-exclude-regex` — see `docs/informacao/dominio/testing-coverage.md`
+
+```bash
+./bin/galaticos coverage
+```
+
+## When to add tests
+
+- New or changed handler/db behavior → matching `test/galaticos/*_test.clj`
+- Bug fixes → regression test when feasible
+
+## PR checklist
+
+From `CONTRIBUTING.md`: compile clean, tests pass, coverage threshold, clj-kondo clean, conventional commit message.

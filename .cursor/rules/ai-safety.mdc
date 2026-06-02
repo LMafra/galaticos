@@ -1,0 +1,44 @@
+---
+description: Anti-hallucination checks for AI-assisted edits
+alwaysApply: true
+---
+
+# AI Safety (Galáticos)
+
+This project is **not** Luminus/Rails. Reject plausible-but-wrong APIs, paths, and deps.
+
+## Before adding requires or deps.edn entries
+
+Confirm the symbol exists in the library version in use:
+
+- **Ring** — `ring.*`, `compojure.core`
+- **Mongo** — `monger.core`, `monger.collection`, `monger.operators` (3.x)
+- **Auth** — `buddy.*`
+- **CLJS** — `reagent.core`, `reitit.frontend*`, `cljs-http.client`
+
+## Monger pitfalls
+
+- Prefer `find-maps`, `insert`, `update` from `monger.collection`
+- Do not mix Java driver method names (`insertOne`, etc.) into Monger ns
+- Operators: `$set`, `$inc`, `$push` via `monger.operators`
+
+## Layout pitfalls
+
+- Handlers: `galaticos.handlers.*`
+- Routes: `galaticos.routes.*`
+- DB: `galaticos.db.*`
+- CLJS UI: `galaticos.components.*`
+
+## After AI edits
+
+1. `./bin/galaticos test` — compile/load failures often mean bad `require`
+2. Watch for `ClassNotFoundException`, unresolved namespace
+3. clj-kondo on changed namespaces
+
+## Deep audit guide
+
+For file-by-file review prompts, use:
+
+`docs/informacao/qualidade/auditoria-alucinacoes-ia.md`
+
+Attach `@deps.edn`, `@shadow-cljs.edn` when auditing dependencies.
