@@ -21,7 +21,7 @@ Championship names from BASE_DADOS use canonical_championship_name(): a trailing
 Env DEFAULT_SEASON (default 2025) is used for championships from BASE_DADOS and,
 when legacy CSV import is on, as the single stored season for those CSVs.
 
-Env EXCEL_FILE (or CLI --excel) overrides the default Excel path (default data/galaticos.xlsm).
+Env EXCEL_FILE (or CLI --excel) overrides the default Excel path (default data/raw/galaticos.xlsm).
 
 Env GALATICOS_ENV=production (or prod): when set, --reset is refused unless
 ALLOW_DESTRUCTIVE_SEED is 1/true/yes (reduces accidental wipe against production).
@@ -58,7 +58,7 @@ MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 DB_NAME = os.getenv("DB_NAME", "galaticos")
 
 # Excel file path (relative to project root)
-EXCEL_FILE = "data/galaticos.xlsm"
+EXCEL_FILE = "data/raw/galaticos.xlsm"
 
 # Consolidated per-player, per-championship stats (not the same layout as row-based championship CSVs)
 BASE_DADOS_FILENAME = "BASE_DADOS.csv"
@@ -1010,15 +1010,16 @@ def is_long_format_base_dados_sheet(df_norm: pd.DataFrame) -> bool:
 
 
 def resolve_excel_path(cli_excel: Optional[str]) -> Path:
-    """Path to .xlsm: --excel, then env EXCEL_FILE, then default; try data/<name> if missing."""
+    """Path to .xlsm: --excel, then env EXCEL_FILE, then default; try data/raw/ and data/ if missing."""
     raw = (cli_excel or os.getenv("EXCEL_FILE") or EXCEL_FILE).strip()
     p = Path(raw).expanduser()
     if p.exists():
         return p.resolve()
     if not p.is_absolute():
-        alt = Path("data") / p.name
-        if alt.exists():
-            return alt.resolve()
+        for base in (Path("data/raw"), Path("data")):
+            alt = base / p.name
+            if alt.exists():
+                return alt.resolve()
     return p
 
 
@@ -2825,7 +2826,7 @@ Examples:
     parser.add_argument(
         "--excel",
         metavar="PATH",
-        help="Path to .xlsm (default: env EXCEL_FILE or data/galaticos.xlsm)",
+        help="Path to .xlsm (default: env EXCEL_FILE or data/raw/galaticos.xlsm)",
     )
     parser.add_argument(
         "--ignore-smoke-dataset",
@@ -2891,7 +2892,7 @@ Examples:
     excel_path = resolve_excel_path(args.excel)
     if not excel_path.exists():
         print(f"✗ Error: Excel file not found: {excel_path}", file=sys.stderr)
-        print("  Set --excel, env EXCEL_FILE, or place data/galaticos.xlsm", file=sys.stderr)
+        print("  Set --excel, env EXCEL_FILE, or place data/raw/galaticos.xlsm", file=sys.stderr)
         sys.exit(1)
     
     # Connect to MongoDB

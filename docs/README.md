@@ -54,9 +54,11 @@ Referência estável: visão, processos, modelos e como medir.
 
 Registros de entregas ou fases encerradas (snapshot).
 
-### Domínio (`docs/concluido/dominio/`)
+### Implementação inicial
 
-- [IMPLEMENTATION.md](concluido/dominio/IMPLEMENTATION.md) — visão da implementação inicial do schema e módulos (histórico).
+- [IMPLEMENTATION.md](IMPLEMENTATION.md) — visão da implementação inicial do schema e módulos (histórico).
+
+### Domínio (`docs/concluido/dominio/`)
 
 ## Parcial
 

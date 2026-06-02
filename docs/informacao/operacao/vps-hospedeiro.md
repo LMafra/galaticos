@@ -185,20 +185,20 @@ Quase sempre: app não escuta na 3000 (container a reiniciar, crash ao ligar ao 
 
 ### Ficheiro
 
-O script espera **`data/galaticos.xlsm`** na raiz do projeto (ver [scripts/database/seed.sh](../../../scripts/database/seed.sh)). A aba de jogadores tem de se chamar exatamente **`Base de dados`**.
+O script espera **`data/raw/galaticos.xlsm`** (ver [scripts/database/seed.sh](../../../scripts/database/seed.sh)). A aba de jogadores tem de se chamar exatamente **`Base de dados`**.
 
 ### Enviar o Excel do Windows para a VPS
 
 PowerShell:
 
 ```powershell
-scp "C:\Users\SEU_USER\Downloads\galaticos.xlsm" root@galaticosfr.vps-kinghost.net:/opt/galaticos/data/galaticos.xlsm
+scp "C:\Users\SEU_USER\Downloads\galaticos.xlsm" root@galaticosfr.vps-kinghost.net:/opt/galaticos/data/raw/galaticos.xlsm
 ```
 
 WSL:
 
 ```bash
-scp /mnt/c/Users/SEU_USER/Downloads/galaticos.xlsm root@HOST:/opt/galaticos/data/galaticos.xlsm
+scp /mnt/c/Users/SEU_USER/Downloads/galaticos.xlsm root@HOST:/opt/galaticos/data/raw/galaticos.xlsm
 ```
 
 ### MongoDB acessível a partir do host (seed / `mongosh`)

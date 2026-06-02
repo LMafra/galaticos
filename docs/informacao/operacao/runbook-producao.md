@@ -10,9 +10,9 @@ Para operações típicas em **VPS + domínio externo** (SSH, localização do `
 - O container **`app`** é substituível: rebuild/restart **não** apaga a base, desde que o volume do MongoDB seja mantido.
 - O ficheiro [config/database/init-indexes.js](../../../config/database/init-indexes.js) corre **apenas no primeiro arranque** do MongoDB com diretório de dados vazio. Bases já existentes precisam de índices aplicados com o fluxo documentado abaixo. Mantê-lo alinhado com [scripts/mongodb/mongodb-indexes.js](../../../scripts/mongodb/mongodb-indexes.js).
 
-### Linha de base: `data/galaticos.xlsm` vs dados no MongoDB
+### Linha de base: `data/raw/galaticos.xlsm` vs dados no MongoDB
 
-- O ficheiro **`data/galaticos.xlsm`** (ou o caminho em **`EXCEL_FILE`**) é a **linha de base** documental do projeto: o seed oficial materializa o Excel na base ([`scripts/python/seed_mongodb.py`](../../../scripts/python/seed_mongodb.py), [`scripts/database/seed.sh`](../../../scripts/database/seed.sh)).
+- O ficheiro **`data/raw/galaticos.xlsm`** (ou o caminho em **`EXCEL_FILE`**) é a **linha de base** documental do projeto: o seed oficial materializa o Excel na base ([`scripts/python/seed_mongodb.py`](../../../scripts/python/seed_mongodb.py), [`scripts/database/seed.sh`](../../../scripts/database/seed.sh)).
 - **Depois** de carregar o Excel, a **fonte de verdade em produção** para jogos e estatísticas **por partida** é a coleção **`matches`** (e `player-statistics` dentro de cada documento). O campo `aggregated-stats` em **`players`** é **derivado** (cache de leitura) e deve alinhar com as partidas após [reconciliação](../../analytics/reconciliation-runbook.md) (`POST /api/aggregations/reconcile`, admin).
 - **Validar** totais “estranhos”: rever ou exportar partidas do campeonato/jogador; corrigir ou apagar a partida em causa na aplicação; em seguida **reconciliar** para recalcular agregados.
 - **Zerar** o que for errado: corrigir **na origem** (partida / linha de estatística) — apagar a partida duplicada ou ajustar golos/assistências — e reconciliar. Não basta apagar ficheiros Excel localmente: a produção lê o Mongo.

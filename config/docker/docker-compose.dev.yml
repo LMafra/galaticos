@@ -23,6 +23,7 @@ services:
     build:
       context: ../..
       dockerfile: config/docker/Dockerfile.dev
+      ignore: .dockerignore
     container_name: galaticos-app-dev
     restart: unless-stopped
     ports:
@@ -55,6 +56,7 @@ services:
     build:
       context: ../..
       dockerfile: config/docker/Dockerfile.dev
+      ignore: .dockerignore
     container_name: galaticos-frontend-watch
     command: ["clj", "-M:frontend", "-m", "shadow.cljs.devtools.cli", "watch", "app"]
     restart: unless-stopped

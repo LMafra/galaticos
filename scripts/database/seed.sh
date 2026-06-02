@@ -20,7 +20,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../utils/common.sh"
 
 # Configuration (EXCEL_FILE may be set in the environment, same as seed_mongodb.py)
-EXCEL_FILE="${EXCEL_FILE:-data/galaticos.xlsm}"
+EXCEL_FILE="${EXCEL_FILE:-data/raw/galaticos.xlsm}"
 readonly SEED_SCRIPT="scripts/python/seed_mongodb.py"
 # Default admin credentials (must match seed_mongodb.py create_admin defaults)
 readonly ADMIN_USER="admin"

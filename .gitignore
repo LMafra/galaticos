@@ -38,6 +38,8 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+!scripts/build/
+!scripts/build/**
 .pytest_cache/
 .coverage
 htmlcov/
@@ -82,7 +84,8 @@ Desktop.ini
 # Data files (large Excel files)
 *.xlsm
 *.xlsx
-data/raw/
+data/raw/*
+!data/raw/.gitkeep
 data/input/
 data/output/
 data/tmp/
