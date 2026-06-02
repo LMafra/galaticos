@@ -67,6 +67,61 @@ async function getAdminToken(request) {
   return j?.data?.token ?? null;
 }
 
-module.exports = { loginAsAdmin, getStoredToken, saveCoverage, getAdminToken };
+/**
+ * @param {import('@playwright/test').APIRequestContext} request
+ * @param {string} token
+ * @param {string} method
+ * @param {string} path
+ * @param {Record<string, unknown>} [data]
+ */
+async function apiJson(request, token, method, path, data = undefined) {
+  const opts = {
+    method,
+    headers: { Authorization: `Bearer ${token}` },
+  };
+  if (data !== undefined && method !== 'GET') {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.data = data;
+  }
+  const response = await request.fetch(path, opts);
+  const body = await response.json().catch(() => ({}));
+  return { response, body };
+}
+
+/**
+ * Activate the first season of a championship (required for POST /api/matches).
+ * @returns {Promise<string|null>} season id when active
+ */
+async function activateChampionshipSeason(request, token, championshipId) {
+  const { response, body } = await apiJson(
+    request,
+    token,
+    'GET',
+    `/api/championships/${championshipId}/seasons`
+  );
+  if (!response.ok()) return null;
+  const seasons = Array.isArray(body?.data) ? body.data : [];
+  const existing = seasons.find((s) => s?.status === 'active');
+  if (existing?._id) return String(existing._id);
+  const seasonId = seasons[0]?._id;
+  if (!seasonId) return null;
+  const { response: actRes } = await apiJson(
+    request,
+    token,
+    'POST',
+    `/api/seasons/${seasonId}/activate`,
+    {}
+  );
+  return actRes.ok() ? String(seasonId) : null;
+}
+
+module.exports = {
+  loginAsAdmin,
+  getStoredToken,
+  saveCoverage,
+  getAdminToken,
+  apiJson,
+  activateChampionshipSeason,
+};
 
 

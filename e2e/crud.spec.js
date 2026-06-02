@@ -1,32 +1,8 @@
 const { test, expect } = require('@playwright/test');
-const { saveCoverage, getAdminToken } = require('./_helpers');
+const { saveCoverage, getAdminToken, apiJson, activateChampionshipSeason } = require('./_helpers');
 
 /**
- * @param {import('@playwright/test').APIRequestContext} request
- * @param {string} token
- * @param {string} method
- * @param {string} path
- * @param {Record<string, unknown>} [data]
- */
-async function apiJson(request, token, method, path, data = undefined) {
-  const opts = {
-    method,
-    headers: { Authorization: `Bearer ${token}` },
-  };
-  if (data !== undefined && method !== 'GET') {
-    opts.headers['Content-Type'] = 'application/json';
-    opts.data = data;
-  }
-  const response = await request.fetch(path, opts);
-  const body = await response.json().catch(() => ({}));
-  return { response, body };
-}
-
-/**
- * Championship + Galáticos player enrolled via API (same pattern as player-stats-refresh).
- * Do not send status: active here: that creates an active season and enroll hits seasons/add-player,
- * which can fail on bad/legacy enrolled-player-ids shapes; without an active season, enroll uses the
- * championship root and get-championship-players still lists the player (roster union).
+ * Championship with active season + Galáticos player enrolled on that season (required for new matches).
  */
 async function setupActiveChampionshipWithEnrolledGalaticosPlayer(request) {
   const token = await getAdminToken(request);
@@ -37,10 +13,13 @@ async function setupActiveChampionshipWithEnrolledGalaticosPlayer(request) {
     name: `E2E Champ ${unique}`,
     season: '2026',
     'titles-count': 0,
+    status: 'active',
   });
   expect(cRes.ok(), JSON.stringify(cBody)).toBeTruthy();
   const championshipId = cBody?.data?._id;
   expect(championshipId).toBeTruthy();
+  const seasonId = await activateChampionshipSeason(request, token, championshipId);
+  expect(seasonId, 'active season for match create').toBeTruthy();
 
   const { response: tRes, body: tBody } = await apiJson(request, token, 'GET', '/api/teams');
   expect(tRes.ok()).toBeTruthy();
@@ -182,6 +161,7 @@ test('create match with one player statistic', { tag: '@crud' }, async ({ page, 
         return false;
       }
     }, { timeout: 20_000 });
+    await expect(page.getByRole('button', { name: 'Criar Partida' })).toBeEnabled({ timeout: 15_000 });
     await page.getByRole('button', { name: 'Criar Partida' }).click();
     const resp = await createMatchResp;
     expect(resp.status(), await resp.text()).toBe(201);

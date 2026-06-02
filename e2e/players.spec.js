@@ -45,8 +45,8 @@ test.describe('Player detail tabs', { tag: '@crud' }, () => {
       }
       await firstRow.click();
       await expect(page.getByRole('button', { name: 'Informações' })).toBeVisible({ timeout: 10_000 });
-      await expect(page.getByRole('button', { name: 'Estatísticas' })).toBeVisible();
-      await page.getByRole('button', { name: 'Estatísticas' }).click();
+      await expect(page.getByRole('button', { name: 'Estatísticas', exact: true })).toBeVisible();
+      await page.getByRole('button', { name: 'Estatísticas', exact: true }).click();
       await expect(page.getByText(/Nenhum dado|Performance por campeonato|Evolução/)).toBeVisible({ timeout: 5000 }).catch(() => {});
     } finally {
       await saveCoverage(page, testInfo);

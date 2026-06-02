@@ -3,20 +3,7 @@
  * Run with app up + (recommended) db:seed-smoke; uses API to avoid flakiness from UI timing.
  */
 const { test, expect } = require('@playwright/test');
-const { getAdminToken, saveCoverage } = require('./_helpers');
-
-async function apiJson(request, token, method, path, data = undefined) {
-  const response = await request.fetch(path, {
-    method,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    data,
-  });
-  const body = await response.json().catch(() => ({}));
-  return { response, body };
-}
+const { getAdminToken, saveCoverage, apiJson, activateChampionshipSeason } = require('./_helpers');
 
 /**
  * @param {import('@playwright/test').APIRequestContext} request
@@ -93,10 +80,13 @@ test.describe('Player stats refresh (async + reconcile API)', { tag: '@analytics
         name: `E2E Stats ${unique}`,
         season: '2026',
         'titles-count': 0,
+        status: 'active',
       });
       expect(cRes.ok(), JSON.stringify(cBody)).toBeTruthy();
       const championshipId = cBody?.data?._id;
       expect(championshipId).toBeTruthy();
+      const seasonId = await activateChampionshipSeason(request, token, championshipId);
+      expect(seasonId, 'active season required for match create').toBeTruthy();
 
       const { body: tBody, response: tRes } = await apiJson(request, token, 'POST', '/api/teams', {
         name: `E2E Team Stats ${unique}`,

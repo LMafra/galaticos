@@ -1,26 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { getAdminToken, saveCoverage } = require('./_helpers');
-
-/**
- * @param {import('@playwright/test').APIRequestContext} request
- * @param {string} token
- * @param {string} method
- * @param {string} path
- * @param {Record<string, unknown>} [data]
- */
-async function apiJson(request, token, method, path, data = undefined) {
-  const opts = {
-    method,
-    headers: { Authorization: `Bearer ${token}` },
-  };
-  if (data !== undefined && method !== 'GET') {
-    opts.headers['Content-Type'] = 'application/json';
-    opts.data = data;
-  }
-  const response = await request.fetch(path, opts);
-  const body = await response.json().catch(() => ({}));
-  return { response, body };
-}
+const { getAdminToken, saveCoverage, apiJson, activateChampionshipSeason } = require('./_helpers');
 
 test.describe('Referential integrity - delete protection', { tag: '@integrity' }, () => {
   test.beforeEach(async ({ page }) => {
@@ -63,11 +42,13 @@ test.describe('Referential integrity - delete protection', { tag: '@integrity' }
         token,
         'POST',
         '/api/championships',
-        { name: `Campeonato Integridade E2E ${unique}`, season: '2026', 'titles-count': 0 }
+        { name: `Campeonato Integridade E2E ${unique}`, season: '2026', 'titles-count': 0, status: 'active' }
       );
       expect(createdChampionshipResponse.ok(), JSON.stringify(createdChampionshipBody)).toBeTruthy();
       const championshipId = createdChampionshipBody?.data?._id;
       expect(championshipId).toBeTruthy();
+      const seasonId = await activateChampionshipSeason(request, token, championshipId);
+      expect(seasonId, 'active season required for match create').toBeTruthy();
 
       const { body: createdTeamBody, response: createdTeamResponse } = await apiJson(
         request,
