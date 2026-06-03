@@ -1,0 +1,43 @@
+---
+description: Backend layering — routes, handlers, db
+globs: "{src,test}/**/*.clj"
+alwaysApply: false
+---
+
+# Clojure Backend
+
+## Request flow
+
+`routes/*` → `handlers/*` → `db/*` → MongoDB
+
+Routes stay thin; HTTP and validation in handlers; persistence in `db/`.
+
+## Handlers
+
+- Use `galaticos.util.response` — `resp/error`, `resp/server-error`, `resp/->object-id`
+- Log errors with `clojure.tools.logging`
+- Validate bodies with explicit allowed-field sets:
+
+```clojure
+(def ^:private allowed-player-fields #{:name :position ...})
+(defn- validate-player-body [body]
+  (let [unknown (seq (remove allowed-player-fields (keys body)))]
+    (when unknown {:error (str "Unknown fields: " ...)})))
+```
+
+See `src/galaticos/handlers/players.clj` for the pattern.
+
+## Routes
+
+- Per-resource ns under `galaticos.routes.*`
+- Mounted in `src/galaticos/routes/api.clj`
+
+## Where logic lives
+
+- Shared domain: `galaticos.championship.roster`, `galaticos.db.*`
+- Analytics recompute: `galaticos.analytics.player-stats-jobs`
+- Do not duplicate business rules in routes
+
+## Exceptions
+
+Map `ex-data :status` 400 to client errors; other exceptions → log + `server-error`.

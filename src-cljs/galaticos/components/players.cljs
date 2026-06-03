@@ -272,6 +272,90 @@
                               (refresh-dup-report!)
                               (search-backend!))}])]))})))
 
+(defn- trend-direction-label [d]
+  (case d :up "Em alta" :down "Em queda" :stable "Estável" (or (some-> d name) "-")))
+
+(defn- risk-level-label [l]
+  (case l :low "Baixo" :medium "Médio" :high "Alto" (or (some-> l name) "-")))
+
+(defn- format-derived-num [k v]
+  (cond
+    (nil? v) "-"
+    (= k :minutes-per-goal) (.toFixed (double v) 1)
+    (#{:goal-contribution-per-game :discipline-index} k) (.toFixed (double v) 2)
+    :else (str v)))
+
+(defn- insights-disclaimers-block [disclaimers]
+  (when (seq disclaimers)
+    [:div {:class "rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/40"}
+     [:p {:class "text-sm font-medium text-amber-900 dark:text-amber-100"} "Avisos"]
+     [:ul {:class "mt-2 list-disc space-y-1 pl-5 text-xs text-amber-800 dark:text-amber-200"}
+      (for [[i msg] (map-indexed vector disclaimers)]
+        ^{:key i} [:li msg])]]))
+
+(defn- insights-derived-card [derived]
+  [common/card
+   [:h3 {:class "app-section-title"} "Métricas derivadas"]
+   [:div {:class "mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"}
+    (for [[k label] [[:goal-contribution "Contrib. gol"]
+                      [:goal-contribution-per-game "Contrib./jogo"]
+                      [:discipline-index "Disciplina"]
+                      [:minutes-per-goal "Min/gol"]]]
+      ^{:key k}
+      [:div {:class "rounded-lg border border-slate-200 p-3 dark:border-slate-700"}
+       [:p {:class "text-xs text-slate-500"} label]
+       [:p {:class "text-lg font-semibold text-slate-900 dark:text-slate-100"}
+        (format-derived-num k (get derived k))]])]])
+
+(defn- insights-predictive-block [data ready?]
+  (if ready?
+    [:div {:class "space-y-4"}
+     [common/card
+      [:h3 {:class "app-section-title"} "Tendência (experimental)"]
+      (let [t (:trend data)]
+        (if t
+          [:dl {:class "mt-3 grid gap-2 text-sm sm:grid-cols-2"}
+           [:div [:dt {:class "text-slate-500"} "Direção"] [:dd (trend-direction-label (:direction t))]]
+           [:div [:dt {:class "text-slate-500"} "Delta contrib./jogo"] [:dd (.toFixed (double (or (:delta t) 0)) 2)]]
+           [:div [:dt {:class "text-slate-500"} "Média recente"] [:dd (.toFixed (double (or (:recent-avg t) 0)) 2)]]
+           [:div [:dt {:class "text-slate-500"} "Média anterior"] [:dd (.toFixed (double (or (:prior-avg t) 0)) 2)]]]
+          [:p {:class "app-muted"} "Sem tendência calculada."]))]
+     [common/card
+      [:h3 {:class "app-section-title"} "Risco e projeção"]
+      (let [risk (:risk data)
+            proj (:projection data)]
+        [:dl {:class "mt-3 grid gap-2 text-sm sm:grid-cols-2"}
+         [:div [:dt {:class "text-slate-500"} "Risco"] [:dd (risk-level-label (:level risk))]]
+         [:div [:dt {:class "text-slate-500"} "Índice disciplina"]
+          [:dd (format-derived-num :discipline-index (:discipline-index risk))]]
+         [:div [:dt {:class "text-slate-500"} "Projeção contrib. gol"]
+          [:dd (if proj (.toFixed (double (or (:projected-goal-contribution proj) 0)) 1) "-")]]])]]
+    [common/card
+     [:h3 {:class "app-section-title"} "Análise preditiva"]
+     [:p {:class "text-sm text-slate-600 dark:text-slate-400"}
+      "Projeções e tendências indisponíveis até o histórico e a reconciliação de agregados atenderem aos critérios. Métricas derivadas acima permanecem válidas."]]))
+
+(defn- insights-tab-panel [player-id]
+  (fn []
+    (let [pid (str player-id)
+          {:keys [player-insights]} @state/app-state
+          match? (= pid (some-> (:player-id player-insights) str))
+          {:keys [loading? error data]} (if match? player-insights {})
+          derived (:derived data)
+          ready? (true? (get-in data [:readiness :ok]))
+          disclaimers (or (:disclaimers data) [])]
+      [:div {:class "mt-4 space-y-4"}
+       (cond
+         loading? [common/loading-spinner]
+         error [:p {:class "text-sm text-red-600"} error]
+         (not data) [:p {:class "app-muted"} "Carregando insights…"]
+         :else
+         [:div {:class "space-y-4"}
+          [insights-disclaimers-block disclaimers]
+          [insights-derived-card derived]
+          [insights-predictive-block data ready?]])])))
+
+
 (defn- format-evolution-period [id]
   (when (map? id)
     (let [y (:year id)
@@ -289,6 +373,7 @@
         error (r/atom nil)
         not-found? (r/atom false)
         deleting? (r/atom false)
+        reconciling? (r/atom false)
         active-tab (r/atom :info)
         evolution (r/atom nil)
         evolution-loading? (r/atom false)
@@ -326,10 +411,24 @@
                                                (reset! deleting? false)
                                                (let [msg (str "Erro ao deletar jogador: " err)]
                                                  (reset! error msg)
-                                                 (state/toast-error! msg))))))]
+                                                 (state/toast-error! msg))))))
+        reconcile-player! (fn []
+                            (when-not @reconciling?
+                              (reset! reconciling? true)
+                              (api/reconcile-player-stats!
+                               id
+                               (fn [data]
+                                 (reset! reconciling? false)
+                                 (let [msg (or (:message data) "Reconciliação concluída.")]
+                                   (state/toast-success! msg)
+                                   (load-player!)))
+                               (fn [err _]
+                                 (reset! reconciling? false)
+                                 (state/toast-error! (str err))))))]
     (r/create-class
      {:component-did-mount (fn []
                              (effects/ensure-teams!)
+                             (effects/ensure-player-insights! id)
                              (load-player!))
       :reagent-render
       (fn []
@@ -362,6 +461,10 @@
                       (when authenticated
                         [:div {:class "flex flex-wrap gap-2"}
                          [common/button "Editar" #(rfe/push-state :player-edit {:id id}) :variant :outline]
+                         [common/button "Reconciliar estatísticas" reconcile-player!
+                          :variant :outline
+                          :disabled @reconciling?
+                          :aria-label "Recalcular estatísticas agregadas deste jogador"]
                          [common/button "Deletar" delete-player! :variant :danger :disabled @deleting?]])]
 
                      [:div {:class "grid gap-4 md:grid-cols-2 xl:grid-cols-4"}
@@ -374,7 +477,8 @@
                       [:div {:class "flex flex-wrap items-center justify-between gap-2"}
                        [:div {:class "flex gap-2"}
                         [common/button "Informações" #(reset! active-tab :info) :variant (if (= @active-tab :info) :primary :outline)]
-                        [common/button "Estatísticas" #(reset! active-tab :stats) :variant (if (= @active-tab :stats) :primary :outline)]]]
+                        [common/button "Estatísticas" #(reset! active-tab :stats) :variant (if (= @active-tab :stats) :primary :outline)]
+                        [common/button "Insights" #(reset! active-tab :insights) :variant (if (= @active-tab :insights) :primary :outline)]]]
                       (case @active-tab
                         :info
                         [:div {:class "mt-4 grid gap-4 md:grid-cols-2"}
@@ -390,6 +494,8 @@
                           [:p [:span {:class "font-medium text-slate-800"} "Número: "] (or (:shirt-number @player) "-")]]]
                         :stats
                         [:div {:class "mt-4 space-y-6"}
+                         [:p {:class "text-xs text-slate-600 dark:text-slate-400"}
+                          "Recalcula os totais a partir das partidas guardadas. Use após corrigir ou apagar partidas."]
                          [common/card
                           [:h3 {:class "app-section-title"} "Performance por campeonato"]
                           (if (seq by-champ)
@@ -430,6 +536,7 @@
                              :sortable? true
                              :dense? true]
                             :else [:p {:class "app-muted"} "Nenhum dado de evolução"])]]
+                        :insights [insights-tab-panel id]
                         [:p {:class "app-muted"} "Selecione uma aba"])
                       ]
                      ])

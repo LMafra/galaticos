@@ -279,24 +279,68 @@ players       (N) ──< (N) seasons         (via aggregated-stats.by-season)
 
 ## 4. Considerações de Design
 
-### 4.1 Denormalização
+### 4.1 Política de desnormalização
+
+Campos denormalizados são **cache de leitura**; a fonte de verdade permanece na coleção de origem.
+
+| Campo denormalizado | Onde | Fonte de verdade | Quando atualizar |
+|---------------------|------|------------------|------------------|
+| `player-name`, `position` | `matches.player-statistics` | `players` | Escrita de partida (UI/API) |
+| `championship-id` | `matches` | `seasons` / `championships` | Criação/edição de partida |
+| `championship-name`, `format` | `seasons` | `championships` | Criação de temporada; evitar drift em rename (re-sync opcional) |
+| `championship-name`, `season` | `players.aggregated-stats.by-season` | `seasons` + jobs de recalc | Após CRUD de partidas (background job) |
+| `team-name` em respostas API | não persistir em `players` | `teams` | Leitura: `logic/players` anexa nome do time |
+
+**Regras:**
+
+- Não confiar em `players.team-name` armazenado no documento; o bundle de detalhe resolve o nome via `teams`.
+- `aggregated-stats` em `players` é recalculável; `matches.player-statistics` é autoritativo para estatísticas por jogo.
+- Novos campos denormalizados exigem entrada nesta tabela e, se necessário, índice em `scripts/mongodb/mongodb-indexes.js`.
+
+### 4.2 Denormalização (resumo histórico)
 
 - `player-name` e `position` são denormalizados em `matches.player-statistics` para evitar lookups frequentes
 - `championship-name`, `championship-id` e `season` são denormalizados em `players.aggregated-stats.by-season` para queries rápidas de dashboard
 - `championship-name` e `format` são denormalizados em `seasons` para evitar join com `championships` em listagens
 - `championship-id` é denormalizado em `matches` para manter compatibilidade com queries de agregação existentes
 
-### 4.2 Performance
+### 4.3 Performance
 
 - Estatísticas agregadas em `players.aggregated-stats` são atualizadas via background job após inserção/atualização de partidas
 - Queries de dashboard usam dados cached em `aggregated-stats`
 - Queries detalhadas usam aggregation pipelines em `matches`
 - `seasons.match-ids` e `seasons.enrolled-player-ids` são sincronizados ao criar/remover matches e inscrições
 
-### 4.3 Consistência e Invariantes
+### 4.4 Consistência e Invariantes
 
 - Estatísticas em `matches` são a fonte de verdade
 - `aggregated-stats` em `players` é cache recalculável a qualquer momento
 - No máximo uma temporada com `status: "active"` por campeonato (enforced no backend)
 - `team-id` em `matches.player-statistics` deve coincidir com `players.team-id` (validado no backend — BRM-09)
 - `enrolled-player-ids` em `seasons` deve incluir todos os jogadores com estatísticas em `match-ids` da mesma temporada
+
+## 5. Índices
+
+Fonte de verdade para criação: `scripts/mongodb/mongodb-indexes.js` (espelhado em `config/database/init-indexes.js` no primeiro boot do container).
+
+| Coleção | Índice | Tipo | Uso |
+|---------|--------|------|-----|
+| `championships` | `{ name: 1, season: 1 }` | unique | Legado; raiz actual usa `name` + `season-ids` |
+| `championships` | `{ status: 1 }` | — | Filtro por estado |
+| `championships` | `{ start-date: 1, end-date: 1 }` | — | Intervalos |
+| `seasons` | `{ championship-id: 1, season: 1 }` | unique | Uma temporada por ano/label por campeonato |
+| `seasons` | `{ championship-id: 1, status: 1 }` | — | Temporada activa por campeonato |
+| `players` | `{ name: 1 }` | — | Listagem por nome |
+| `players` | `{ team-id: 1, active: 1 }` | — | Elenco por time |
+| `players` | `{ position: 1 }` | — | Filtro posição |
+| `players` | `{ aggregated-stats.total.games: -1 }` | — | Ranking jogos |
+| `players` | `{ aggregated-stats.by-championship.championship-id: 1 }` | — | Stats por campeonato |
+| `players` | `{ nickname: 1 }` | — | Busca apelido |
+| `matches` | `{ championship-id: 1, date: -1 }` | — | Histórico por campeonato |
+| `matches` | `{ date: -1 }` | — | Ordenação global |
+| `matches` | `{ player-statistics.player-id: 1 }` | — | Partidas por jogador |
+| `matches` | `{ season-id: 1, date: -1 }` | — | Partidas por temporada (recomendado em novos deploys) |
+| `teams` | `{ name: 1 }` | unique | Nome único |
+| `admins` | `{ username: 1 }` | unique | Login |
+
+**Manutenção:** ao adicionar query frequente nova, actualizar o script JS, correr `./bin/galaticos db:setup` em ambientes existentes, e reflectir a linha nesta tabela.

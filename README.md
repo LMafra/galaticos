@@ -163,10 +163,10 @@ Este comando:
 - Lê o arquivo Excel e popula o banco de dados
 - Verifica que os dados foram inseridos corretamente
 
-**Nota:** O arquivo Excel deve estar em `data/galaticos.xlsm`.
+**Nota:** O arquivo Excel deve estar em `data/raw/galaticos.xlsm`.
 
 O script irá:
-- Ler o arquivo `data/galaticos.xlsm`
+- Ler o arquivo `data/raw/galaticos.xlsm`
 - Criar o time "Galáticos"
 - Criar jogadores a partir da planilha "Base de dados"
 - Criar campeonatos a partir das outras planilhas

@@ -1,0 +1,21 @@
+(ns galaticos.db.protocol.match-store
+  "Persistence contract for matches and related season/championship/player/team reads.")
+
+(defprotocol MatchStore
+  (find-all-matches [this])
+  (find-match-by-id [this id])
+  (find-matches-by-championship [this championship-id])
+  (find-matches-by-season [this season-id])
+  (create-match [this match-data player-statistics opts])
+  (update-match-by-id [this id updates opts])
+  (delete-match-by-id [this id])
+  (match-exists? [this id])
+  (find-season-by-id [this id])
+  (find-default-season-for-championship [this championship-id])
+  (find-season-for-new-match [this championship-id season-id])
+  (add-match-to-season! [this season-id match-id])
+  (remove-match-from-season! [this season-id match-id])
+  (find-championship-by-id [this id])
+  (find-players-by-ids [this ids])
+  (find-team-by-id [this id])
+  (find-teams-by-ids [this ids]))

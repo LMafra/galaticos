@@ -2,7 +2,7 @@
 
 Objetivo: registrar **baseline** por rota (ou grupo lógico), **oportunidades** apontadas pelo Lighthouse e **tarefas** concretas. Preencher as células `_/_` após cada rodada de auditoria (ver [metodologia.md](../../informacao/performance/metodologia.md)).
 
-**Legenda de baseline:** score = Performance (0–100), LCP/TBT/CLS conforme Lighthouse. Incluir sempre **data**, **build** (`dev` / `release`) e **perfil** (`mobile` / `desktop`).
+**Legenda de baseline:** score = Performance (0–100), LCP/TBT/CLS conforme Lighthouse. Incluir sempre **data**, **build** (`dev` / `release`) e **perfil** (`mobile` / `desktop`). Células `___` = **baseline ainda não medido** (tarefas podem estar concluídas na mesma secção).
 
 ### Convenção do projeto (auditoria mar/2026)
 

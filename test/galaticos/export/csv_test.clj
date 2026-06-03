@@ -22,7 +22,15 @@
                 (export-csv/dashboard-csv))]
       (is (str/includes? csv "ATLETA,JOGOS,GOLS,ASSISTENCIAS,TÍTULOS"))
       (is (str/includes? csv "Top 20 Jogos"))
-      (is (str/includes? csv "Top 20 Gols")))))
+      (is (str/includes? csv "Top 20 Gols"))))
+  (testing "include-derived adds columns"
+    (let [csv (with-redefs [players-db/find-active (fn []
+                                                               [{:name "Bob"
+                                                                 :aggregated-stats {:total {:games 2 :goals 1 :assists 1 :titles 0}}}])
+                            agg/top-players-by-metric (fn [_ _ & _] [])]
+                (export-csv/dashboard-csv {:include-derived? true}))]
+      (is (str/includes? csv "CONTRIB GOL"))
+      (is (str/includes? csv "DISCIPLINA")))))
 
 (deftest championship-csv-has-player-and-match-columns
   (testing "builds championship csv with left and right blocks"

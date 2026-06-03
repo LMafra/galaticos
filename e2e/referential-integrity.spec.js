@@ -1,28 +1,9 @@
 const { test, expect } = require('@playwright/test');
-const { getAdminToken, saveCoverage } = require('./_helpers');
-
-/**
- * @param {import('@playwright/test').APIRequestContext} request
- * @param {string} token
- * @param {string} method
- * @param {string} path
- * @param {Record<string, unknown>} [data]
- */
-async function apiJson(request, token, method, path, data = undefined) {
-  const opts = {
-    method,
-    headers: { Authorization: `Bearer ${token}` },
-  };
-  if (data !== undefined && method !== 'GET') {
-    opts.headers['Content-Type'] = 'application/json';
-    opts.data = data;
-  }
-  const response = await request.fetch(path, opts);
-  const body = await response.json().catch(() => ({}));
-  return { response, body };
-}
+const { getAdminToken, saveCoverage, apiJson, activateChampionshipSeason } = require('./_helpers');
 
 test.describe('Referential integrity - delete protection', { tag: '@integrity' }, () => {
+  // API setup (championship + team + player + match) is sensitive to parallel DB load.
+  test.describe.configure({ mode: 'serial' });
   test.beforeEach(async ({ page }) => {
     await page.goto('/#/dashboard');
   });
@@ -54,8 +35,11 @@ test.describe('Referential integrity - delete protection', { tag: '@integrity' }
 
   test('deleting championship with matches shows error message', async ({ page, request }, testInfo) => {
     try {
-      const token = await getAdminToken(request);
-      expect(token, 'admin token (db:seed-smoke: admin/admin)').toBeTruthy();
+      const token = await getAdminToken(request, page);
+      expect(
+        token,
+        'admin token (storageState from auth.setup, or db:seed-smoke admin/admin via POST /api/auth/login)'
+      ).toBeTruthy();
 
       const unique = `${Date.now()}-${testInfo.parallelIndex}-${testInfo.retry}`;
       const { body: createdChampionshipBody, response: createdChampionshipResponse } = await apiJson(
@@ -63,11 +47,13 @@ test.describe('Referential integrity - delete protection', { tag: '@integrity' }
         token,
         'POST',
         '/api/championships',
-        { name: `Campeonato Integridade E2E ${unique}`, season: '2026', 'titles-count': 0 }
+        { name: `Campeonato Integridade E2E ${unique}`, season: '2026', 'titles-count': 0, status: 'active' }
       );
       expect(createdChampionshipResponse.ok(), JSON.stringify(createdChampionshipBody)).toBeTruthy();
       const championshipId = createdChampionshipBody?.data?._id;
       expect(championshipId).toBeTruthy();
+      const seasonId = await activateChampionshipSeason(request, token, championshipId);
+      expect(seasonId, 'active season required for match create').toBeTruthy();
 
       const { body: createdTeamBody, response: createdTeamResponse } = await apiJson(
         request,
@@ -91,7 +77,7 @@ test.describe('Referential integrity - delete protection', { tag: '@integrity' }
           'team-id': String(teamId),
         }
       );
-      expect(createdPlayerResponse.ok(), JSON.stringify(createdPlayerBody)).toBeTruthy();
+      expect(createdPlayerResponse.status(), JSON.stringify(createdPlayerBody)).toBe(201);
       const playerId = createdPlayerBody?.data?._id;
       expect(playerId).toBeTruthy();
 

@@ -1,0 +1,38 @@
+---
+description: ClojureScript SPA — Reagent, routing, API client
+globs: "{src-cljs,test-cljs}/**/*.{cljs,cljc}"
+alwaysApply: false
+---
+
+# ClojureScript Frontend
+
+## UI
+
+- **Reagent** components in `galaticos.components.*`
+- No React hooks, no JSX — Hiccup-style vectors in `.cljs`
+- Shared primitives: `src-cljs/galaticos/components/common.cljs`
+
+## Routing
+
+- `src-cljs/galaticos/routes.cljs` — reitit-frontend
+- Effects/API side effects: `effects.cljs`
+
+## Data
+
+- HTTP: `src-cljs/galaticos/api.cljs`
+- App state: `src-cljs/galaticos/state.cljs`
+
+## Styling
+
+- Tailwind utility classes on `:class`
+- Follow existing light/dark patterns (`dark:` variants)
+
+## Build
+
+- Config: `shadow-cljs.edn`
+- Do not hand-edit `resources/public/js/compiled/` or `public/js/compiled/`
+- CSS output: `resources/public/css/app.css` (built from Tailwind/PostCSS)
+
+## Charts
+
+Recharts via CLJS wrappers in `components/charts.cljs` — keep data shape aligned with API responses.

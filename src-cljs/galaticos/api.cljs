@@ -364,6 +364,10 @@
 (defn get-player-evolution [player-id on-success on-error]
   (get-request (str "/api/aggregations/players/" player-id "/evolution") {} on-success on-error))
 
+(defn get-player-insights [player-id on-success on-error]
+  "GET /api/aggregations/players/:player-id/insights — derived + optional predictive."
+  (get-request (str "/api/aggregations/players/" player-id "/insights") {} on-success on-error))
+
 (defn get-avg-goals-by-position [championship-id on-success on-error]
   (get-request (str "/api/aggregations/positions/" championship-id) {} on-success on-error))
 
@@ -371,6 +375,11 @@
   "POST /api/aggregations/reconcile — recalcula aggregated-stats de todos os jogadores a partir de matches (admin)."
   [on-success on-error]
   (post-request "/api/aggregations/reconcile" {} on-success on-error))
+
+(defn reconcile-player-stats!
+  "POST /api/aggregations/players/:id/reconcile — recalcula aggregated-stats de um jogador a partir de matches."
+  [player-id on-success on-error]
+  (post-request (str "/api/aggregations/players/" player-id "/reconcile") {} on-success on-error))
 
 (defn download-csv!
   "Download CSV file from API endpoint."

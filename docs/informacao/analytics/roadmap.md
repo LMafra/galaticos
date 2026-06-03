@@ -57,8 +57,11 @@ Roadmap em três fases para evoluir o Galáticos de analytics operacional para a
 
 ### Critérios de saída
 
-- Uso recorrente das novas métricas em rituais de decisão.
-- Confiabilidade mantida com aumento de complexidade.
+- [x] Métricas derivadas e tops expostos na API e no dashboard.
+- [x] Insights com gate `readiness` e disclaimers na UI.
+- [x] Export CSV com colunas derivadas opcionais.
+- [ ] Uso recorrente das novas métricas em rituais de decisão (validação com utilizadores).
+- [ ] Confiabilidade mantida com aumento de complexidade (monitorização contínua).
 
 ## Dependências transversais
 
@@ -69,4 +72,4 @@ Roadmap em três fases para evoluir o Galáticos de analytics operacional para a
 ## Referências de execução
 
 - Backlog de analytics avançado: `docs/a-fazer/analytics/advanced-analytics-backlog.md`.
-- Evolução técnica incremental: `docs/parcial/analytics/technical-evolution.md`.
+- Jobs de agregados e desacoplamento (Fase 2): [architecture.md](architecture.md#jobs-de-agregados-player-stats).

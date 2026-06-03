@@ -137,16 +137,19 @@ def main() -> Dict[str, pd.DataFrame]:
         SystemExit: If file not found or processing fails
     """
     # Excel file path (relative to project root)
-    excel_file = Path("data/galaticos.xlsm")
-    
-    # Try to find file in current directory or data/raw
+    excel_file = Path("data/raw/galaticos.xlsm")
+
     if not excel_file.exists():
-        alt_path = Path("data") / excel_file.name
-        if alt_path.exists():
-            excel_file = alt_path
+        found = None
+        for alt_path in (Path("data/raw") / excel_file.name, Path("data") / excel_file.name):
+            if alt_path.exists():
+                found = alt_path
+                break
+        if found is not None:
+            excel_file = found
         else:
             print(f"Error: File '{excel_file}' not found!", file=sys.stderr)
-            print(f"Also checked: {alt_path}", file=sys.stderr)
+            print("Also checked: data/raw/ and data/", file=sys.stderr)
             sys.exit(1)
     
     try:

@@ -102,7 +102,7 @@ open target/coverage-report/index.html
 clj -M:dev
 
 # Ou usar Docker
-docker-compose -f docker-compose.dev.yml up
+docker compose -f config/docker/docker-compose.dev.yml up
 ```
 
 ## Perguntas?

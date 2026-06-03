@@ -70,12 +70,70 @@ Ser a fonte de verdade semântica para métricas esportivas da plataforma.
 - **Fórmula**: soma dos incrementos aprovados em finalização de campeonato.
 - **Fonte**: `players.aggregated-stats.total.titles`.
 
-## Métricas derivadas recomendadas (próximas fases)
+## Métricas derivadas (v1.1)
 
-- **goal_contribution**: `goals + assists`.
-- **goal_contribution_per_game**: `(goals + assists) / games`.
-- **discipline_index**: métrica ponderada de cartões por jogo.
-- **minutes_per_goal**: minutos jogados por gol (quando `minutes-played` estiver consistente).
+### goal_contribution
+
+- **Descrição**: contribuição ofensiva total (gols + assistências).
+- **Grão**: jogador-campeonato e jogador-total.
+- **Fórmula**: `goals + assists`.
+- **Fonte**: `players.aggregated-stats` (campos base) ou cálculo puro em `galaticos.domain.analytics/goal-contribution`.
+- **Interpretação**: quanto o jogador participou diretamente de gols; útil para ranking ofensivo amplo.
+
+### goal_contribution_per_game
+
+- **Descrição**: contribuição ofensiva média por partida.
+- **Grão**: jogador-campeonato e jogador-total.
+- **Fórmula**: `(goals + assists) / games`.
+- **Regra**: se `games = 0`, retorna `0`.
+- **Implementação**: `galaticos.domain.analytics/goal-contribution-per-game`.
+
+### discipline_index
+
+- **Descrição**: índice ponderado de cartões por partida (vermelho pesa 3× amarelo).
+- **Grão**: jogador-campeonato e jogador-total.
+- **Fórmula**: `(yellow-cards + 3 × red-cards) / games`.
+- **Regra**: se `games = 0`, retorna `0`.
+- **Fonte**: `aggregated-stats` com `yellow-cards`, `red-cards`, `games` — sem scan de `matches` por request.
+- **Implementação**: `galaticos.domain.analytics/discipline-index`.
+
+### minutes_per_goal
+
+- **Descrição**: minutos jogados por gol marcado.
+- **Grão**: jogador-campeonato e jogador-total.
+- **Fórmula**: `minutes-played / goals` quando `goals > 0` e qualidade de minutos OK.
+- **Qualidade de minutos**: `minutes-played >= games` (média ≥ 1 min/partida).
+- **Regra**: retorna `nil` quando pré-condições falham.
+- **Implementação**: `galaticos.domain.analytics/minutes-per-goal`.
+
+## Insights preditivos (experimental, v1.0)
+
+Expostos via `GET /api/aggregations/players/:player-id/insights` quando `readiness.ok` é true. Ver [data-contracts.md](data-contracts.md) contrato 3.
+
+### trend
+
+- **Descrição**: direção da contribuição ofensiva (janela recente vs anterior).
+- **Grão**: jogador-temporal (buckets semana/mês de `player-performance-evolution`).
+- **Valores**: `:direction` (`:up` | `:down` | `:stable`), `:delta`, médias por janela.
+- **Implementação**: `galaticos.analytics.predictive/compute-trend`.
+
+### risk
+
+- **Descrição**: rótulo simples de risco de queda combinando tendência e `discipline-index`.
+- **Valores**: `:level` (`:low` | `:medium` | `:high`).
+- **Implementação**: `galaticos.analytics.predictive/compute-risk`.
+
+### projection
+
+- **Descrição**: projeção linear de contribuição ofensiva na próxima janela.
+- **Campo principal**: `:projected-goal-contribution`.
+- **Implementação**: `galaticos.analytics.predictive/compute-projection`.
+
+### readiness
+
+- **Descrição**: gate antes de expor trend/risk/projection.
+- **Checks**: mínimo de partidas, buckets temporais, anos distintos, reconciliação registrada (`player_stats_job_meta`), fila de jobs saudável.
+- **Implementação**: `galaticos.analytics.readiness/evaluate`.
 
 ## Governança
 

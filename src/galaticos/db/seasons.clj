@@ -25,6 +25,23 @@
                         {:championship-id (->object-id championship-id)
                          :status "active"}))
 
+(defn find-default-for-championship
+  "Season used when backfilling season-id on match updates: active if present, else most recent by start-date."
+  [championship-id]
+  (or (find-active-by-championship championship-id)
+      (when-let [seasons (seq (find-all-by-championship championship-id))]
+        (first (sort-by :start-date #(compare %2 %1) seasons)))))
+
+(defn season-accepts-new-matches?
+  [season]
+  (= "active" (:status season)))
+
+(defn find-for-new-match
+  "Season to attach a newly created match: explicit season-id or active season only."
+  [championship-id season-id]
+  (or (when season-id (find-by-id season-id))
+      (find-active-by-championship championship-id)))
+
 (defn exists?
   [id]
   (some? (find-by-id id)))

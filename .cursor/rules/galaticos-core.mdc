@@ -1,0 +1,47 @@
+---
+description: Galáticos project identity, stack, and layout
+alwaysApply: true
+---
+
+# Galáticos Core
+
+Sports roster management: JSON API (Ring/Compojure) + Reagent SPA (shadow-cljs).
+
+## Stack (verify in deps.edn before adding libs)
+
+| Layer | Libraries |
+|-------|-----------|
+| JVM | Clojure 1.11, Ring, Compojure, Jetty, Buddy JWT, Environ, Selmer/Hiccup |
+| DB | MongoDB via **Monger 3.x** — not raw Java driver APIs in handlers |
+| CLJS | shadow-cljs, Reagent, reitit-frontend, cljs-http, Tailwind |
+| Build | `deps.edn` aliases `:test`, `:cljs-test`, `:uberjar`, `:coverage`, `:format` |
+
+## Code layout
+
+- `src/galaticos/handlers/` — request logic
+- `src/galaticos/routes/` — Compojure routes (aggregator: `routes/api.clj`)
+- `src/galaticos/db/` — Mongo access
+- `src/galaticos/middleware/` — auth, CORS, errors, gzip
+- `src-cljs/galaticos/components/` — UI
+- `src-cljs/galaticos/routes.cljs` — client routing
+
+Namespaces: `src/galaticos/...` and `src-cljs/galaticos/...` — not `src/main/clj/`.
+
+## Do not use unless declared in deps.edn
+
+Rails, ActiveRecord, Stimulus/Hotwire, Luminus mount/component/integrant patterns.
+
+## Change discipline
+
+- Minimal, focused diffs; match existing style (kebab-case, small functions)
+- Conventional commits: `feat:`, `fix:`, `docs:`, `refactor:`
+- Do not edit compiled assets under `resources/public/js/compiled/`
+
+## Verify after changes
+
+```bash
+./bin/galaticos test
+./bin/galaticos coverage   # when touching backend logic
+```
+
+Run clj-kondo when editing `.clj` / `.cljs`. Docs: `docs/README.md`.

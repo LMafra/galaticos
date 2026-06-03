@@ -54,10 +54,24 @@
       :on-click #(when id (rfe/push-state :player-detail {:id id}))}
      (:name player)]))
 
+(defn- derived-metric-value
+  [player k]
+  (or (get-in player [:derived k])
+      (get-in player [:derived (name k)])
+      0))
+
+(defn- format-derived [k v]
+  (cond
+    (nil? v) "-"
+    (= k :minutes-per-goal) (.toFixed (double v) 1)
+    (#{:goal-contribution-per-game :discipline-index} k) (.toFixed (double v) 2)
+    :else (str v)))
+
 (defn- dashboard-deferred-block
   "Charts + top tables: mounted after first paint to reduce TBT."
   [{:keys [filtered-championships chart-goals chart-performance
-           top-goals top-assists top-matches top-titles]}]
+           top-goals top-assists top-matches top-titles
+           top-goal-contribution top-discipline-index]}]
   [:div {:class "space-y-6"}
    [:div {:class "grid gap-4 xl:grid-cols-3"}
     [:div {:class "xl:col-span-2"}
@@ -134,7 +148,29 @@
             [(player-name-link player)
              (get-in player [:aggregated-stats :total :titles] 0)
              (get-in player [:aggregated-stats :total :games] 0)])
-          (take 5 top-titles))]]])
+          (take 5 top-titles))]]
+
+   [:div {:class "space-y-2"}
+    [:h3 {:class "app-section-title"} "Métricas derivadas"]
+    [:p {:class "text-xs text-slate-600 dark:text-slate-400"}
+     "Contribuição ofensiva e disciplina calculadas a partir dos totais agregados (ver catálogo de métricas)."]]
+   [:div {:class "grid gap-4 md:grid-cols-2"}
+    [top5-card
+     "Top 5 - Contribuição de gol"
+     ["Nome" "Contrib. gol" "Partidas"]
+     (map (fn [player]
+            [(player-name-link player)
+             (format-derived :goal-contribution (derived-metric-value player :goal-contribution))
+             (get-in player [:aggregated-stats :total :games] 0)])
+          (take 5 (or top-goal-contribution [])))]
+    [top5-card
+     "Top 5 - Índice de disciplina"
+     ["Nome" "Disciplina" "Partidas"]
+     (map (fn [player]
+            [(player-name-link player)
+             (format-derived :discipline-index (derived-metric-value player :discipline-index))
+             (get-in player [:aggregated-stats :total :games] 0)])
+          (take 5 (or top-discipline-index [])))]]])
 
 (defn dashboard
   "Dashboard component - render-only; data fetched via route watcher."
@@ -169,6 +205,9 @@
                top-assists (:top-assists dashboard-stats)
                top-matches (:top-matches dashboard-stats)
                top-titles (:top-titles dashboard-stats)
+               derived-tops @state/dashboard-derived-reaction
+               top-goal-contribution (:top-goal-contribution derived-tops)
+               top-discipline-index (:top-discipline-index derived-tops)
                chart-goals (map (fn [player]
                                   {:name (:name player)
                                    :value (get-in player [:aggregated-stats :total :goals] 0)})
@@ -210,7 +249,7 @@
                      (rfe/push-state :players {} {:q q}))))
                :variant :outline]
               [common/button "Exportar CSV"
-               #(api/download-csv! "/api/exports/dashboard.csv"
+               #(api/download-csv! "/api/exports/dashboard.csv?include-derived=true"
                                    "galaticos-dashboard.csv"
                                    (fn [] nil)
                                    (fn [err] (state/toast-error! err)))
@@ -257,7 +296,9 @@
                    :top-goals top-goals
                    :top-assists top-assists
                    :top-matches top-matches
-                   :top-titles top-titles}]
+                   :top-titles top-titles
+                   :top-goal-contribution top-goal-contribution
+                   :top-discipline-index top-discipline-index}]
                  [:div {:class "min-h-[28rem] flex items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/50 dark:border-slate-700 dark:bg-slate-800/30"}
                   [common/loading-spinner]])]
               :else

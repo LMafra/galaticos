@@ -55,18 +55,103 @@ async function saveCoverage(page, testInfo) {
 }
 
 /**
- * @param {import('@playwright/test').APIRequestContext} request
+ * JWT from the authenticated browser session (storageState from auth.setup).
+ * Prefer this over POST /api/auth/login when the test already has a logged-in page.
+ * @param {import('@playwright/test').Page} page
  * @returns {Promise<string | null>}
  */
-async function getAdminToken(request) {
-  const r = await request.post('/api/auth/login', {
-    data: { username: 'admin', password: 'admin' },
-  });
-  if (!r.ok()) return null;
-  const j = await r.json();
-  return j?.data?.token ?? null;
+async function getAdminTokenFromPage(page) {
+  if (!page) return null;
+  try {
+    return await getStoredToken(page);
+  } catch {
+    return null;
+  }
 }
 
-module.exports = { loginAsAdmin, getStoredToken, saveCoverage, getAdminToken };
+/**
+ * @param {import('@playwright/test').APIRequestContext} request
+ * @param {import('@playwright/test').Page} [page] optional — reuse token from storageState
+ * @returns {Promise<string | null>}
+ */
+async function getAdminToken(request, page = null) {
+  const fromPage = await getAdminTokenFromPage(page);
+  if (fromPage) return fromPage;
+
+  const maxAttempts = 3;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const r = await request.post('/api/auth/login', {
+      headers: { 'Content-Type': 'application/json' },
+      data: { username: 'admin', password: 'admin' },
+    });
+    if (r.ok()) {
+      const j = await r.json().catch(() => ({}));
+      const token = j?.data?.token ?? null;
+      if (token) return token;
+    }
+    if (attempt < maxAttempts - 1) {
+      await new Promise((res) => setTimeout(res, 250 * (attempt + 1)));
+    }
+  }
+  return null;
+}
+
+/**
+ * @param {import('@playwright/test').APIRequestContext} request
+ * @param {string} token
+ * @param {string} method
+ * @param {string} path
+ * @param {Record<string, unknown>} [data]
+ */
+async function apiJson(request, token, method, path, data = undefined) {
+  const opts = {
+    method,
+    headers: { Authorization: `Bearer ${token}` },
+  };
+  if (data !== undefined && method !== 'GET') {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.data = data;
+  }
+  const response = await request.fetch(path, opts);
+  const body = await response.json().catch(() => ({}));
+  return { response, body };
+}
+
+/**
+ * Activate the first season of a championship (required for POST /api/matches).
+ * @returns {Promise<string|null>} season id when active
+ */
+async function activateChampionshipSeason(request, token, championshipId) {
+  const { response, body } = await apiJson(
+    request,
+    token,
+    'GET',
+    `/api/championships/${championshipId}/seasons`
+  );
+  if (!response.ok()) return null;
+  const seasons = Array.isArray(body?.data) ? body.data : [];
+  const existing = seasons.find((s) => s?.status === 'active');
+  if (existing?._id) return String(existing._id);
+  const seasonId = seasons[0]?._id;
+  if (!seasonId) return null;
+  const { response: actRes } = await apiJson(
+    request,
+    token,
+    'POST',
+    `/api/seasons/${seasonId}/activate`,
+    {}
+  );
+  return actRes.ok() ? String(seasonId) : null;
+}
+
+module.exports = {
+  loginAsAdmin,
+  getStoredToken,
+  getAdminTokenFromPage,
+  saveCoverage,
+  getAdminToken,
+  apiJson,
+  activateChampionshipSeason,
+};
 
 

@@ -1,0 +1,40 @@
+---
+description: Domain rules and analytics pointers before behavior changes
+globs: "{src/galaticos/{handlers,db,championship},src-cljs/galaticos/components}/**/*"
+alwaysApply: false
+---
+
+# Business Domain
+
+Read authoritative docs **before** changing CRUD, seasons, stats, or dashboard metrics.
+
+## Functional rules
+
+`docs/informacao/dominio/regras-de-negocio.md`
+
+Key themes (details in doc):
+
+- Players: soft delete; required name/position
+- Championships: at most one active season; finalize → titles
+- Matches: stats consistency on CRUD; embedded player stats
+- Teams: cannot delete with active players
+
+## Metrics and KPIs
+
+**Source of truth:** `docs/informacao/analytics/metrics-catalog.md`
+
+Do not redefine metric semantics in code comments or handlers — align with catalog or update catalog first.
+
+## Analytics jobs
+
+In-process thread pool — `src/galaticos/analytics/player_stats_jobs.clj`
+
+Not Redis/Sidekiq. Job status via `player_stats_job_store`.
+
+## Player merge
+
+Follow `src/galaticos/handlers/player_merge.clj` and merge audit collections in `db/merge_audit.clj`, `db/player_merge_refs.clj`.
+
+## Reconciliation
+
+Operational analytics issues: `docs/informacao/analytics/reconciliation-runbook.md`

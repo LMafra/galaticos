@@ -1,11 +1,12 @@
 # Galáticos — Hub de documentação
 
-Documentação central do projeto, organizada por **status** (Informação, Concluído, Parcial, A Fazer) e por **tema** dentro de cada status.
+Documentação central do projeto, organizada por **status** (Informação, A Fazer) e por **tema** dentro de cada status.
 
 ## Como navegar
 
 - `README.md` (raiz do repositório): visão geral do projeto, setup e execução.
 - `docs/README.md` (este arquivo): índice por status.
+- [plans/README.md](plans/README.md) — planos de implementação sequenciais (trilha FP 00–07 + analytics Fase 3).
 - Saídas locais do Lighthouse (JSON): `docs/perf-output/` (gitignored; ver documentação em Informação / performance).
 
 ## Informação
@@ -15,7 +16,7 @@ Referência estável: visão, processos, modelos e como medir.
 ### Analytics (`docs/informacao/analytics/`)
 
 - [strategy.md](informacao/analytics/strategy.md) — visão, objetivos e casos de uso analíticos.
-- [architecture.md](informacao/analytics/architecture.md) — arquitetura de dados e fluxo analítico fim a fim.
+- [architecture.md](informacao/analytics/architecture.md) — arquitetura analítica, jobs de agregados e fluxo fim a fim.
 - [metrics-catalog.md](informacao/analytics/metrics-catalog.md) — catálogo oficial de métricas e KPIs.
 - [data-contracts.md](informacao/analytics/data-contracts.md) — contratos de dados versionados e governança de schema.
 - [data-quality.md](informacao/analytics/data-quality.md) — regras de qualidade, reconciliação e incidentes.
@@ -29,6 +30,10 @@ Referência estável: visão, processos, modelos e como medir.
 - [metodologia.md](informacao/performance/metodologia.md) — Lighthouse (DevTools e CLI), WSL/Chrome, rotas públicas e autenticadas.
 - [inventario-paginas.md](informacao/performance/inventario-paginas.md) — inventário de rotas e componentes para medição por página.
 
+### Arquitetura (`docs/informacao/arquitetura/`)
+
+- [arquitetura-funcional.md](informacao/arquitetura/arquitetura-funcional.md) — guia principal da migração OO → FP: namespaces (`domain/*`, `logic/*`, `db.protocol/*`), erros, DI, testes, anti-padrões e ordem de execução (planos 02–07).
+
 ### Qualidade (`docs/informacao/qualidade/`)
 
 - [auditoria-alucinacoes-ia.md](informacao/qualidade/auditoria-alucinacoes-ia.md) — guia para auditar código assistido por IA (deps, Monger, Ring/Compojure, CLJS, prompts e validação com testes e clj-kondo).
@@ -41,30 +46,18 @@ Referência estável: visão, processos, modelos e como medir.
 
 ### Domínio (`docs/informacao/dominio/`)
 
+- [guia-partidas-temporadas-estatisticas-hibridas.md](informacao/dominio/guia-partidas-temporadas-estatisticas-hibridas.md) — partidas, temporadas ativas e modelo híbrido de estatísticas (merge, fan-out, UI).
 - [regras-de-negocio.md](informacao/dominio/regras-de-negocio.md) — regras funcionais e técnicas do domínio.
+- [regras-negocio-auditoria.md](informacao/dominio/regras-negocio-auditoria.md) — auditoria regras vs implementação (snapshot).
 - [mongodb-schema.md](informacao/dominio/mongodb-schema.md) — modelagem das coleções MongoDB.
 - [testing-coverage.md](informacao/dominio/testing-coverage.md) — cobertura de testes e estratégia de qualidade.
 
 ### NotebookLM (`docs/informacao/notebookLM/`)
 
-- [notebooklm-prompts.md](informacao/notebookLM/notebooklm-prompts.md)
-- [notebooklm-response.md](informacao/notebookLM/notebooklm-response.md)
-
-## Concluído
-
-Registros de entregas ou fases encerradas (snapshot).
-
-### Domínio (`docs/concluido/dominio/`)
-
-- [IMPLEMENTATION.md](concluido/dominio/IMPLEMENTATION.md) — visão da implementação inicial do schema e módulos (histórico).
-
-## Parcial
-
-Planos ou trabalhos em curso, ainda não totalmente aplicados.
-
-### Analytics (`docs/parcial/analytics/`)
-
-- [technical-evolution.md](parcial/analytics/technical-evolution.md) — desacoplamento da recomputação analítica e observabilidade.
+- [notebooklm-prompts.md](informacao/notebookLM/notebooklm-prompts.md) — prompts OO (histórico)
+- [notebooklm-response.md](informacao/notebookLM/notebooklm-response.md) — respostas OO (histórico)
+- [notebooklm-prompts-fp.md](informacao/notebookLM/notebooklm-prompts-fp.md) — prompts programação funcional
+- [notebooklm-response-fp.md](informacao/notebookLM/notebooklm-response-fp.md) — respostas FP + decisões consolidadas
 
 ## A Fazer
 
@@ -78,14 +71,12 @@ Backlogs, checklists de pendências e melhorias a executar.
 
 - [backlog-acoes.md](a-fazer/performance/backlog-acoes.md)
 
-### Domínio (`docs/a-fazer/dominio/`)
-
-- [regras-de-negocio-checklist.md](a-fazer/dominio/regras-de-negocio-checklist.md)
-
 ### NotebookLM (`docs/a-fazer/notebookLM/`)
 
-- [design-and-db-improvements.md](a-fazer/notebookLM/design-and-db-improvements.md)
-- [improvement-checklist.md](a-fazer/notebookLM/improvement-checklist.md)
+- [design-and-db-improvements.md](a-fazer/notebookLM/design-and-db-improvements.md) — melhorias OO (histórico)
+- [improvement-checklist.md](a-fazer/notebookLM/improvement-checklist.md) — checklist OO (Fases 2–5 superseded pela trilha FP)
+- [fp-design-improvements.md](a-fazer/notebookLM/fp-design-improvements.md) — mapa De→Para e decisões FP
+- [fp-improvement-checklist.md](a-fazer/notebookLM/fp-improvement-checklist.md) — checklist acionável FP (Fase A doc concluída; Fases B–E = código)
 
 ## Referências externas (trilha de analytics)
 
@@ -95,7 +86,7 @@ Backlogs, checklists de pendências e melhorias a executar.
 
 ## Manutenção
 
-- Ao criar um documento novo, coloque-o em **uma** pasta de status; se o trabalho evoluir (ex.: checklist concluído), **mova** o arquivo e atualize este `README.md`.
+- Ao criar um documento novo, coloque-o em **uma** pasta de status; quando o trabalho terminar, **mova** para `informacao/` ou **apague** o backlog e atualize este `README.md`.
 - Evitar duplicar o mesmo conteúdo em duas categorias.
 - Evitar duplicação de definição de métricas entre `informacao/dominio/regras-de-negocio.md` e `informacao/analytics/metrics-catalog.md`.
 - Tratar `informacao/analytics/metrics-catalog.md` como fonte de verdade semântica para indicadores analíticos.

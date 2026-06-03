@@ -129,6 +129,7 @@ cmd_host() {
   log_step "docker build --network host ${extra[*]:-} -f config/docker/Dockerfile.prod -t \"$tag\" ."
   DOCKER_BUILDKIT=1 docker build --network host "${extra[@]}" \
     -f config/docker/Dockerfile.prod \
+    --ignorefile config/docker/.dockerignore \
     -t "$tag" \
     .
   log_success "Host-network build finished."

@@ -19,6 +19,31 @@
     (.toFixed (/ total matches) 2)
     "0"))
 
+(def ^:private derived-metrics
+  #{"goal-contribution" "goal-contribution-per-game" "discipline-index" "minutes-per-goal"})
+
+(defn- derived-metric? [metric]
+  (contains? derived-metrics metric))
+
+(defn- player-metric-value
+  [player metric]
+  (let [kw (keyword metric)]
+    (if (derived-metric? metric)
+      (or (get-in player [:derived kw]) 0)
+      (get-in player [:aggregated-stats :total kw] 0))))
+
+(defn- format-metric-cell [metric v]
+  (cond
+    (and (derived-metric? metric) (nil? v)) "-"
+    (number? v) (if (derived-metric? metric)
+                  (if (= metric "minutes-per-goal")
+                    (.toFixed (double v) 1)
+                    (if (#{"goal-contribution-per-game" "discipline-index"} metric)
+                      (.toFixed (double v) 2)
+                      (str v)))
+                  (str v))
+    :else (str (or v "-"))))
+
 ;; ---------------------------------------------------------------------------
 ;; Top players tab
 ;; ---------------------------------------------------------------------------
@@ -51,18 +76,23 @@
                             (map (fn [ch] [(str (:_id ch)) (:name ch)]))
                             (or championships []))
             metric-label   (case @metric
-                             "goals"   "Gols"
+                             "goals" "Gols"
                              "assists" "Assistências"
-                             "games"   "Partidas"
-                             "titles"  "Títulos"
+                             "games" "Partidas"
+                             "titles" "Títulos"
+                             "goal-contribution" "Contrib. gol"
+                             "goal-contribution-per-game" "Contrib./jogo"
+                             "discipline-index" "Disciplina"
+                             "minutes-per-goal" "Min/gol"
                              "Gols")
             rows           (when (seq @data)
                              (mapv (fn [p]
-                                     [(or (:name p) "-")
-                                      (get-in p [:aggregated-stats :total (keyword @metric)] 0)
-                                      (get-in p [:aggregated-stats :total :games] 0)
-                                      (avg-goals (get-in p [:aggregated-stats :total :goals] 0)
-                                                 (get-in p [:aggregated-stats :total :games] 0))])
+                                     (let [mv (player-metric-value p @metric)]
+                                       [(or (:name p) "-")
+                                        (format-metric-cell @metric mv)
+                                        (get-in p [:aggregated-stats :total :games] 0)
+                                        (avg-goals (get-in p [:aggregated-stats :total :goals] 0)
+                                                   (get-in p [:aggregated-stats :total :games] 0))]))
                                    @data))]
         [:div {:class "space-y-4"}
          [:div {:class "flex flex-wrap items-end gap-3"}
@@ -71,7 +101,11 @@
            [["goals" "Gols"]
             ["assists" "Assistências"]
             ["games" "Partidas"]
-            ["titles" "Títulos"]]
+            ["titles" "Títulos"]
+            ["goal-contribution" "Contrib. gol (derivada)"]
+            ["goal-contribution-per-game" "Contrib./jogo (derivada)"]
+            ["discipline-index" "Disciplina (derivada)"]
+            ["minutes-per-goal" "Min/gol (derivada)"]]
            #(do (reset! metric %) (reset! data nil))
            :container-class "min-w-[140px]"]
           [common/select-field
