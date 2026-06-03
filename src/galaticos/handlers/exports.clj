@@ -19,10 +19,15 @@
       (str/replace #"[^a-z0-9]+" "-")
       (str/replace #"^-+|-+$" "")))
 
+(defn- include-derived? [request]
+  (= "true" (str/lower-case (str/trim (str (or (get-in request [:query-params "include-derived"])
+                                               (get-in request [:params :include-derived])))))))
+
 (defn export-dashboard-csv
-  [_request]
+  [request]
   (try
-    (csv-download-response (export-csv/dashboard-csv) "galaticos-dashboard.csv")
+    (csv-download-response (export-csv/dashboard-csv {:include-derived? (include-derived? request)})
+                           "galaticos-dashboard.csv")
     (catch Exception e
       (log/error e "Error exporting dashboard CSV")
       (resp/server-error "Failed to export dashboard CSV"))))

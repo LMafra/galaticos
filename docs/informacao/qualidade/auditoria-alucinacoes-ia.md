@@ -196,8 +196,31 @@ Encerre com totais por categoria e lista de arquivos “limpos” ou pendentes d
 
 ---
 
+## Anti-alucinação na migração FP
+
+Ao gerar ou rever código na trilha **OO → FP**, validar contra [arquitetura-funcional.md](../arquitetura/arquitetura-funcional.md) — não contra padrões OO do NotebookLM original.
+
+| Suspeita comum | Correção Galáticos |
+|----------------|-------------------|
+| `galaticos.service.*`, `galaticos.repository.*` | Usar `domain/*`, `logic/*`, `db.protocol/*` |
+| `repo-call`, `ns-resolve` para DI | `defprotocol` + implementação em `db/*`; testes com `reify` |
+| `throw` / `ex-info` em `domain/*` puro | Retornar `{:ok _}` / `{:error {:type :status :message}}` |
+| Malli, spec, re-frame sem estar em `deps.edn` | Manter `validation/entity.clj`; CLJS com reducer + `reaction` |
+| `mount.core`, Integrant, Luminus | Stack Ring + Compojure + Monger — ver tabela acima |
+| API Java driver Mongo (`insertOne`, etc.) em handlers | Monger 3.x: `monger.collection/find-maps`, `insert`, `update` |
+
+Prompt sugerido (slice FP):
+
+```text
+Revise @file no contexto Galáticos FP: domain puro sem IO; logic/* orquestra com protocol;
+handlers finos; Monger 3.x; sem service/repository/repo-call. Liste alucinações de API ou namespace.
+```
+
+---
+
 ## Relação com outros documentos
 
+- [arquitetura-funcional.md](../arquitetura/arquitetura-funcional.md) — namespaces e anti-padrões FP alvo.
 - [regras-negocio-auditoria.md](../dominio/regras-negocio-auditoria.md) — aderência a requisitos de negócio e testes como evidência.
 - [testing-coverage.md](../dominio/testing-coverage.md) — estratégia de testes e cobertura.
 - [data-quality.md](../analytics/data-quality.md) — qualidade de **dados** analíticos (complementar ao foco em código aqui).

@@ -30,6 +30,9 @@
        (agg-handlers/avg-goals-by-position (assoc request :params {:championship-id championship-id})))
    (GET "/api/aggregations/players/:player-id/evolution" [player-id :as request]
        (agg-handlers/player-performance-evolution (assoc request :params {:player-id player-id})))
+   (GET "/api/aggregations/players/:player-id/insights" [player-id :as request]
+        ((wrap-auth agg-handlers/player-insights)
+         (assoc request :params {:player-id player-id})))
   (GET "/api/aggregations/players/search" request (agg-handlers/search-players request))
   (GET "/api/aggregations/championships/comparison" request (agg-handlers/championship-comparison request))
   (GET "/api/aggregations/players/top" request (agg-handlers/top-players request))

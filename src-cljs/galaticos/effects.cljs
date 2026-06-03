@@ -33,6 +33,23 @@
       (fetch-fn on-success* on-error*))
     nil))
 
+(defn ensure-player-insights! [player-id & [{:keys [force?]}]]
+  (when-let [pid (some-> player-id str not-empty)]
+    (let [{:keys [player-insights]} @state/app-state
+          same? (= pid (some-> (:player-id player-insights) str))
+          loaded? (and same? (some? (:data player-insights)) (not force?))]
+      (when (and (not loaded?) (not (in-flight? :player-insights)))
+        (mark-in-flight! :player-insights)
+        (state/dispatch! [:analytics/insights-request {:player-id pid}])
+        (api/get-player-insights
+         pid
+         (fn [data]
+           (state/dispatch! [:analytics/insights-success {:data data}])
+           (clear-in-flight! :player-insights))
+         (fn [err _resp]
+           (state/dispatch! [:analytics/insights-error {:error (str err)}])
+           (clear-in-flight! :player-insights)))))))
+
 (defn ensure-dashboard! [& [{:keys [force?]}]]
   (let [{:keys [dashboard-loaded?]} @state/app-state
         loaded? (and dashboard-loaded? (not force?))]
@@ -130,5 +147,7 @@
           :team-new (ensure-teams!)
           :team-detail (ensure-teams!)
           :team-edit (ensure-teams!)
+          :player-detail (when-let [id (get-in match [:path-params :id])]
+                           (ensure-player-insights! id))
           nil)))))
 

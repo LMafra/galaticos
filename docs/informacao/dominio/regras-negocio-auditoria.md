@@ -14,7 +14,7 @@
 | Apêndice **BRM-01–16** | Maioria coberta por API + UI + `seed_mongodb.py`; **BRM-14** “idealmente outros filtros no dashboard” só parcial (dashboard envia `q`; filtros extra na página Jogadores). |
 | **RN-PEND-*** no apêndice | Identificadores **não** existem como `### RN-PEND-*` no doc; comportamentos mapeados abaixo. |
 | **Q-01–Q-06** | Continuam **decisões de negócio / doc**; não bloqueiam verificação técnica mas impedem “100% fechado” no manifesto. |
-| Jobs de agregados (player stats) | Retry + registo de último sucesso (Mongo) + `GET /api/aggregations/player-stats-jobs` (auth); ver `player_stats_jobs.clj` e [technical-evolution (parcial)](../../parcial/analytics/technical-evolution.md). |
+| Jobs de agregados (player stats) | Retry + registo de último sucesso (Mongo) + `GET /api/aggregations/player-stats-jobs` (auth); ver `player_stats_jobs.clj` e [architecture.md — Jobs de agregados](../analytics/architecture.md#jobs-de-agregados-player-stats). |
 
 ---
 
@@ -74,7 +74,7 @@ Todos os paths explícitos únicos abaixo **existem** no repositório (verifica�
 | Q-01 múltiplas temporadas | **Parcialmente resolvido** no produto: coleção `seasons` + `championship-id`; doc apêndice ainda ambíguo. |
 | Q-02 reabrir campeonato | Não auditado como regra formal; exige decisão de negócio. |
 | Q-03 critérios de busca | Backend `search-players` usa normalização + regex; “accent-insensitive” depende de `normalize-text` — validar com `str-util` e dados reais. |
-| Q-04 conflitos import | **Alinhado ao** [checklist](../../a-fazer/dominio/regras-de-negocio-checklist.md) e a **Q-04** em [regras-de-negocio.md](regras-de-negocio.md): política no `seed_mongodb.py` (ex.: chave por nome, planilha prevalece em `aggregated-stats.total` onde aplicável). |
+| Q-04 conflitos import | **Alinhado** a **Q-04** em [regras-de-negocio.md](regras-de-negocio.md): política no `seed_mongodb.py` (ex.: chave por nome, planilha prevalece em `aggregated-stats.total` onde aplicável). |
 | Q-05 GK vs posição | **Precedência** em `seed_mongodb.py` (posição explícita vs inferência). |
 | Q-06 mapa card→rota | Dashboard tem mapeamento implícito; tabela formal opcional no doc. |
 

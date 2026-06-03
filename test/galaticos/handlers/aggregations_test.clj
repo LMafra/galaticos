@@ -3,6 +3,7 @@
             [clojure.test :refer [deftest is testing]]
             [galaticos.handlers.aggregations :as handlers]
             [galaticos.db.aggregations :as agg]
+            [galaticos.logic.analytics :as analytics-logic]
             [galaticos.db.core :as db]
             [galaticos.analytics.player-stats-jobs :as pjobs]
             [galaticos.analytics.player-stats-job-store :as job-store]
@@ -71,11 +72,16 @@
       (is (= 400 (:status result))))))
 
 (deftest search-players
-  (testing "success"
+  (testing "success with derived enrichment"
     (let [request {:params {}}
-          result (with-redefs [agg/search-players (fn [_] [])]
-                  (handlers/search-players request))]
-      (is (= 200 (:status result))))))
+          player {:name "A"
+                  :aggregated-stats {:total {:goals 1 :assists 1 :games 1}}
+                  :derived {:goal-contribution 2}}
+          result (with-redefs [analytics-logic/search-players (fn [_] [player])]
+                  (handlers/search-players request))
+          body (parse-body result)]
+      (is (= 200 (:status result)))
+      (is (= 2 (get-in body [:data 0 :derived :goal-contribution]))))))
 
 (deftest championship-comparison
   (let [request {}
@@ -88,15 +94,38 @@
 (deftest top-players
   (testing "success with default params"
     (let [request {:params {}}
-          result (with-redefs [agg/top-players-by-metric (fn [_ _] [])]
+          result (with-redefs [analytics-logic/top-players (fn [_ _] [])]
                   (handlers/top-players request))]
       (is (= 200 (:status result)))))
   (testing "success with championship-id"
     (let [champ-id (str (ObjectId.))
           request {:params {:metric "goals" :limit "5" :championship-id champ-id}}
-          result (with-redefs [agg/top-players-by-metric (fn [_ _ & _] [])]
+          result (with-redefs [analytics-logic/top-players (fn [_ _ & _] [])]
                   (handlers/top-players request))]
       (is (= 200 (:status result))))))
+
+(deftest player-insights-handler
+  (testing "success with readiness false omits predictive"
+    (let [player-id (str (ObjectId.))
+          payload {:derived {:goal-contribution 1}
+                   :trend nil
+                   :risk nil
+                   :projection nil
+                   :readiness {:ok false :reason :insufficient-games}
+                   :disclaimers ["experimental"]
+                   :experiment-meta {:version "v0.1"}}
+          result (with-redefs [analytics-logic/player-insights (fn [id]
+                                                                  (is (= player-id id))
+                                                                  payload)]
+                  (handlers/player-insights {:params {:player-id player-id}}))
+          body (parse-body result)]
+      (is (= 200 (:status result)))
+      (is (false? (get-in body [:data :readiness :ok])))
+      (is (nil? (get-in body [:data :trend])))))
+  (testing "missing player-id"
+    (let [result (handlers/player-insights {:params {}})
+          body (parse-body result)]
+      (is (= 400 (:status result))))))
 
 (deftest reconcile-stats
   (testing "success synchronous"

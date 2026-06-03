@@ -5,12 +5,16 @@
             [galaticos.db.championships :as championships-db]
             [galaticos.db.seasons :as seasons-db]
             [galaticos.db.players :as players-db]
+            [galaticos.middleware.errors :as errors]
             [galaticos.util.response :as resp])
   (:import [org.bson.types ObjectId]))
 
 (defn- parse-body [response]
   (when (:body response)
     (json/read-str (:body response) :key-fn keyword)))
+
+(defn- invoke [handler request]
+  ((errors/wrap-errors handler) request))
 
 (defn- make-request
   ([id] (make-request id {}))
@@ -25,42 +29,44 @@
     (with-redefs [seasons-db/find-active-by-championship (fn [_] nil)
                   championships-db/find-by-id (fn [_] champ)
                   championships-db/update-by-id (fn [_ _] nil)
-                  players-db/increment-titles (fn [_ _] nil)
-                  resp/error (fn [msg _] {:error msg})
-                  resp/success (fn [_] {:success true})]
-      (let [response (handlers/finalize-championship request)]
-        (is (= "Only active championships can be finalized" (:error response)))))))
+                  players-db/increment-titles (fn [_ _] nil)]
+      (let [response (invoke handlers/finalize-championship request)
+            body (parse-body response)]
+        (is (= 400 (:status response)))
+        (is (= "Only active championships can be finalized" (:error body)))))))
 
 (deftest finalize-championship-already-finalized
   (let [champ-id (str (ObjectId.))
         champ {:_id (ObjectId. champ-id) :status "active" :finished-at (java.util.Date.) :enrolled-player-ids []}
         request (make-request champ-id {:winner-player-ids [] :titles-award-count 0})]
     (with-redefs [seasons-db/find-active-by-championship (fn [_] nil)
-                  championships-db/find-by-id (fn [_] champ)
-                  resp/error (fn [msg _] {:error msg})
-                  resp/not-found (fn [_] {:not-found true})]
-      (let [response (handlers/finalize-championship request)]
-        (is (= "Championship has already been finalized" (:error response)))))))
+                  championships-db/find-by-id (fn [_] champ)]
+      (let [response (invoke handlers/finalize-championship request)
+            body (parse-body response)]
+        (is (= 400 (:status response)))
+        (is (= "Championship has already been finalized" (:error body)))))))
 
 (deftest finalize-championship-titles-award-count-negative
   (let [champ-id (str (ObjectId.))
         champ {:_id (ObjectId. champ-id) :status "active" :enrolled-player-ids [(ObjectId.)]}
         request (make-request champ-id {:winner-player-ids [(str (ObjectId.))] :titles-award-count -1})]
     (with-redefs [seasons-db/find-active-by-championship (fn [_] nil)
-                  championships-db/find-by-id (fn [_] champ)
-                  resp/error (fn [msg _] {:error msg})]
-      (let [response (handlers/finalize-championship request)]
-        (is (= "titles-award-count must be non-negative" (:error response)))))))
+                  championships-db/find-by-id (fn [_] champ)]
+      (let [response (invoke handlers/finalize-championship request)
+            body (parse-body response)]
+        (is (= 400 (:status response)))
+        (is (= "titles-award-count must be non-negative" (:error body)))))))
 
 (deftest finalize-championship-winners-required-when-awarding-titles
   (let [champ-id (str (ObjectId.))
         champ {:_id (ObjectId. champ-id) :status "active" :enrolled-player-ids []}
         request (make-request champ-id {:winner-player-ids [] :titles-award-count 2})]
     (with-redefs [seasons-db/find-active-by-championship (fn [_] nil)
-                  championships-db/find-by-id (fn [_] champ)
-                  resp/error (fn [msg _] {:error msg})]
-      (let [response (handlers/finalize-championship request)]
-        (is (= "At least one winner must be specified when awarding titles" (:error response)))))))
+                  championships-db/find-by-id (fn [_] champ)]
+      (let [response (invoke handlers/finalize-championship request)
+            body (parse-body response)]
+        (is (= 400 (:status response)))
+        (is (= "At least one winner must be specified when awarding titles" (:error body)))))))
 
 (deftest finalize-championship-success-with-titles-award-count
   (let [champ-id (str (ObjectId.))
@@ -73,10 +79,11 @@
                   championships-db/find-by-id (fn [_] champ)
                   championships-db/update-by-id (fn [_ m] (reset! updated m))
                   players-db/increment-titles (fn [ids amount] (reset! increment-args [ids amount]))
-                  resp/success (fn [m] {:success true :message (:message m)})
                   resp/->object-id (fn [x] (if (string? x) (ObjectId. x) x))]
-      (let [response (handlers/finalize-championship request)]
-        (is (= true (:success response)))
+      (let [response (invoke handlers/finalize-championship request)
+            body (parse-body response)]
+        (is (= 200 (:status response)))
+        (is (= "Championship finalized" (get-in body [:data :message])))
         (is (= "completed" (:status @updated)))
         (is (some? (:finished-at @updated)))
         (is (= 2 (:titles-award-count @updated)))
@@ -92,10 +99,11 @@
                   championships-db/find-by-id (fn [_] champ)
                   championships-db/update-by-id (fn [_ m] (reset! updated m))
                   players-db/increment-titles (fn [_ _] (reset! increment-called true))
-                  resp/success (fn [m] {:success true :message (:message m)})
                   resp/->object-id (fn [x] (if (string? x) (ObjectId. x) x))]
-      (let [response (handlers/finalize-championship request)]
-        (is (= true (:success response)))
+      (let [response (invoke handlers/finalize-championship request)
+            body (parse-body response)]
+        (is (= 200 (:status response)))
+        (is (= "Championship finalized" (get-in body [:data :message])))
         (is (= "completed" (:status @updated)))
         (is (= 0 (:titles-award-count @updated)))
         (is (false? @increment-called))))))
@@ -105,7 +113,7 @@
         result (with-redefs [championships-db/find-all (fn [] [{:name "C1" :_id (ObjectId.)}])
                              seasons-db/find-active-by-championship (fn [_] nil)
                              seasons-db/find-all-by-championship (fn [_] [])]
-                (handlers/list-championships request))
+                (invoke handlers/list-championships request))
         body (parse-body result)]
     (is (= 200 (:status result)))
     (is (vector? (:data body)))))
@@ -130,7 +138,7 @@
                                                                         :titles-count 3
                                                                         :enrolled-player-ids []
                                                                         :updated-at (java.util.Date. 2000)}]))]
-                  (handlers/get-championship request))
+                  (invoke handlers/get-championship request))
           body (parse-body result)]
       (is (= 200 (:status result)))
       (is (= "Champ" (get-in body [:data :name])))
@@ -144,7 +152,7 @@
           result (with-redefs [championships-db/find-by-id (fn [_] nil)
                                seasons-db/find-active-by-championship (fn [_] nil)
                                seasons-db/find-all-by-championship (fn [_] [])]
-                  (handlers/get-championship request))]
+                  (invoke handlers/get-championship request))]
       (is (= 404 (:status result))))))
 
 (deftest create-championship
@@ -155,7 +163,7 @@
                              seasons-db/activate! (fn [_] nil)
                              seasons-db/find-all-by-championship (fn [_] [])
                              seasons-db/find-active-by-championship (fn [_] nil)]
-                (handlers/create-championship request))
+                (invoke handlers/create-championship request))
         body (parse-body result)]
     (is (= 201 (:status result)))
     (is (= "New" (get-in body [:data :name])))))
@@ -169,7 +177,7 @@
                              championships-db/update-by-id (fn [_ _] nil)
                              championships-db/find-by-id (fn [_] updated)
                              seasons-db/find-all-by-championship (fn [_] [])]
-                (handlers/update-championship request))]
+                (invoke handlers/update-championship request))]
     (is (= 200 (:status result)))))
 
 (deftest delete-championship
@@ -179,7 +187,7 @@
           result (with-redefs [championships-db/exists? (fn [x] (= x id))
                                championships-db/has-matches? (fn [_] false)
                                championships-db/delete-by-id (fn [_] nil)]
-                  (handlers/delete-championship request))
+                  (invoke handlers/delete-championship request))
           body (parse-body result)]
       (is (= 200 (:status result)))
       (is (= "Championship deleted" (get-in body [:data :message])))))
@@ -188,7 +196,7 @@
           request {:params {:id id}}
           result (with-redefs [championships-db/exists? (fn [x] (= x id))
                                championships-db/has-matches? (fn [_] true)]
-                  (handlers/delete-championship request))
+                  (invoke handlers/delete-championship request))
           body (parse-body result)]
       (is (= 409 (:status result)))
       (is (string? (:error body))))))
@@ -203,13 +211,13 @@
                                championships-db/find-by-id (fn [_] champ)
                                players-db/find-by-id (fn [_] {:_id (ObjectId. player-id)})
                                championships-db/add-player (fn [_ _] nil)]
-                  (handlers/enroll-player request))
+                  (invoke handlers/enroll-player request))
           body (parse-body result)]
       (is (= 200 (:status result)))
       (is (= "Player enrolled" (get-in body [:data :message])))))
   (testing "missing params"
     (let [request {:params {}}
-          result (handlers/enroll-player request)
+          result (invoke handlers/enroll-player request)
           body (parse-body result)]
       (is (= 400 (:status result)))
       (is (= "Championship ID and player ID are required" (:error body))))))
@@ -221,7 +229,7 @@
         result (with-redefs [seasons-db/find-active-by-championship (fn [_] nil)
                              championships-db/exists? (fn [x] (= x champ-id))
                              championships-db/remove-player (fn [_ _] nil)]
-                (handlers/unenroll-player request))
+                (invoke handlers/unenroll-player request))
         body (parse-body result)]
     (is (= 200 (:status result)))
     (is (= "Player unenrolled" (get-in body [:data :message])))))
@@ -235,7 +243,7 @@
                                seasons-db/find-all-by-championship (fn [_] [])
                                championships-db/find-by-id (fn [_] champ)
                                players-db/find-by-ids (fn [_] [{:name "P1"}])]
-                  (handlers/get-championship-players request))
+                  (invoke handlers/get-championship-players request))
           body (parse-body result)]
       (is (= 200 (:status result)))
       (is (vector? (:data body)))
@@ -254,7 +262,7 @@
                                                                       {:enrolled-player-ids [p2]}])
                                championships-db/find-by-id (fn [_] champ)
                                players-db/find-by-ids (fn [ids] (vec (keep by-id ids)))]
-                  (handlers/get-championship-players request))
+                  (invoke handlers/get-championship-players request))
           body (parse-body result)
           names (sort (map :name (:data body)))]
       (is (= 200 (:status result)))

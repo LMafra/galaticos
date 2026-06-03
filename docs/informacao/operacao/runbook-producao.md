@@ -66,6 +66,7 @@ docker compose -f config/docker/docker-compose.prod.yml up -d --build app
 ### Seed smoke (E2E)
 
 - **Não** executar `./bin/galaticos db:seed-smoke` na mesma base (`DB_NAME`) que produção. Mistura dados de teste com dados reais e o seed oficial pode recusar-se a correr sem `--reset`.
+- Em **dev**, o seed oficial (`scripts/python/seed_mongodb.py`, opcional `--reset`) carrega `data/BASE_DADOS.csv` e planilha Base. O smoke (`db:seed-smoke`) cria um conjunto mínimo (“Smoke Championship”, etc.). Correr ambos no **mesmo** Mongo **sem** limpar coleções **acumula** registos (não é o Python a “ler” o smoke — é mistura na base). Para base só Excel: reset + seed Python e **não** rodar smoke depois.
 
 ## Índices em bases já inicializadas
 

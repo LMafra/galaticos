@@ -3,6 +3,7 @@
   (:require [galaticos.analytics.player-stats-job-store :as job-store]
             [galaticos.analytics.player-stats-jobs :as player-stats-jobs]
             [galaticos.db.aggregations :as agg]
+            [galaticos.logic.analytics :as analytics-logic]
             [galaticos.db.core :refer [db]]
             [galaticos.util.response :as resp]
             [monger.collection :as mc]
@@ -160,15 +161,17 @@
         (log/warn "No top matches players found - check if players have aggregated-stats.total.games populated"))
       (when (empty? top-titles)
         (log/warn "No top titles players found - check if players have aggregated-stats.total.titles populated"))
-      (let [response-data {:championships championships
-                           :top-goals top-goals
-                           :top-assists top-assists
-                           :top-matches top-matches
-                           :top-titles top-titles
-                           :teams-count total-teams
-                           :players-total players-total
-                           :player-goals-total player-goals-total
-                           :seasons-count seasons-count}]
+      (let [derived-tops (analytics-logic/dashboard-derived-tops 10)
+            response-data (merge {:championships championships
+                                    :top-goals top-goals
+                                    :top-assists top-assists
+                                    :top-matches top-matches
+                                    :top-titles top-titles
+                                    :teams-count total-teams
+                                    :players-total players-total
+                                    :player-goals-total player-goals-total
+                                    :seasons-count seasons-count}
+                                   derived-tops)]
         (log/info (str "Dashboard stats response data: " (pr-str response-data)))
         (log/info (str "Response structure - Championships count: " (count championships)
                        ", Top goals count: " (count top-goals)
@@ -253,7 +256,7 @@
                       (update :limit #(when % (Integer/parseInt %)))
                       (update :sort-by #(when % (keyword %)))
                       (update :sort-order #(when % (Integer/parseInt %))))]
-      (resp/success (agg/search-players filters)))
+      (resp/success (analytics-logic/search-players filters)))
     (catch Exception e
       (log/error e "Error searching players")
       (resp/server-error "Failed to search players"))))
@@ -282,8 +285,8 @@
       (log/info (str "Fetching top players - Metric: " metric ", Limit: " limit
                      (when championship-id (str ", Championship: " championship-id))))
       (let [players (if championship-id
-                     (agg/top-players-by-metric metric limit :championship-id championship-id)
-                     (agg/top-players-by-metric metric limit))]
+                     (analytics-logic/top-players metric limit :championship-id championship-id)
+                     (analytics-logic/top-players metric limit))]
         (log/info (str "Top players retrieved: " (count players) " players"))
         (when (empty? players)
           (log/warn (str "No players found for metric " metric " - check if players have aggregated-stats field populated")))
@@ -294,7 +297,7 @@
 
 (defn player-stats-jobs-status
   "Read-only: last successful job metadata (Mongo) + in-process executor queue depth. Auth required.
-  See technical-evolution (player stats jobs) and reconciliation-runbook."
+  See docs/informacao/analytics/architecture.md and reconciliation-runbook."
   [_request]
   (try
     (let [doc (job-store/fetch-doc)
@@ -306,6 +309,19 @@
     (catch Exception e
       (log/error e "Error reading player-stats-jobs status")
       (resp/server-error "Failed to read player-stats job status"))))
+
+(defn player-insights
+  "GET insights for one player (auth). Predictive fields nil when readiness fails.
+  Policy: HTTP 200 with full payload; `:readiness :ok false` and null trend/risk/projection."
+  [request]
+  (try
+    (let [player-id (get-in request [:params :player-id])]
+      (if (str/blank? (str player-id))
+        (resp/error "Player ID required" 400)
+        (resp/success (analytics-logic/player-insights player-id))))
+    (catch Exception e
+      (log/error e "Error getting player insights")
+      (resp/server-error "Failed to get player insights"))))
 
 (defn reconcile-stats
   "Manual reconciliation: validate data integrity (log warnings) then full player aggregated-stats

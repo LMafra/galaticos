@@ -1,14 +1,16 @@
 (ns galaticos.db.aggregations-test
   (:require [clojure.test :refer [deftest is testing]]
             [galaticos.db.aggregations :as agg]
+            [galaticos.domain.analytics :as analytics]
             [monger.collection :as mc])
   (:import [org.bson.types ObjectId]))
 
-(deftest coerce-player-stat-goals-assists-is-addfields-convert
-  (let [stage @#'agg/coerce-player-stat-goals-assists]
+(deftest coerce-player-stat-numerics-is-addfields-convert
+  (let [stage @#'agg/coerce-player-stat-numerics]
     (is (map? stage))
     (is (contains? stage :$addFields))
-    (is (= "long" (get-in stage [:$addFields "player-statistics.goals" :$convert :to])))))
+    (is (= "long" (get-in stage [:$addFields "player-statistics.goals" :$convert :to])))
+    (is (= "long" (get-in stage [:$addFields "player-statistics.yellow-cards" :$convert :to])))))
 
 (deftest match-player-stats-filter-treats-objectid-and-string-as-same
   (let [oid (ObjectId.)
@@ -26,7 +28,7 @@
         match-derived [{:championship-id (str cid)
                         :championship-name "C"
                         :games 2 :goals 1 :assists 0}]
-        merged (#'agg/merge-aggregated-stats existing match-derived)]
+        merged (analytics/merge-aggregated-stats existing match-derived)]
     (is (= 2 (get-in merged [:total :games])))
     (is (= 1 (get-in merged [:total :goals])))))
 
@@ -55,7 +57,7 @@
                           :games 1
                           :goals 1
                           :assists 0}]
-          merged (#'agg/merge-aggregated-stats existing match-derived)
+          merged (analytics/merge-aggregated-stats existing match-derived)
           c1 (first (filter #(= "c1" (:championship-id %)) (:by-championship merged)))
           c2 (first (filter #(= "c2" (:championship-id %)) (:by-championship merged)))
           c3 (first (filter #(= "c3" (:championship-id %)) (:by-championship merged)))]
@@ -82,13 +84,13 @@
                         :games 1
                         :goals 1
                         :assists 0}]
-          after-first (#'agg/merge-aggregated-stats existing first-match)
+          after-first (analytics/merge-aggregated-stats existing first-match)
           second-match [{:championship-id "c1"
                          :championship-name "Champ 1"
                          :games 2
                          :goals 3
                          :assists 1}]
-          after-second (#'agg/merge-aggregated-stats after-first second-match)
+          after-second (analytics/merge-aggregated-stats after-first second-match)
           row (first (:by-championship after-second))]
       (is (= 11 (:games (first (:by-championship after-first)))))
       (is (= 10 (:games (:pre-match-stats row))))
@@ -104,7 +106,7 @@
                           :games 1
                           :goals 2
                           :assists 0}]
-          merged (#'agg/merge-aggregated-stats existing match-derived)]
+          merged (analytics/merge-aggregated-stats existing match-derived)]
       (is (= {:games 50 :goals 20 :assists 5 :titles 3} (:pre-match-total merged)))
       (is (= 51 (get-in merged [:total :games])))
       (is (= 22 (get-in merged [:total :goals]))))))
@@ -118,12 +120,12 @@
                           :games 58
                           :goals 35
                           :assists 0}]
-          merged (#'agg/merge-aggregated-stats existing match-derived)]
+          merged (analytics/merge-aggregated-stats existing match-derived)]
       (is (= 61 (get-in merged [:pre-match-total :games])))
       (is (= 110 (get-in merged [:pre-match-total :goals])))
       (is (= 119 (get-in merged [:total :games])))
       (is (= 145 (get-in merged [:total :goals])))
-      (let [after-one-more (#'agg/merge-aggregated-stats merged
+      (let [after-one-more (analytics/merge-aggregated-stats merged
                                                          [{:championship-id "c1"
                                                            :championship-name "C"
                                                            :games 59
@@ -149,12 +151,12 @@
                      :games 4
                      :goals 4
                      :assists 0}]
-          after-import (#'agg/merge-aggregated-stats seeded imported)
+          after-import (analytics/merge-aggregated-stats seeded imported)
           row (first (:by-championship after-import))]
       (is (= 8 (:games row)))
       (is (= 6 (:goals row)))
       (is (= 4 (get-in row [:baseline-match-rollup :games])))
-      (let [after-new-match (#'agg/merge-aggregated-stats after-import
+      (let [after-new-match (analytics/merge-aggregated-stats after-import
                                                           [{:championship-id "c1"
                                                             :championship-name "SARRADA"
                                                             :season "2025"
@@ -182,7 +184,7 @@
                           :games 4
                           :goals 4
                           :assists 0}]
-          merged (#'agg/merge-aggregated-stats corrupted match-derived)
+          merged (analytics/merge-aggregated-stats corrupted match-derived)
           row (first (:by-championship merged))]
       (is (= 8 (:games row)))
       (is (= 6 (:goals row)))
@@ -204,7 +206,7 @@
                           :games 9
                           :goals 5
                           :assists 2}]
-          merged (#'agg/merge-aggregated-stats existing match-derived)
+          merged (analytics/merge-aggregated-stats existing match-derived)
           row (first (:by-championship merged))]
       (is (= 11 (:games row)))
       (is (= 7 (:goals row)))
@@ -229,7 +231,7 @@
                           :games 1
                           :goals 0
                           :assists 0}]
-          merged (#'agg/merge-aggregated-stats existing match-derived)
+          merged (analytics/merge-aggregated-stats existing match-derived)
           row (first (:by-championship merged))]
       (is (= 1 (count (:by-championship merged))))
       (is (= 1 (:games row)))
@@ -254,7 +256,7 @@
                           :games 1
                           :goals 200
                           :assists 0}]
-          merged (#'agg/merge-aggregated-stats existing match-derived)
+          merged (analytics/merge-aggregated-stats existing match-derived)
           row (first (:by-championship merged))]
       (is (= 1 (count (:by-championship merged))))
       (is (= cid-str (str (:championship-id row))))
@@ -287,7 +289,7 @@
                           :games 1
                           :goals 1
                           :assists 0}]
-          merged (#'agg/merge-aggregated-stats existing match-derived)
+          merged (analytics/merge-aggregated-stats existing match-derived)
           row (first (:by-championship merged))]
       (is (= 9 (:games row)))
       (is (= 7 (:goals row)))
@@ -303,7 +305,7 @@
                                        :championship-name "C" :games 1 :goals 0 :assists 0 :titles 0}]}
           match-derived [{:championship-id "c1" :season nil
                           :championship-name "C" :games 3 :goals 2 :assists 0}]
-          merged (#'agg/merge-aggregated-stats existing match-derived)
+          merged (analytics/merge-aggregated-stats existing match-derived)
           by (:by-championship merged)]
       (is (= 3 (count by)))
       (is (= 5 (get-in merged [:total :games])))
@@ -320,7 +322,7 @@
                           :championship-name "C" :games 3 :goals 2 :assists 0}
                          {:championship-id "c1" :season "2025"
                           :championship-name "C" :games 1 :goals 1 :assists 0}]
-          merged (#'agg/merge-aggregated-stats existing match-derived)
+          merged (analytics/merge-aggregated-stats existing match-derived)
           by (:by-championship merged)
           r24 (first (filter #(= "2024" (:season %)) by))
           r25 (first (filter #(= "2025" (:season %)) by))]
@@ -357,7 +359,7 @@
                           :games 1
                           :goals 1
                           :assists 0}]
-          merged (#'agg/merge-aggregated-stats existing match-derived)
+          merged (analytics/merge-aggregated-stats existing match-derived)
           c2 (first (filter #(= "c2" (:championship-id %)) (:by-championship merged)))]
       (is (= 2 (:games c2)))
       (is (= 1 (:goals c2))))))

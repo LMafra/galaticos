@@ -2,45 +2,55 @@
 
 This checklist turns the recommendations from [notebooklm-response.md](../../informacao/notebookLM/notebooklm-response.md) into concrete, trackable tasks. It follows the refactoring order suggested in NotebookLM response 3 (safety net → repository → service → thin handlers → DI → refinements). For project-specific context, see [design-and-db-improvements.md](design-and-db-improvements.md).
 
+**Nota:** Para abordagem **programação funcional**, usar [fp-improvement-checklist.md](fp-improvement-checklist.md), [fp-design-improvements.md](fp-design-improvements.md) e [arquitetura-funcional.md](../../informacao/arquitetura/arquitetura-funcional.md). **Fases 2–5 abaixo estão superseded** pela trilha FP (planos [02–07](../../plans/README.md)); o código OO actual (`service/*`, `repository/*`) será removido na fase de implementação FP, não expandido.
+
 ---
 
 ## Phase 1: Safety net
 
-- [ ] Add integration tests for existing API handlers (contract tests).
-- [ ] Rule: do not mix refactoring and new features in the same change.
+- [x] Add integration tests for existing API handlers (contract tests).
+- [x] Rule: do not mix refactoring and new features in the same change.
 
 ---
 
-## Phase 2: Repository layer
+## Phase 2: Repository layer — **superseded by FP checklist**
 
-- [ ] Introduce repository namespaces (e.g. wrap existing `db/championships`, `db/matches`, `db/players` behind a clear repository API if not already).
-- [ ] Move all DB access behind repositories; handlers call repositories only.
-- [ ] Document repository responsibilities in code or docs.
+> Não implementar camada `repository/*`. Alvo: `db.protocol/*` + `db/*` + `logic/*`. Ver [fp-improvement-checklist.md](fp-improvement-checklist.md) Fase B–D.
 
----
-
-## Phase 3: Service layer
-
-- [ ] Add service namespaces (e.g. `galaticos.service.championships`).
-- [ ] Move business rules (e.g. "cannot delete championship with matches") into services; services throw domain exceptions.
-- [ ] Handlers delegate to services for all business logic.
-- [ ] Apply design by contract (preconditions) in service functions.
+- [ ] ~~Introduce repository namespaces~~ — **cancelado (FP)**
+- [ ] ~~Move all DB access behind repositories~~ — **cancelado (FP)**
+- [ ] ~~Document repository responsibilities~~ — **cancelado (FP)**
 
 ---
 
-## Phase 4: Thin handlers
+## Phase 3: Service layer — **superseded by FP checklist**
 
-- [ ] Restrict handlers to: parse request (params, body), call one service function, map result/exception to HTTP status and body.
-- [ ] Remove validation and business logic from handlers (validation at boundary can stay in a dedicated step that calls into service with validated data).
-- [ ] Use Facade-style single entry per use case where it helps.
+> Não expandir `service/*`. Alvo: `domain/*` (puro) + `logic/*` (orquestração). Ver Plano [02](../../plans/02-championships-service.md).
+
+- [ ] ~~Add service namespaces~~ — **cancelado (FP)**
+- [ ] ~~Move business rules into services~~ — **cancelado (FP)**
+- [ ] ~~Handlers delegate to services~~ — **cancelado (FP)**
+- [ ] ~~Design by contract in services~~ — **cancelado (FP)**
 
 ---
 
-## Phase 5: Dependency injection / testability
+## Phase 4: Thin handlers — **superseded by FP checklist**
 
-- [ ] Inject repositories into services (and services into handlers if applicable); avoid constructing DB/repos inside services.
-- [ ] Add unit tests for services using test doubles (e.g. in-memory or mock repositories).
-- [ ] Centralize object/component construction (e.g. in `core` or a "composition" namespace).
+> Handlers finos via `logic/*` + middleware unificado; ver [arquitetura-funcional.md](../../informacao/arquitetura/arquitetura-funcional.md).
+
+- [ ] ~~Restrict handlers to parse → service → HTTP~~ — **substituído:** parse → `logic/*` → HTTP
+- [ ] ~~Remove validation from handlers~~ — parcialmente feito; validação em `validation/entity`
+- [ ] ~~Facade per use case~~ — **cancelado (FP)**
+
+---
+
+## Phase 5: Dependency injection / testability — **superseded by FP checklist**
+
+> DI via `defprotocol` + `reify`; **proibido** `repo-call`/`ns-resolve`. Ver Prompt 5 em [notebooklm-response-fp.md](../../informacao/notebookLM/notebooklm-response-fp.md).
+
+- [ ] ~~Inject repositories into services~~ — **cancelado (FP)**
+- [ ] ~~Unit tests for services with mocks~~ — **substituído:** `logic/*_test` com `reify`
+- [ ] ~~Centralize composition namespace~~ — **cancelado (FP)**
 
 ---
 

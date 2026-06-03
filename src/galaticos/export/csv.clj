@@ -2,6 +2,7 @@
   "CSV builders for dashboard and championship exports."
   (:require [clojure.data.csv :as data-csv]
             [clojure.string :as str]
+            [galaticos.analytics.derived-metrics :as derived]
             [galaticos.db.aggregations :as agg]
             [galaticos.db.championships :as championships-db]
             [galaticos.db.matches :as matches-db]
@@ -24,42 +25,57 @@
   [(as-str (:name player))
    (as-str (get-in player [:aggregated-stats :total metric] 0))])
 
+(defn- player-dashboard-row
+  [p include-derived?]
+  (let [total (get-in p [:aggregated-stats :total] {})
+        base [(as-str (:name p))
+              (as-str (get total :games 0))
+              (as-str (get total :goals 0))
+              (as-str (get total :assists 0))
+              (as-str (get total :titles 0))]]
+    (if include-derived?
+      (let [d (derived/derived-from-stats total)]
+        (into base [(as-str (:goal-contribution d))
+                    (as-str (:goal-contribution-per-game d))
+                    (as-str (:discipline-index d))]))
+      base)))
+
 (defn dashboard-csv
-  []
-  (let [players (players-db/find-active)
-        tops {:games (map #(top-entry % :games) (agg/top-players-by-metric :games 20))
-              :goals (map #(top-entry % :goals) (agg/top-players-by-metric :goals 20))
-              :assists (map #(top-entry % :assists) (agg/top-players-by-metric :assists 20))
-              :titles (map #(top-entry % :titles) (agg/top-players-by-metric :titles 20))}
-        players-rows (map (fn [p]
-                            [(as-str (:name p))
-                             (as-str (get-in p [:aggregated-stats :total :games] 0))
-                             (as-str (get-in p [:aggregated-stats :total :goals] 0))
-                             (as-str (get-in p [:aggregated-stats :total :assists] 0))
-                             (as-str (get-in p [:aggregated-stats :total :titles] 0))])
-                          (sort-by (comp str/lower-case as-str :name) players))
-        left-count (count players-rows)
-        right-count (apply max 0 (map count (vals tops)))
-        rows-count (max left-count right-count)
-        padded-player-rows (concat players-rows (repeat (- rows-count left-count) ["" "" "" "" ""]))
-        padded-games (concat (:games tops) (repeat (- rows-count (count (:games tops))) ["" ""]))
-        padded-goals (concat (:goals tops) (repeat (- rows-count (count (:goals tops))) ["" ""]))
-        padded-assists (concat (:assists tops) (repeat (- rows-count (count (:assists tops))) ["" ""]))
-        padded-titles (concat (:titles tops) (repeat (- rows-count (count (:titles tops))) ["" ""]))
-        header-1 ["ATLETA" "JOGOS" "GOLS" "ASSISTENCIAS" "TÍTULOS"
-                  "" "" "" "" "Top 20 Jogos" "" "" "Top 20 Gols" "" "" "Top 20 Assistências" "" "" "Top 20 Títulos" ""]
-        header-2 ["" "" "" "" ""
-                  "" "" "" "" "Atleta" "Jogos" "" "Atleta" "Gols" "" "Atleta" "Assistências" "" "Atleta" "Títulos"]
-        rows (map (fn [left g go a t]
-                    (into []
-                          (concat left
-                                  ["" "" "" ""]
-                                  g [""]
-                                  go [""]
-                                  a [""]
-                                  t)))
-                  padded-player-rows padded-games padded-goals padded-assists padded-titles)]
-    (write-csv (into [header-1 header-2] rows))))
+  ([] (dashboard-csv {}))
+  ([{:keys [include-derived?] :or {include-derived? false}}]
+   (let [players (players-db/find-active)
+         tops {:games (map #(top-entry % :games) (agg/top-players-by-metric :games 20))
+               :goals (map #(top-entry % :goals) (agg/top-players-by-metric :goals 20))
+               :assists (map #(top-entry % :assists) (agg/top-players-by-metric :assists 20))
+               :titles (map #(top-entry % :titles) (agg/top-players-by-metric :titles 20))}
+         players-rows (map #(player-dashboard-row % include-derived?)
+                           (sort-by (comp str/lower-case as-str :name) players))
+         left-cols (if include-derived? 8 5)
+         left-blank (vec (repeat left-cols ""))
+         left-count (count players-rows)
+         right-count (apply max 0 (map count (vals tops)))
+         rows-count (max left-count right-count)
+         padded-player-rows (concat players-rows (repeat (- rows-count left-count) left-blank))
+         padded-games (concat (:games tops) (repeat (- rows-count (count (:games tops))) ["" ""]))
+         padded-goals (concat (:goals tops) (repeat (- rows-count (count (:goals tops))) ["" ""]))
+         padded-assists (concat (:assists tops) (repeat (- rows-count (count (:assists tops))) ["" ""]))
+         padded-titles (concat (:titles tops) (repeat (- rows-count (count (:titles tops))) ["" ""]))
+         header-1 (if include-derived?
+                    ["ATLETA" "JOGOS" "GOLS" "ASSISTENCIAS" "TÍTULOS"
+                     "CONTRIB GOL" "CONTRIB/JOGO" "DISCIPLINA"
+                     "" "" "" "Top 20 Jogos" "" "" "Top 20 Gols" "" "" "Top 20 Assistências" "" "" "Top 20 Títulos" ""]
+                    ["ATLETA" "JOGOS" "GOLS" "ASSISTENCIAS" "TÍTULOS"
+                     "" "" "" "" "Top 20 Jogos" "" "" "Top 20 Gols" "" "" "Top 20 Assistências" "" "" "Top 20 Títulos" ""])
+         header-2 (if include-derived?
+                    (vec (concat (repeat left-cols "")
+                                 ["" "" "" "Atleta" "Jogos" "" "Atleta" "Gols" "" "Atleta" "Assistências" "" "Atleta" "Títulos"]))
+                    ["" "" "" "" ""
+                     "" "" "" "" "Atleta" "Jogos" "" "Atleta" "Gols" "" "Atleta" "Assistências" "" "Atleta" "Títulos"])
+         sep (if include-derived? ["" "" ""] ["" "" "" ""])
+         rows (map (fn [left g go a t]
+                     (into [] (concat left sep g [""] go [""] a [""] t)))
+                   padded-player-rows padded-games padded-goals padded-assists padded-titles)]
+     (write-csv (into [header-1 header-2] rows)))))
 
 (defn- round-marker-rows [matches]
   (loop [remaining matches

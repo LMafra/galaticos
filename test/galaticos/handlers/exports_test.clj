@@ -7,7 +7,7 @@
 (deftest export-dashboard-csv-test
   (testing "success"
     (let [csv "a,b\n1,2"
-          result (with-redefs [export-csv/dashboard-csv (fn [] csv)]
+          result (with-redefs [export-csv/dashboard-csv (fn [& _] csv)]
                   (handlers/export-dashboard-csv {}))]
       (is (= 200 (:status result)))
       (is (= csv (:body result)))
@@ -15,7 +15,7 @@
       (is (re-find #"galaticos-dashboard\.csv"
                    (get-in result [:headers "Content-Disposition"])))))
   (testing "error from export"
-    (let [result (with-redefs [export-csv/dashboard-csv (fn [] (throw (Exception. "boom")))]
+    (let [result (with-redefs [export-csv/dashboard-csv (fn [& _] (throw (Exception. "boom")))]
                   (handlers/export-dashboard-csv {}))]
       (is (= 500 (:status result))))))
 

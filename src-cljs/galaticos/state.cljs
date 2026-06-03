@@ -58,6 +58,7 @@
            :dashboard-loaded? false
            :dashboard-loading? false
            :dashboard-error nil
+           :player-insights {:player-id nil :data nil :loading? false :error nil}
            :loading false
            :error nil
            :toasts []}))
@@ -171,4 +172,54 @@
 
 (defn set-dashboard-stats! [stats]
   (swap! app-state assoc :dashboard-stats stats :dashboard-loaded? true :dashboard-loading? false :dashboard-error nil))
+
+(defn app-reducer
+  "Pure state transitions for incremental FP events `[event-type payload]`."
+  [state [event-type payload]]
+  (case event-type
+    :analytics/insights-request
+    (assoc state :player-insights {:player-id (:player-id payload)
+                                   :data nil
+                                   :loading? true
+                                   :error nil})
+
+    :analytics/insights-success
+    (assoc-in state [:player-insights]
+              {:player-id (get-in state [:player-insights :player-id])
+               :data (:data payload)
+               :loading? false
+               :error nil})
+
+    :analytics/insights-error
+    (update state :player-insights
+            assoc :loading? false :error (:error payload))
+
+    :analytics/insights-clear
+    (assoc state :player-insights {:player-id nil :data nil :loading? false :error nil})
+
+    state))
+
+(defn dispatch!
+  "Apply one event to app-state."
+  [event]
+  (swap! app-state app-reducer event))
+
+(defn derived-dashboard-tops
+  "Derived top lists from last dashboard payload (pure read)."
+  [stats]
+  (when stats
+    {:top-goal-contribution (:top-goal-contribution stats)
+     :top-discipline-index (:top-discipline-index stats)}))
+
+(def dashboard-derived-reaction
+  (r/reaction (derived-dashboard-tops (:dashboard-stats @app-state))))
+
+(defn player-insights-reaction
+  "Insights slice for a player id (loading, data, error)."
+  [player-id]
+  (r/reaction
+   (let [{:keys [player-insights]} @app-state
+         pid (some-> player-id str)]
+     (when (= pid (some-> (:player-id player-insights) str))
+       player-insights))))
 

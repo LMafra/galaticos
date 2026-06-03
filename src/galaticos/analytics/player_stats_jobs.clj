@@ -1,6 +1,6 @@
 (ns galaticos.analytics.player-stats-jobs
   "In-process single-thread executor for player aggregated-stats recompute after match writes
-  (incremental by default) and full recompute. See docs/parcial/analytics/technical-evolution."
+  (incremental by default) and full recompute. See docs/informacao/analytics/architecture.md."
   (:require [clojure.string :as str]
             [clojure.tools.logging :as log]
             [environ.core :refer [env]]

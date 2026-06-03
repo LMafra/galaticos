@@ -1,5 +1,18 @@
 (ns galaticos.components.matches
-  "Match list and form components"
+  "Match list and form components.
+  
+  ## Regras de UI para Temporadas (RN-MATCH-08/09)
+  
+  | Variável | Uso |
+  |----------|-----|
+  | has-active-season? | Esconde botão 'Nova Partida' quando false |
+  | create-locked? | Desabilita submit do form de criação; NÃO afeta edição |
+  | is-edit? | Distingue edição (sempre permitida) de criação (requer temporada ativa) |
+  
+  IMPORTANTE: Update/delete de partidas existentes são permitidos mesmo com
+  temporada concluída (RN-MATCH-09). Apenas CREATE requer temporada ativa.
+  
+  Ver: docs/informacao/dominio/guia-partidas-temporadas-estatisticas-hibridas.md"
   (:require [reagent.core :as r]
             [clojure.string :as str]
             [reitit.frontend.easy :as rfe]
@@ -454,7 +467,9 @@
                  [:div {:class "mt-4 space-y-3"}
                   (when (and (not is-edit?) create-locked?)
                     [:p {:class "text-sm text-amber-600 dark:text-amber-400"}
-                     "Temporada concluída — novas partidas não podem ser criadas. Ative uma temporada ou edite partidas existentes."])
+                     (if (empty? @championship-seasons)
+                       "Nenhuma temporada cadastrada neste campeonato. Crie uma temporada ativa para registrar partidas."
+                       "Nenhuma temporada ativa neste campeonato. Ative uma temporada ou edite partidas existentes.")])
                   [:div {:class "overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"}
                    [:table {:class "min-w-full divide-y divide-slate-200 dark:divide-slate-700"}
                     [:thead {:class "bg-slate-50 dark:bg-slate-800/80"}
@@ -517,7 +532,7 @@
               [:p {:class "app-muted"}
                (if (common/status-active? (:status season))
                  "Nenhuma partida nesta temporada."
-                 "Temporada concluída — novas partidas não podem ser criadas.")])])]))))
+                 (str "Temporada " (common/status-label (:status season)) " — novas partidas só podem ser criadas em temporadas ativas."))])])]))))
 
 (defn championship-matches-page
   "Page showing all matches for a championship, organized by season."
