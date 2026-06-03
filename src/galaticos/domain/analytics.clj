@@ -1,20 +1,23 @@
 (ns galaticos.domain.analytics
   "Pure analytics rollups, merge, and derived metric formulas.
   
-  ## Modelo Híbrido de Estatísticas
+  ## Modelo híbrido (carreira completa)
   
-  O sistema mantém estatísticas de jogadores em duas fontes:
-  1. **Baseline da planilha/seed** - dados históricos importados (`:pre-match-stats`)
-  2. **Rollup de partidas** - soma das partidas registradas no sistema
+  O `total` é a soma de todas as linhas `by-championship` (todas as temporadas). Cada linha
+  combina até três origens, sem duplicar partidas já contadas na planilha:
   
-  A fórmula de exibição por campeonato é:
+  1. **Só planilha** — `:pre-match-stats` com totais da tabela; sem partidas no Mongo para
+     aquele `championship-id|season` → exibido = planilha.
+  2. **Planilha + partidas importadas** — planilha em `:pre-match-stats`; rollup das partidas
+     seed com overlap congelado em `:baseline-match-rollup` → exibido = planilha + (rollup − frozen).
+  3. **Só partidas** (antigas ou criadas na UI) — sem linha na planilha para aquela temporada;
+     `:pre-match-stats` zerado → exibido = rollup de todas as partidas daquele par campeonato|season.
+  
+  Fórmula por linha:
   
       exibido = pre-match-stats + (rollup_partidas − baseline-match-rollup)
   
-  Onde:
-  - `:pre-match-stats` é o baseline da planilha
-  - `:baseline-match-rollup` é a parte do rollup já contabilizada no baseline (partidas importadas)
-  - Títulos vêm sempre da planilha, nunca das partidas
+  Títulos: só da planilha. O pipeline incremental/agregado considera **todas** as partidas do jogador.
   
   Ver: docs/informacao/dominio/guia-partidas-temporadas-estatisticas-hibridas.md"
   (:require [clojure.string :as str]))
@@ -125,15 +128,25 @@
    :goals (+ (safe-int (:goals baseline)) (safe-int (:goals delta)))
    :assists (+ (safe-int (:assists baseline)) (safe-int (:assists delta)))})
 
+(defn- pre-match-stats-meaningful?
+  "True when :pre-match-stats carries spreadsheet baseline (not the zero placeholder on match-only rows)."
+  [entry]
+  (when-let [pm (:pre-match-stats entry)]
+    (some pos? (map safe-int (vals pm)))))
+
 (defn- infer-baseline-match-rollup
   [existing-entry match-entry]
-  (when (and existing-entry match-entry (:pre-match-stats existing-entry))
+  (when (and existing-entry match-entry (pre-match-stats-meaningful? existing-entry))
     (let [pre (stat-triple (:pre-match-stats existing-entry))
           disp (stat-triple existing-entry)
           match (stat-triple match-entry)
           inflation (subtract-stat-triples disp pre)]
-      (if (>= (:games inflation) (:games match))
+      (cond
+        (>= (:games inflation) (:games match))
         match
+        (>= (:goals inflation) (:goals match))
+        match
+        :else
         (subtract-stat-triples match inflation)))))
 
 (defn- resolve-baseline-match-rollup
@@ -149,17 +162,29 @@
    :assists (sum-stat match-derived :assists)})
 
 (defn- display-likely-includes-match-rollups?
+  "True when cached display already embeds some or all of the match rollup (overlap).
+  Used to avoid exibido = display + rollup when :pre-match-stats is absent.
+  Requires a substantial display baseline so small rows + new rollups still add normally."
   [display-triple match-triple]
   (let [dg (safe-int (:games display-triple))
-        mg (safe-int (:games match-triple))]
-    (and (pos? dg) (>= mg 10) (>= dg mg) (> (/ (double mg) (double dg)) 0.4))))
+        mg (safe-int (:games match-triple))
+        dgoals (safe-int (:goals display-triple))
+        mgoals (safe-int (:goals match-triple))]
+    (or
+     ;; Many games: rollup covers a large share of display games
+     (and (pos? dg) (>= mg 10) (>= dg mg) (> (/ (double mg) (double dg)) 0.4))
+     ;; Rollup goals meet display and rollup games fit inside display games (import in seed)
+     (and (pos? dgoals) (>= dgoals 5) (pos? mgoals) (>= mgoals dgoals) (<= mg dg))
+     ;; Large table-style display; rollup goals are a material fraction (e.g. Jow: 36/87)
+     (and (pos? dgoals) (>= dgoals 10) (pos? mgoals) (pos? mg) (<= mg dg)
+          (>= (/ (double mgoals) (double dgoals)) 0.35)))))
 
 (defn- baseline-from-entry
   ([entry]
    (baseline-from-entry entry nil))
   ([entry match-entry]
-   (if-let [pm (:pre-match-stats entry)]
-     (stat-triple pm)
+   (if (pre-match-stats-meaningful? entry)
+     (stat-triple (:pre-match-stats entry))
      (let [current (stat-triple entry)]
        (if-not (or (pos? (:games current)) (pos? (:goals current)) (pos? (:assists current)))
          (zero-baseline-stats)
@@ -173,15 +198,45 @@
     (let [s (str/trim (str season))]
       (when-not (str/blank? s) s))))
 
+(defn- match-only-row?
+  "Row driven only by match rollups: explicit zero :pre-match-stats from match-only-entry.
+  Legacy/planilha rows without :pre-match-stats use the hybrid formula branch."
+  [entry]
+  (and entry
+       (contains? entry :pre-match-stats)
+       (not (pre-match-stats-meaningful? entry))))
+
 (defn- merge-championship-entry
   [existing-entry match-entry]
-  (let [baseline (baseline-from-entry existing-entry match-entry)
-        frozen (resolve-baseline-match-rollup existing-entry match-entry)
+  (let [current-triple (stat-triple existing-entry)
         match-triple (stat-triple match-entry)
-        delta (subtract-stat-triples match-triple frozen)
-        display (add-stat-triples baseline delta)
         season (or (:season existing-entry) (:season match-entry))
         cards (card-minute-fields match-entry)
+        {baseline :pre-match-stats
+         frozen :baseline-match-rollup
+         display :display}
+        (if (match-only-row? existing-entry)
+          ;; Só partidas: exibido = rollup atual; frozen acompanha o rollup (sem planilha).
+          {:pre-match-stats (zero-baseline-stats)
+           :baseline-match-rollup match-triple
+           :display match-triple}
+          (let [overlap-without-baseline? (and (not (pre-match-stats-meaningful? existing-entry))
+                                               (display-likely-includes-match-rollups?
+                                                current-triple
+                                                match-triple))
+                baseline (if overlap-without-baseline?
+                           current-triple
+                           (baseline-from-entry existing-entry match-entry))
+                frozen (or (:baseline-match-rollup existing-entry)
+                           (when overlap-without-baseline?
+                             match-triple)
+                           (resolve-baseline-match-rollup existing-entry match-entry)
+                           (zero-baseline-stats))
+                delta (subtract-stat-triples match-triple frozen)
+                display (add-stat-triples baseline delta)]
+            {:pre-match-stats baseline
+             :baseline-match-rollup frozen
+             :display display}))
         base (merge {:championship-id (:championship-id existing-entry)
                      :championship-name (or (:championship-name match-entry)
                                             (:championship-name existing-entry)
@@ -213,9 +268,9 @@
 (defn- match-only-entry
   [entry]
   (let [baseline (zero-baseline-stats)
-        frozen (zero-baseline-stats)
         match-triple (stat-triple entry)
-        display (add-stat-triples baseline match-triple)
+        frozen match-triple
+        display match-triple
         cards (card-minute-fields entry)]
     (cond-> (merge {:championship-id (:championship-id entry)
                     :championship-name (or (:championship-name entry) "")
@@ -411,6 +466,17 @@
               :by-championship merged-by}
        pre-match-total (assoc :pre-match-total pre-match-total)))))
 
+(defn- row-pre-match-triple
+  "Baseline triple for combine: explicit :pre-match-stats or displayed row stats."
+  [row]
+  (if-let [pm (:pre-match-stats row)]
+    (stat-triple pm)
+    (stat-triple row)))
+
+(defn- combine-pre-match-stats-field
+  [existing row]
+  (add-stat-triples (row-pre-match-triple existing) (row-pre-match-triple row)))
+
 (defn- combine-players-by-championship-additive
   [players]
   (let [merged-map
@@ -442,13 +508,18 @@
                                           (fn [nm]
                                             (if (and (string? nm) (not (str/blank? nm)))
                                               nm
-                                              (or (:championship-name row) "")))))
-                              (cond-> {:championship-id cid
-                                       :championship-name (or (:championship-name row) "")
-                                       :games g :goals gl :assists a :titles ti
-                                       :yellow-cards yc :red-cards rc :minutes-played mp}
-                                (some? (season-key-suffix (:season row)))
-                                (assoc :season (:season row)))))))
+                                              (or (:championship-name row) ""))))
+                                  (assoc :pre-match-stats (combine-pre-match-stats-field existing row)))
+                              (let [pre (row-pre-match-triple row)]
+                                (cond-> {:championship-id cid
+                                         :championship-name (or (:championship-name row) "")
+                                         :pre-match-stats {:games (:games pre)
+                                                           :goals (:goals pre)
+                                                           :assists (:assists pre)}
+                                         :games g :goals gl :assists a :titles ti
+                                         :yellow-cards yc :red-cards rc :minutes-played mp}
+                                  (some? (season-key-suffix (:season row)))
+                                  (assoc :season (:season row))))))))
                 acc))
             acc
             (or (:by-championship (:aggregated-stats p)) [])))

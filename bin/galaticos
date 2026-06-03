@@ -53,9 +53,10 @@ show_help() {
     echo ""
     echo "  Database:"
     echo "    db:setup         Set up MongoDB indexes (creates indexes for all collections)"
-    echo "    db:seed          Seed database from Excel file (populates teams, players, championships)"
-    echo "                     Flags: --reset, --import-tournament-matches, --import-asbac-data"
+    echo "    db:seed          Seed from Excel + BASE_DADOS (idempotent; flags: --reset, --full)"
+    echo "    db:seed-full     All data + hybrid stats reconcile (recommended: --reset)"
     echo "    db:seed-smoke    Seed minimal deterministic data for smoke/E2E tests"
+    echo "    db:check-stats   Quick check of players/matches aggregated-stats"
     echo "    db:reset         Drop all collections (dev only; use --keep-admins to preserve admins)"
     echo "    db:backup        Dump database to backups/mongodb (mongodump archive, needs MONGO_URI)"
     echo "    db:restore       Restore from archive (mongorestore; use --archive PATH [--drop])"
@@ -79,7 +80,8 @@ show_help() {
     echo "  ./bin/galaticos docker:prod deploy:vps-host --no-cache  # VPS: Clojars timeout → host-network build"
     echo "  ./bin/galaticos docker:dev start"
     echo "  ./bin/galaticos db:setup         # Create MongoDB indexes"
-    echo "  ./bin/galaticos db:seed          # Populate database from Excel"
+    echo "  ./bin/galaticos db:seed-full --reset  # Full data + hybrid stats reconcile"
+    echo "  ./bin/galaticos db:seed          # Base seed (planilha; add --full for all imports)"
     echo ""
 }
 
@@ -122,6 +124,13 @@ case "$COMMAND" in
     db:seed)
         shift
         exec "$SCRIPTS_DIR/database/seed.sh" "$@"
+        ;;
+    db:seed-full)
+        shift
+        exec "$SCRIPTS_DIR/database/seed-full.sh" "$@"
+        ;;
+    db:check-stats)
+        exec "$SCRIPTS_DIR/database/check-stats.sh"
         ;;
     db:seed-smoke)
         exec "$SCRIPTS_DIR/database/seed-smoke.sh"

@@ -20,6 +20,7 @@ Padronizar a operação de reconciliação entre a fonte de verdade (`matches.pl
 
 - **Síncrono (padrão):** `POST /api/aggregations/reconcile` (autenticado). A API valida integridade, executa o recompute completo na thread do pedido e responde com `updated` e mensagem. Adequado quando se precisa de confirmação imediata.
 - **Assíncrono:** `POST /api/aggregations/reconcile?async=true` (autenticado). Responde **202** com `job-id`; o recompute roda no executor in-process. Use para janelas longas ou reduzir tempo de conexão no cliente. Acompanhe o processamento via logs estruturados (filtrar por `:job-id` e `galaticos.event/player-stats-refresh`).
+- **CLI (dev):** `clojure -M:dev -m galaticos.tasks.reconcile-player-stats` — reconexão completa via `update-all-player-stats` e log de jogadores sem `:pre-match-stats` / `:baseline-match-rollup` (ver [guia híbrida](../dominio/guia-partidas-temporadas-estatisticas-hibridas.md#troubleshooting-gols-saltam-ao-criar-partida)).
 - **Estado do worker (leitura):** `GET /api/aggregations/player-stats-jobs` (autenticado) devolve último sucesso (incremental/completo) persistido e métricas simples do executor (fila, activos). Útil em incidentes sem aceder apenas aos logs. Ver [architecture.md — Jobs de agregados](architecture.md#jobs-de-agregados-player-stats).
 
 ## Checklist de execução

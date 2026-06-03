@@ -269,6 +269,11 @@
                         (when (seq errs) errs)))
         prepare-payload (fn []
                           (let [home-team-id (:home-team-id @form-data)
+                                team-by-player (into {}
+                                                     (keep (fn [player]
+                                                             (when-let [tid (:team-id player)]
+                                                               [(str (:_id player)) (str tid)]))
+                                                           @enrolled-players))
                                 stats-map (:player-statistics @form-data)
                                 stats-vec (->> stats-map
                                                (filter (fn [[_pid stat]]
@@ -277,7 +282,7 @@
                                                              (> (:assists stat) 0))))
                                                (mapv (fn [[pid stat]]
                                                        {:player-id pid
-                                                        :team-id home-team-id
+                                                        :team-id (or (get team-by-player pid) home-team-id)
                                                         :goals (:goals stat)
                                                         :assists (:assists stat)
                                                         :minutes-played (if (:played? stat) 90 0)})))]

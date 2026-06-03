@@ -1,6 +1,7 @@
 (ns galaticos.db.aggregations-test
   (:require [clojure.test :refer [deftest is testing]]
             [galaticos.db.aggregations :as agg]
+            [galaticos.db.core :as db]
             [galaticos.domain.analytics :as analytics]
             [monger.collection :as mc])
   (:import [org.bson.types ObjectId]))
@@ -166,6 +167,105 @@
             row2 (first (:by-championship after-new-match))]
         (is (= 9 (:games row2)))
         (is (= 7 (:goals row2)))))))
+
+(deftest merge-aggregated-stats-repairs-goals-only-inflation-without-pre-match-stats
+  (testing "seeded display without :pre-match-stats must not add full rollup on top (Jow 87 -> 123)"
+    (let [existing {:total {:games 8 :goals 87 :assists 0 :titles 0}
+                    :by-championship [{:championship-id "c1"
+                                       :championship-name "SARRADA"
+                                       :season "2025"
+                                       :games 8
+                                       :goals 87
+                                       :assists 0
+                                       :titles 0}]}
+          match-derived [{:championship-id "c1"
+                          :championship-name "SARRADA"
+                          :season "2025"
+                          :games 4
+                          :goals 36
+                          :assists 0}]
+          merged (analytics/merge-aggregated-stats existing match-derived)
+          row (first (:by-championship merged))]
+      (is (= 87 (:goals row)))
+      (is (= 87 (get-in merged [:total :goals])))
+      (is (= 87 (:goals (:pre-match-stats row))))
+      (is (= 36 (:goals (:baseline-match-rollup row))))
+      (let [after-new-match (analytics/merge-aggregated-stats merged
+                                                          [{:championship-id "c1"
+                                                            :championship-name "SARRADA"
+                                                            :season "2025"
+                                                            :games 5
+                                                            :goals 37
+                                                            :assists 0}])
+            row2 (first (:by-championship after-new-match))]
+        (is (= 88 (:goals row2)))
+        (is (= 88 (get-in after-new-match [:total :goals])))))))
+
+(deftest merge-aggregated-stats-repairs-goals-only-inflation-with-pre-match-stats
+  (testing "corrupted display with same games but inflated goals is repaired on merge"
+    (let [corrupted {:total {:games 8 :goals 123 :assists 0 :titles 0}
+                     :by-championship [{:championship-id "c1"
+                                        :championship-name "SARRADA"
+                                        :season "2025"
+                                        :pre-match-stats {:games 8 :goals 87 :assists 0}
+                                        :games 8
+                                        :goals 123
+                                        :assists 0
+                                        :titles 0}]}
+          match-derived [{:championship-id "c1"
+                          :championship-name "SARRADA"
+                          :season "2025"
+                          :games 4
+                          :goals 36
+                          :assists 0}]
+          merged (analytics/merge-aggregated-stats corrupted match-derived)
+          row (first (:by-championship merged))]
+      (is (= 87 (:goals row)))
+      (is (= 36 (:goals (:baseline-match-rollup row)))))))
+
+(deftest merge-aggregated-stats-full-career-three-sources
+  (testing "planilha sem partidas + planilha/import + só partidas antigas + partida UI nova"
+    (let [existing {:total {:games 18 :goals 11 :assists 0 :titles 1}
+                    :by-championship [{:championship-id "c-plan"
+                                       :championship-name "Planilha"
+                                       :season "2025"
+                                       :pre-match-stats {:games 10 :goals 5 :assists 0}
+                                       :games 10 :goals 5 :assists 0 :titles 1}
+                                      {:championship-id "c-hybrid"
+                                       :championship-name "Hibrido"
+                                       :season "2025"
+                                       :pre-match-stats {:games 8 :goals 6 :assists 0}
+                                       :baseline-match-rollup {:games 4 :goals 4 :assists 0}
+                                       :games 8 :goals 6 :assists 0 :titles 0}]}
+          match-derived [{:championship-id "c-hybrid"
+                          :championship-name "Hibrido"
+                          :season "2025"
+                          :games 4 :goals 4 :assists 0}
+                         {:championship-id "c-old"
+                          :championship-name "Historico"
+                          :season "2022"
+                          :games 7 :goals 11 :assists 0}
+                         {:championship-id "c-plan"
+                          :championship-name "Planilha"
+                          :season "2026"
+                          :games 1 :goals 1 :assists 0}]
+          merged (analytics/merge-aggregated-stats existing match-derived)
+          by (:by-championship merged)
+          plan-25 (first (filter #(= "2025" (:season %)) (filter #(= "c-plan" (:championship-id %)) by)))
+          hybrid (first (filter #(= "c-hybrid" (:championship-id %)) by))
+          old (first (filter #(= "c-old" (:championship-id %)) by))
+          ui (first (filter #(= "2026" (:season %)) (filter #(= "c-plan" (:championship-id %)) by)))]
+      (is (= 5 (:goals plan-25)) "só planilha 2025")
+      (is (= 6 (:goals hybrid)) "planilha + import sem delta")
+      (is (= 11 (:goals old)) "só partidas 2022")
+      (is (= 1 (:goals ui)) "partida UI 2026")
+      (is (= 23 (get-in merged [:total :goals])) "5+6+11+1")
+      (let [after-ui (analytics/merge-aggregated-stats merged
+                                                   [{:championship-id "c-plan"
+                                                     :championship-name "Planilha"
+                                                     :season "2026"
+                                                     :games 2 :goals 2 :assists 0}])]
+        (is (= 24 (get-in after-ui [:total :goals])) "+1 gol na UI")))))
 
 (deftest merge-aggregated-stats-repairs-inflated-display-from-prior-additive-merge
   (testing "corrupted display (table + full match rollup) is repaired on reconcile"
@@ -404,7 +504,76 @@
     (is (= 7 (:games row)))
     (is (= 2 (:goals row)))
     (is (= 1 (:assists row)))
-    (is (= 1 (:titles row)))))
+    (is (= 1 (:titles row)))
+    (is (= 7 (get-in row [:pre-match-stats :games])))
+    (is (= 2 (get-in row [:pre-match-stats :goals])))))
+
+(deftest combine-players-aggregated-stats-preserves-pre-match-stats
+  (testing "Lucas+Mafra style merge keeps hybrid metadata per championship row"
+    (let [astcu (ObjectId.)
+          sarrada (ObjectId.)
+          fut7 (ObjectId.)
+          boleiro (ObjectId.)
+          p1 {:aggregated-stats {:total {:games 7 :goals 1 :assists 0 :titles 0}
+                                :by-championship [{:championship-id astcu
+                                                   :championship-name "ASTCU"
+                                                   :season "2025"
+                                                   :pre-match-stats {:games 7 :goals 1 :assists 0}
+                                                   :games 7 :goals 1 :assists 0 :titles 0}]}}
+          p2 {:aggregated-stats {:total {:games 11 :goals 0 :assists 0 :titles 2}
+                                :by-championship [{:championship-id sarrada
+                                                   :championship-name "SARRADA"
+                                                   :season "2025"
+                                                   :pre-match-stats {:games 6 :goals 0 :assists 0}
+                                                   :games 6 :goals 0 :assists 0 :titles 1}
+                                                  {:championship-id fut7
+                                                   :championship-name "Boleiro fut7"
+                                                   :season "2025"
+                                                   :pre-match-stats {:games 5 :goals 0 :assists 0}
+                                                   :games 5 :goals 0 :assists 0 :titles 0}
+                                                  {:championship-id boleiro
+                                                   :championship-name "Boleiro"
+                                                   :season "2025"
+                                                   :pre-match-stats {:games 0 :goals 0 :assists 0}
+                                                   :games 0 :goals 0 :assists 0 :titles 1}]}}
+          out (agg/combine-players-aggregated-stats [p1 p2])
+          astcu-row (first (filter #(= (str astcu) (str (:championship-id %))) (:by-championship out)))]
+      (is (= 18 (get-in out [:total :games])))
+      (is (= 7 (get-in astcu-row [:pre-match-stats :games])))
+      (is (= 1 (get-in astcu-row [:pre-match-stats :goals]))))))
+
+(deftest combine-then-player-reconcile-opts-preserves-cache
+  (testing "post-merge combined cache (no matches) is not cleared with reconcile-safe opts"
+    (let [astcu (ObjectId.)
+          sarrada (ObjectId.)
+          p1 {:aggregated-stats {:by-championship [{:championship-id astcu :season "2025"
+                                                   :championship-name "ASTCU"
+                                                   :pre-match-stats {:games 7 :goals 1 :assists 0}
+                                                   :games 7 :goals 1 :assists 0 :titles 0}]}}
+          p2 {:aggregated-stats {:by-championship [{:championship-id sarrada :season "2025"
+                                                   :championship-name "SARRADA"
+                                                   :pre-match-stats {:games 6 :goals 0 :assists 0}
+                                                   :games 6 :goals 0 :assists 0 :titles 1}]}}
+          combined (agg/combine-players-aggregated-stats [p1 p2])
+          pid (ObjectId.)
+          player {:_id pid :name "Lucas Mafra" :aggregated-stats combined}
+          stored (atom player)
+          reconcile-safe {:zero-if-no-matches? false
+                          :drop-stale-without-match-rollups? false}
+          run-reconcile! (fn [opts]
+                           (with-redefs [db/db (constantly :mock-db)
+                                         mc/aggregate (fn [_ _ _] [])
+                                         mc/find-one-as-map (fn [_ _ _ q]
+                                                              (when (= pid (:_id q))
+                                                                @stored))
+                                         mc/update (fn [_ _ q patch]
+                                                     (when (= pid (:_id q))
+                                                       (swap! stored merge (:$set patch))))]
+                             (agg/update-incremental-player-stats! [(str pid)] opts)))]
+      (is (= 13 (get-in combined [:total :games])))
+      (run-reconcile! reconcile-safe)
+      (is (= 13 (get-in @stored [:aggregated-stats :total :games])))
+      (is (= 2 (count (:by-championship (:aggregated-stats @stored))))))))
 
 (deftest championship-comparison-includes-all-championships
   (testing "returns all championships with zeroed metrics when there is no data"

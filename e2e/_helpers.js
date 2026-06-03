@@ -55,16 +55,45 @@ async function saveCoverage(page, testInfo) {
 }
 
 /**
- * @param {import('@playwright/test').APIRequestContext} request
+ * JWT from the authenticated browser session (storageState from auth.setup).
+ * Prefer this over POST /api/auth/login when the test already has a logged-in page.
+ * @param {import('@playwright/test').Page} page
  * @returns {Promise<string | null>}
  */
-async function getAdminToken(request) {
-  const r = await request.post('/api/auth/login', {
-    data: { username: 'admin', password: 'admin' },
-  });
-  if (!r.ok()) return null;
-  const j = await r.json();
-  return j?.data?.token ?? null;
+async function getAdminTokenFromPage(page) {
+  if (!page) return null;
+  try {
+    return await getStoredToken(page);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * @param {import('@playwright/test').APIRequestContext} request
+ * @param {import('@playwright/test').Page} [page] optional — reuse token from storageState
+ * @returns {Promise<string | null>}
+ */
+async function getAdminToken(request, page = null) {
+  const fromPage = await getAdminTokenFromPage(page);
+  if (fromPage) return fromPage;
+
+  const maxAttempts = 3;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const r = await request.post('/api/auth/login', {
+      headers: { 'Content-Type': 'application/json' },
+      data: { username: 'admin', password: 'admin' },
+    });
+    if (r.ok()) {
+      const j = await r.json().catch(() => ({}));
+      const token = j?.data?.token ?? null;
+      if (token) return token;
+    }
+    if (attempt < maxAttempts - 1) {
+      await new Promise((res) => setTimeout(res, 250 * (attempt + 1)));
+    }
+  }
+  return null;
 }
 
 /**
@@ -118,6 +147,7 @@ async function activateChampionshipSeason(request, token, championshipId) {
 module.exports = {
   loginAsAdmin,
   getStoredToken,
+  getAdminTokenFromPage,
   saveCoverage,
   getAdminToken,
   apiJson,

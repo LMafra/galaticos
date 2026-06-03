@@ -354,7 +354,8 @@
       (resp/server-error (str "Falha na reconciliação: " (.getMessage e))))))
 
 (defn reconcile-player-stats
-  "Incremental reconciliation for a single player: recompute aggregated-stats from matches."
+  "Incremental reconciliation for a single player: recompute aggregated-stats from matches.
+  Uses the same opts as post-merge refresh: preserve spreadsheet baseline when no matches."
   [request]
   (try
     (let [player-id (get-in request [:params :player-id])]
@@ -362,7 +363,9 @@
         (resp/error "Player ID required" 400)
         (do
           (log/info "Player stats reconciliation started" {:player-id (str player-id)})
-          (let [{:keys [updated]} (agg/update-incremental-player-stats! [player-id])
+          (let [{:keys [updated]} (agg/update-incremental-player-stats! [player-id]
+                                                                        {:zero-if-no-matches? false
+                                                                         :drop-stale-without-match-rollups? false})
                 n (or updated 0)]
             (log/info "Player stats reconciliation completed" {:player-id (str player-id) :updated n})
             (resp/success {:updated n

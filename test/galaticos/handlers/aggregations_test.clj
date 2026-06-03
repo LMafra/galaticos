@@ -151,7 +151,15 @@
   (testing "success with player-id"
     (let [player-id (str (ObjectId.))
           request {:params {:player-id player-id}}
-          result (with-redefs [agg/update-incremental-player-stats! (fn [ids] (is (= [player-id] ids)) {:updated 1})]
+          expected-opts {:zero-if-no-matches? false
+                         :drop-stale-without-match-rollups? false}
+          result (with-redefs [agg/update-incremental-player-stats!
+                              (fn
+                                ([ids] (is (= [player-id] ids)) {:updated 1})
+                                ([ids opts]
+                                 (is (= [player-id] ids))
+                                 (is (= expected-opts opts))
+                                 {:updated 1}))]
                   (handlers/reconcile-player-stats request))
           body (parse-body result)]
       (is (= 200 (:status result)))

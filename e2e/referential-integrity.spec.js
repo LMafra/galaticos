@@ -2,6 +2,8 @@ const { test, expect } = require('@playwright/test');
 const { getAdminToken, saveCoverage, apiJson, activateChampionshipSeason } = require('./_helpers');
 
 test.describe('Referential integrity - delete protection', { tag: '@integrity' }, () => {
+  // API setup (championship + team + player + match) is sensitive to parallel DB load.
+  test.describe.configure({ mode: 'serial' });
   test.beforeEach(async ({ page }) => {
     await page.goto('/#/dashboard');
   });
@@ -33,8 +35,11 @@ test.describe('Referential integrity - delete protection', { tag: '@integrity' }
 
   test('deleting championship with matches shows error message', async ({ page, request }, testInfo) => {
     try {
-      const token = await getAdminToken(request);
-      expect(token, 'admin token (db:seed-smoke: admin/admin)').toBeTruthy();
+      const token = await getAdminToken(request, page);
+      expect(
+        token,
+        'admin token (storageState from auth.setup, or db:seed-smoke admin/admin via POST /api/auth/login)'
+      ).toBeTruthy();
 
       const unique = `${Date.now()}-${testInfo.parallelIndex}-${testInfo.retry}`;
       const { body: createdChampionshipBody, response: createdChampionshipResponse } = await apiJson(
@@ -72,7 +77,7 @@ test.describe('Referential integrity - delete protection', { tag: '@integrity' }
           'team-id': String(teamId),
         }
       );
-      expect(createdPlayerResponse.ok(), JSON.stringify(createdPlayerBody)).toBeTruthy();
+      expect(createdPlayerResponse.status(), JSON.stringify(createdPlayerBody)).toBe(201);
       const playerId = createdPlayerBody?.data?._id;
       expect(playerId).toBeTruthy();
 

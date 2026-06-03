@@ -2810,7 +2810,11 @@ Examples:
   python seed_mongodb.py --import-asbac-data
 
   # Full enrichment (all new features)
-  python seed_mongodb.py --reset --import-tournament-matches --import-asbac-data
+  python seed_mongodb.py --reset --full
+
+  # Same as --full (explicit flags)
+  python seed_mongodb.py --reset --import-excel-championships --import-data-csv \\
+      --import-tournament-matches --import-asbac-data
         """
     )
     parser.add_argument(
@@ -2853,8 +2857,22 @@ Examples:
         action="store_true",
         help="Parse ASBAC standings (SIMULADOR) and records (CURIOSIDADES)",
     )
+    parser.add_argument(
+        "--full",
+        action="store_true",
+        help=(
+            "Load all sources: legacy Excel championship sheets, data/*.csv, "
+            "tournament match sheets, and ASBAC standings/records (implies all --import-* flags)"
+        ),
+    )
 
     args = parser.parse_args()
+
+    if args.full:
+        args.import_excel_championships = True
+        args.import_data_csv = True
+        args.import_tournament_matches = True
+        args.import_asbac_data = True
 
     if args.keep_admins and not args.reset:
         print("✗ Error: --keep-admins can only be used with --reset", file=sys.stderr)
@@ -3023,15 +3041,7 @@ Examples:
         )
         print("  Use --import-data-csv for legacy import.")
 
-    # Step 3.6: Rebuild aggregated stats from matches (no-op if there are no matches)
-    rebuild_aggregated_stats_from_matches(db)
-    match_count = db.matches.count_documents({})
-    if match_count == 0:
-        print(
-            "  Note: no documents in matches; rebuild only affects players that already had match-derived stats."
-        )
-
-    # Step 3.7: canonical BASE_DADOS table stats (overwrites merged table fields)
+    # Step 3.7: canonical BASE_DADOS table stats (planilha por campeonato/temporada)
     apply_base_dados_to_db(
         db, player_map, team_id, DEFAULT_SEASON, canonical_df, canonical_source
     )
@@ -3053,7 +3063,17 @@ Examples:
         print("\n" + "=" * 60)
         print("Step 5: Tournament sheet match import")
         print("=" * 60)
-        print("  Skipped. Use --import-tournament-matches to parse matches from Excel sheets.")
+        print("  Skipped. Use --import-tournament-matches or --full.")
+
+    # Step 3.6: Hybrid merge (planilha + partidas importadas/UI) — after all match sources
+    rebuild_aggregated_stats_from_matches(db)
+    match_count = db.matches.count_documents({})
+    if match_count == 0:
+        print(
+            "  Note: no documents in matches; player stats are table-only from BASE_DADOS."
+        )
+    else:
+        print(f"  Matches in database: {match_count}")
 
     # Step 7-8: Parse ASBAC special data (if flag set)
     standings_count = 0
@@ -3065,7 +3085,17 @@ Examples:
         print("\n" + "=" * 60)
         print("Step 7-8: ASBAC special data import")
         print("=" * 60)
-        print("  Skipped. Use --import-asbac-data to parse standings and records.")
+        print("  Skipped. Use --import-asbac-data or --full.")
+
+    if args.full:
+        print("\n" + "=" * 60)
+        print("Full seed mode")
+        print("=" * 60)
+        print(
+            "  Tip: run Clojure reconcile after seed for production-aligned hybrid stats:"
+        )
+        print("    clojure -M:dev -m galaticos.tasks.reconcile-player-stats")
+        print("  Or: ./bin/galaticos db:seed-full (includes reconcile when Clojure is available)")
 
     # Step 4: Update team with active player IDs
     print("\n" + "=" * 60)
@@ -3097,6 +3127,9 @@ Examples:
     print(f"✓ Total player-championship records: {total_players_processed}")
     if args.import_tournament_matches:
         print(f"✓ Matches from tournament sheets: {matches_from_sheets}")
+    print(f"✓ Matches in database (total): {db.matches.count_documents({})}")
+    if args.full:
+        print("✓ Full import flags: excel championships, data CSV, tournament matches, ASBAC")
     if args.import_asbac_data:
         print(f"✓ Standings documents: {standings_count}")
         print(f"✓ Records documents: {records_count}")

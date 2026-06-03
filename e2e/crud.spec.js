@@ -124,24 +124,11 @@ test('create championship', { tag: '@crud' }, async ({ page }, testInfo) => {
 
 test('create match with one player statistic', { tag: '@crud' }, async ({ page, request }, testInfo) => {
   try {
-    await page.goto('/#/matches/new');
-    await expect(page.getByRole('heading', { name: 'Nova Partida' })).toBeVisible();
-
-    await page.getByText('Carregando jogadores inscritos...').waitFor({ state: 'hidden', timeout: 15_000 }).catch(() => {});
-
-    const noActiveChamp = page.getByText('Nenhum campeonato ativo encontrado.');
-    const noEnrolled = page.getByText('Nenhum jogador inscrito neste campeonato.');
-    const needsSetup =
-      (await noActiveChamp.isVisible().catch(() => false)) || (await noEnrolled.isVisible().catch(() => false));
-
-    if (needsSetup) {
-      let champId;
-      await test.step('API: active championship + Galáticos player enrolled', async () => {
-        champId = await setupActiveChampionshipWithEnrolledGalaticosPlayer(request);
-      });
-      await page.goto(`/#/matches/by-championship/${champId}/new`);
-    }
-
+    let champId;
+    await test.step('API: isolated championship + Galáticos player enrolled', async () => {
+      champId = await setupActiveChampionshipWithEnrolledGalaticosPlayer(request);
+    });
+    await page.goto(`/#/matches/by-championship/${champId}/new`);
     await expect(page.getByRole('heading', { name: 'Nova Partida' })).toBeVisible();
     await page.getByText('Carregando jogadores inscritos...').waitFor({ state: 'hidden', timeout: 15_000 }).catch(() => {});
 
