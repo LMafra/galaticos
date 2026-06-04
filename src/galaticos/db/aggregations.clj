@@ -10,7 +10,7 @@
   - Defaults preservam baseline (:pre-match-stats)
   - :drop-stale-without-match-rollups? só em reconcile explícito
   
-  Ver: docs/informacao/dominio/guia-partidas-temporadas-estatisticas-hibridas.md
+  Ver: docs/reference/domain/matches-seasons-hybrid-stats.md
   Testes: test/galaticos/db/aggregations_test.clj"
   (:require [monger.collection :as mc]
             [galaticos.db.core :refer [db]]
@@ -277,7 +277,7 @@
   IMPORTANTE: O default (false) preserva baseline. Use true apenas em reconciliação
   explícita para limpar linhas órfãs.
   
-  Ver: docs/informacao/dominio/guia-partidas-temporadas-estatisticas-hibridas.md
+  Ver: docs/reference/domain/matches-seasons-hybrid-stats.md
   
   Returns {:status :success :updated n}."
   ([player-ids]

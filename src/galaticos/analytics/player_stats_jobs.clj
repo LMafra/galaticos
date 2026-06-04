@@ -1,6 +1,6 @@
 (ns galaticos.analytics.player-stats-jobs
   "In-process single-thread executor for player aggregated-stats recompute after match writes
-  (incremental by default) and full recompute. See docs/informacao/analytics/architecture.md."
+  (incremental by default) and full recompute. See docs/reference/analytics/architecture.md."
   (:require [clojure.string :as str]
             [clojure.tools.logging :as log]
             [environ.core :refer [env]]
@@ -244,7 +244,7 @@
 
 (defn synchronous-full-recompute!
   "Run full recompute in caller thread. Returns {:status :ok :result m} or {:status :error :message s}.
-  For admin reconcile. Coordinated with informacao/analytics/reconciliation-runbook.md."
+  For admin reconcile. Coordinated with reference/analytics/reconciliation-runbook.md."
   [reason]
   (let [job-id (str (UUID/randomUUID))
         th (long-ms-threshold)

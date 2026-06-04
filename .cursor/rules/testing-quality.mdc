@@ -25,7 +25,7 @@ alwaysApply: false
 Cloverage alias `:coverage` in `deps.edn`:
 
 - Fails when **min(% lines, % forms)** below **70**
-- Some ns excluded via `:ns-exclude-regex` — see `docs/informacao/dominio/testing-coverage.md`
+- Some ns excluded via `:ns-exclude-regex` — see `docs/reference/domain/testing-coverage.md`
 
 ```bash
 ./bin/galaticos coverage

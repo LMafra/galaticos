@@ -10,7 +10,7 @@ Read authoritative docs **before** changing CRUD, seasons, stats, or dashboard m
 
 ## Functional rules
 
-`docs/informacao/dominio/regras-de-negocio.md`
+`docs/reference/domain/business-rules.md`
 
 Key themes (details in doc):
 
@@ -21,7 +21,7 @@ Key themes (details in doc):
 
 ## Metrics and KPIs
 
-**Source of truth:** `docs/informacao/analytics/metrics-catalog.md`
+**Source of truth:** `docs/reference/analytics/metrics-catalog.md`
 
 Do not redefine metric semantics in code comments or handlers — align with catalog or update catalog first.
 
@@ -37,4 +37,4 @@ Follow `src/galaticos/handlers/player_merge.clj` and merge audit collections in 
 
 ## Reconciliation
 
-Operational analytics issues: `docs/informacao/analytics/reconciliation-runbook.md`
+Operational analytics issues: `docs/reference/analytics/reconciliation-runbook.md`

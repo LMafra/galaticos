@@ -30,7 +30,7 @@ alwaysApply: false
 
 When changing document shape:
 
-1. Update `docs/informacao/dominio/mongodb-schema.md`
+1. Update `docs/reference/domain/mongodb-schema.md`
 2. Add indexes in `config/database/init-indexes.js` if query paths change
 
 ## IDs

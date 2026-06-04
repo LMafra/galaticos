@@ -19,7 +19,7 @@
   
   Títulos: só da planilha. O pipeline incremental/agregado considera **todas** as partidas do jogador.
   
-  Ver: docs/informacao/dominio/guia-partidas-temporadas-estatisticas-hibridas.md"
+  Ver: docs/reference/domain/matches-seasons-hybrid-stats.md"
   (:require [clojure.string :as str]))
 
 (defn- safe-int

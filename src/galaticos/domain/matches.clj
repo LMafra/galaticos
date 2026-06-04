@@ -9,7 +9,7 @@
   | update   | Permitido mesmo com temporada concluída (RN-MATCH-09) |
   | delete   | Permitido mesmo com temporada concluída (RN-MATCH-09) |
   
-  Ver: docs/informacao/dominio/guia-partidas-temporadas-estatisticas-hibridas.md"
+  Ver: docs/reference/domain/matches-seasons-hybrid-stats.md"
   (:require [clojure.string :as str]))
 
 (defn- error [type message]
@@ -147,7 +147,7 @@
   merge-aggregated-stats preservando baseline e calculando delta.
   
   Fluxo: persistir partida → add-match na temporada → submit job incremental
-  Ver: docs/informacao/analytics/architecture.md"
+  Ver: docs/reference/analytics/architecture.md"
   [{:keys [reason crud-op match-id player-ids]}]
   {:op :recalc-stats
    :reason reason

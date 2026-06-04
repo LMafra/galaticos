@@ -5,7 +5,7 @@
   - CREATE: só temporada ativa (RN-MATCH-08)
   - UPDATE/DELETE: permitidos mesmo com temporada concluída (RN-MATCH-09)
   
-  Ver: docs/informacao/dominio/guia-partidas-temporadas-estatisticas-hibridas.md"
+  Ver: docs/reference/domain/matches-seasons-hybrid-stats.md"
   (:require [galaticos.logic.matches :as logic]
             [galaticos.util.response :as resp]
             [galaticos.validation.entity :as validation]))

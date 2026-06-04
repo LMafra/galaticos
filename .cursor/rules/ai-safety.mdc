@@ -39,6 +39,6 @@ Confirm the symbol exists in the library version in use:
 
 For file-by-file review prompts, use:
 
-`docs/informacao/qualidade/auditoria-alucinacoes-ia.md`
+`docs/reference/quality/ai-assisted-code-audit.md`
 
 Attach `@deps.edn`, `@shadow-cljs.edn` when auditing dependencies.

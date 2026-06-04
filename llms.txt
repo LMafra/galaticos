@@ -1,0 +1,26 @@
+# Galáticos
+
+> Sports roster management with analytics dashboard — Ring/Compojure API, Reagent SPA, MongoDB. Production: https://www.galaticosfr.com.br
+
+## Essential
+
+- [Concepts](docs/concepts.md): Canonical vocabulary (championship, season, match, aggregated-stats, RN-* IDs).
+- [Development guide](docs/reference/development.md): Local setup, scripts, tests, CI, REPL examples.
+- [Business rules](docs/reference/domain/business-rules.md): Functional and technical domain rules (RN-*).
+- [MongoDB schema](docs/reference/domain/mongodb-schema.md): Collections, embedding, indexes.
+- [Matches, seasons, hybrid stats](docs/reference/domain/matches-seasons-hybrid-stats.md): Match/season flows and stat merge.
+- [Metrics catalog](docs/reference/analytics/metrics-catalog.md): KPI definitions (semantic source of truth).
+- [Production runbook](docs/reference/operations/production-runbook.md): Deploy, backup, seed, indexes in production.
+- [AI-assisted code audit](docs/reference/quality/ai-assisted-code-audit.md): Stack verification for AI-generated code (Monger, Ring, CLJS).
+
+## Documentation hub
+
+- [docs/README.md](docs/README.md): Full map by audience (domain, engineering, operations, analytics).
+
+## Optional
+
+- [Functional architecture](docs/reference/architecture/functional-architecture.md): FP migration (domain/logic/db).
+- [Testing and coverage](docs/reference/domain/testing-coverage.md): Cloverage thresholds and strategy.
+- [Analytics architecture](docs/reference/analytics/architecture.md): Jobs and data flow.
+- [FP improvement checklist](docs/backlog/fp-improvement-checklist.md): Remaining FP migration tasks.
+- [Backlog](docs/backlog/): Pending improvements (not stable reference).

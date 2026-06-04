@@ -12,7 +12,7 @@
   IMPORTANTE: Update/delete de partidas existentes são permitidos mesmo com
   temporada concluída (RN-MATCH-09). Apenas CREATE requer temporada ativa.
   
-  Ver: docs/informacao/dominio/guia-partidas-temporadas-estatisticas-hibridas.md"
+  Ver: docs/reference/domain/matches-seasons-hybrid-stats.md"
   (:require [reagent.core :as r]
             [clojure.string :as str]
             [reitit.frontend.easy :as rfe]

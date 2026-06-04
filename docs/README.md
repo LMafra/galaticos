@@ -1,92 +1,92 @@
-# Galáticos — Hub de documentação
+# Galáticos documentation
 
-Documentação central do projeto, organizada por **status** (Informação, A Fazer) e por **tema** dentro de cada status.
+Central documentation organized by **audience and topic**, not project status. Entry points for humans and LLMs: [concepts.md](concepts.md), [llms.txt](../llms.txt), [root README](../README.md).
 
-## Como navegar
+## Start here
 
-- `README.md` (raiz do repositório): visão geral do projeto, setup e execução.
-- `docs/README.md` (este arquivo): índice por status.
-- [plans/README.md](plans/README.md) — planos de implementação sequenciais (trilha FP 00–07 + analytics Fase 3).
-- Saídas locais do Lighthouse (JSON): `docs/perf-output/` (gitignored; ver documentação em Informação / performance).
+| Doc | Answers |
+|-----|---------|
+| [concepts.md](concepts.md) | What terms mean (championship, season, aggregated-stats, RN-*) |
+| [reference/development.md](reference/development.md) | How to install, run, test, and replicate CI locally |
+| [authoring.md](authoring.md) | How to write and maintain docs (GEO-friendly) |
 
-## Informação
+## Domain and data
 
-Referência estável: visão, processos, modelos e como medir.
+| Doc | Answers |
+|-----|---------|
+| [reference/domain/business-rules.md](reference/domain/business-rules.md) | All business rules (`RN-*`) — functional and technical |
+| [reference/domain/mongodb-schema.md](reference/domain/mongodb-schema.md) | MongoDB collections, embedding, relationships |
+| [reference/domain/matches-seasons-hybrid-stats.md](reference/domain/matches-seasons-hybrid-stats.md) | Matches, active seasons, hybrid stat model |
+| [reference/domain/business-rules-audit.md](reference/domain/business-rules-audit.md) | Rules vs implementation audit snapshot |
+| [reference/analytics/metrics-catalog.md](reference/analytics/metrics-catalog.md) | **Source of truth** for metric semantics and KPIs |
 
-### Analytics (`docs/informacao/analytics/`)
+Do not redefine metrics in other docs; link to the catalog.
 
-- [strategy.md](informacao/analytics/strategy.md) — visão, objetivos e casos de uso analíticos.
-- [architecture.md](informacao/analytics/architecture.md) — arquitetura analítica, jobs de agregados e fluxo fim a fim.
-- [metrics-catalog.md](informacao/analytics/metrics-catalog.md) — catálogo oficial de métricas e KPIs.
-- [data-contracts.md](informacao/analytics/data-contracts.md) — contratos de dados versionados e governança de schema.
-- [data-quality.md](informacao/analytics/data-quality.md) — regras de qualidade, reconciliação e incidentes.
-- [reconciliation-runbook.md](informacao/analytics/reconciliation-runbook.md) — rotina operacional de reconciliação e resposta a incidentes.
-- [operating-model.md](informacao/analytics/operating-model.md) — papéis, cadência e gestão de mudanças analíticas.
-- [roadmap.md](informacao/analytics/roadmap.md) — roadmap evolutivo em fases.
+## Engineering
 
-### Performance (`docs/informacao/performance/`)
+| Doc | Answers |
+|-----|---------|
+| [reference/architecture/functional-architecture.md](reference/architecture/functional-architecture.md) | OO → FP migration: `domain/*`, `logic/*`, tests |
+| [reference/domain/testing-coverage.md](reference/domain/testing-coverage.md) | Cloverage, E2E coverage, CI thresholds |
+| [reference/quality/ai-assisted-code-audit.md](reference/quality/ai-assisted-code-audit.md) | Auditing AI-assisted code (deps, Monger, Ring, CLJS) |
+| [backlog/fp-improvement-checklist.md](backlog/fp-improvement-checklist.md) | FP migration checklist (remaining code work) |
 
-- [README.md](informacao/performance/README.md) — objetivos, interpretação dev vs release, limitações de auditoria com JWT em `localStorage`.
-- [metodologia.md](informacao/performance/metodologia.md) — Lighthouse (DevTools e CLI), WSL/Chrome, rotas públicas e autenticadas.
-- [inventario-paginas.md](informacao/performance/inventario-paginas.md) — inventário de rotas e componentes para medição por página.
+## Operations
 
-### Arquitetura (`docs/informacao/arquitetura/`)
+| Doc | Answers |
+|-----|---------|
+| [reference/operations/production-runbook.md](reference/operations/production-runbook.md) | Production deploy, backup, seed without data loss |
+| [reference/operations/vps-hosting.md](reference/operations/vps-hosting.md) | VPS, Docker, Nginx, HTTPS, deploy checklist |
+| [reference/operations/incident-deploy-vps-frontend-2026-05.md](reference/operations/incident-deploy-vps-frontend-2026-05.md) | Post-incident notes (May 2026) |
 
-- [arquitetura-funcional.md](informacao/arquitetura/arquitetura-funcional.md) — guia principal da migração OO → FP: namespaces (`domain/*`, `logic/*`, `db.protocol/*`), erros, DI, testes, anti-padrões e ordem de execução (planos 02–07).
+## Analytics program
 
-### Qualidade (`docs/informacao/qualidade/`)
+| Doc | Answers |
+|-----|---------|
+| [reference/analytics/strategy.md](reference/analytics/strategy.md) | Vision, use cases |
+| [reference/analytics/architecture.md](reference/analytics/architecture.md) | Pipelines, jobs, end-to-end flow |
+| [reference/analytics/data-contracts.md](reference/analytics/data-contracts.md) | Versioned data contracts |
+| [reference/analytics/data-quality.md](reference/analytics/data-quality.md) | Quality rules and incidents |
+| [reference/analytics/reconciliation-runbook.md](reference/analytics/reconciliation-runbook.md) | Reconciliation operations |
+| [reference/analytics/operating-model.md](reference/analytics/operating-model.md) | Roles and cadence |
+| [reference/analytics/roadmap.md](reference/analytics/roadmap.md) | Phased roadmap |
 
-- [auditoria-alucinacoes-ia.md](informacao/qualidade/auditoria-alucinacoes-ia.md) — guia para auditar código assistido por IA (deps, Monger, Ring/Compojure, CLJS, prompts e validação com testes e clj-kondo).
+## Performance
 
-### Operação (`docs/informacao/operacao/`)
+| Doc | Answers |
+|-----|---------|
+| [reference/performance/overview.md](reference/performance/overview.md) | Goals, dev vs release, JWT audit limits |
+| [reference/performance/methodology.md](reference/performance/methodology.md) | Lighthouse methodology |
+| [reference/performance/page-inventory.md](reference/performance/page-inventory.md) | Routes and components to measure |
 
-- [runbook-producao.md](informacao/operacao/runbook-producao.md) — deploy, backup, seed e índices em produção sem perda de dados.
-- [vps-hospedeiro.md](informacao/operacao/vps-hospedeiro.md) — SSH, `.env` do Compose, Nginx/HTTPS, build Docker na VPS (Clojars/MTU), seed com Excel e checklist de deploy.
-- [incidente-deploy-vps-frontend-2026-05.md](informacao/operacao/incidente-deploy-vps-frontend-2026-05.md) — nota pós-incidente: Mongo/seed, Clojars na VPS, cache de deploy, browser, remoção do chunk lazy `pages.js`.
+Local Lighthouse JSON: `docs/perf-output/` (gitignored).
 
-### Domínio (`docs/informacao/dominio/`)
+## Backlog
 
-- [guia-partidas-temporadas-estatisticas-hibridas.md](informacao/dominio/guia-partidas-temporadas-estatisticas-hibridas.md) — partidas, temporadas ativas e modelo híbrido de estatísticas (merge, fan-out, UI).
-- [regras-de-negocio.md](informacao/dominio/regras-de-negocio.md) — regras funcionais e técnicas do domínio.
-- [regras-negocio-auditoria.md](informacao/dominio/regras-negocio-auditoria.md) — auditoria regras vs implementação (snapshot).
-- [mongodb-schema.md](informacao/dominio/mongodb-schema.md) — modelagem das coleções MongoDB.
-- [testing-coverage.md](informacao/dominio/testing-coverage.md) — cobertura de testes e estratégia de qualidade.
+Executable pending work — not stable reference:
 
-### NotebookLM (`docs/informacao/notebookLM/`)
+- [backlog/analytics/advanced-analytics-backlog.md](backlog/analytics/advanced-analytics-backlog.md)
+- [backlog/performance/action-backlog.md](backlog/performance/action-backlog.md)
+- [backlog/fp-design-improvements.md](backlog/fp-design-improvements.md)
+- [backlog/fp-improvement-checklist.md](backlog/fp-improvement-checklist.md)
 
-- [notebooklm-prompts.md](informacao/notebookLM/notebooklm-prompts.md) — prompts OO (histórico)
-- [notebooklm-response.md](informacao/notebookLM/notebooklm-response.md) — respostas OO (histórico)
-- [notebooklm-prompts-fp.md](informacao/notebookLM/notebooklm-prompts-fp.md) — prompts programação funcional
-- [notebooklm-response-fp.md](informacao/notebookLM/notebooklm-response-fp.md) — respostas FP + decisões consolidadas
+## Archive
 
-## A Fazer
+Historical NotebookLM and superseded OO checklists (optional reading):
 
-Backlogs, checklists de pendências e melhorias a executar.
+- [archive/notebookLM/](archive/notebookLM/)
 
-### Analytics (`docs/a-fazer/analytics/`)
+## External references
 
-- [advanced-analytics-backlog.md](a-fazer/analytics/advanced-analytics-backlog.md)
+- [Sports analytics (Wikipedia)](https://en.wikipedia.org/wiki/Sports_analytics)
+- [Teradata — sports data analytics](https://www.teradata.com/insights/data-analytics/what-is-sports-data-analytics)
 
-### Performance (`docs/a-fazer/performance/`)
+## Maintaining documentation
 
-- [backlog-acoes.md](a-fazer/performance/backlog-acoes.md)
+1. Put new **stable** docs under `docs/reference/<topic>/`.
+2. Put **pending** work under `docs/backlog/`.
+3. When done, move to `reference/` or delete the backlog item.
+4. Update this README and [llms.txt](../llms.txt).
+5. One semantic source for metrics: [metrics-catalog.md](reference/analytics/metrics-catalog.md).
 
-### NotebookLM (`docs/a-fazer/notebookLM/`)
-
-- [design-and-db-improvements.md](a-fazer/notebookLM/design-and-db-improvements.md) — melhorias OO (histórico)
-- [improvement-checklist.md](a-fazer/notebookLM/improvement-checklist.md) — checklist OO (Fases 2–5 superseded pela trilha FP)
-- [fp-design-improvements.md](a-fazer/notebookLM/fp-design-improvements.md) — mapa De→Para e decisões FP
-- [fp-improvement-checklist.md](a-fazer/notebookLM/fp-improvement-checklist.md) — checklist acionável FP (Fase A doc concluída; Fases B–E = código)
-
-## Referências externas (trilha de analytics)
-
-- [Sports analytics - Wikipedia](https://en.wikipedia.org/wiki/Sports_analytics)
-- [What Is Sports Data Analytics? | Teradata](https://www.teradata.com/insights/data-analytics/what-is-sports-data-analytics)
-- [Data Literacy Toolkit](https://data-literacy-toolkit.github.io)
-
-## Manutenção
-
-- Ao criar um documento novo, coloque-o em **uma** pasta de status; quando o trabalho terminar, **mova** para `informacao/` ou **apague** o backlog e atualize este `README.md`.
-- Evitar duplicar o mesmo conteúdo em duas categorias.
-- Evitar duplicação de definição de métricas entre `informacao/dominio/regras-de-negocio.md` e `informacao/analytics/metrics-catalog.md`.
-- Tratar `informacao/analytics/metrics-catalog.md` como fonte de verdade semântica para indicadores analíticos.
+**Moved from old paths:** `docs/reference/` → `docs/reference/`; `docs/backlog/` → `docs/backlog/`.

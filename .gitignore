@@ -119,7 +119,7 @@ temp/
 
 node_modules/
 
-# Lighthouse / perf tooling (regenerate locally; see docs/informacao/performance)
+# Lighthouse / perf tooling (regenerate locally; see docs/reference/performance)
 chrome/
 docs/perf-output/lighthouse-*.json
 
