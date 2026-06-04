@@ -3,7 +3,7 @@
 # Prefer `docker build --network host` for the full Dockerfile: `docker compose build` can still
 # use the bridge for some BuildKit steps even with compose `build.network: host`, so `clj -P` may
 # succeed while a later `clj -M:build:frontend` times out to repo.clojars.org.
-# See docs/informacao/operacao/vps-hospedeiro.md §4.
+# See docs/reference/operations/vps-hosting.md §4.
 #
 # Usage (from repo root):
 #   ./scripts/docker/prod-vps-build-app.sh compose [--no-cache]
@@ -79,7 +79,7 @@ Environment:
   COMPOSE_FILE       Default: config/docker/docker-compose.prod.yml
   APP_CONTAINER_NAME Default: galaticos-app-prod
 
-Docs: docs/informacao/operacao/vps-hospedeiro.md §4
+Docs: docs/reference/operations/vps-hosting.md §4
 EOF
 }
 
@@ -143,7 +143,7 @@ cmd_host_deploy() {
 }
 
 cmd_mtu_hint() {
-  log_header "Docker MTU workaround (vps-hospedeiro.md §4 — Opção B)"
+  log_header "Docker MTU workaround (vps-hosting.md §4 — Opção B)"
   cat <<'EOF'
 Some VPSes need a lower Docker bridge MTU so HTTPS to Maven/Clojars works.
 
@@ -162,7 +162,7 @@ EOF
 }
 
 cmd_ci_hint() {
-  log_header "Build off the VPS (vps-hospedeiro.md §4 — Opção C)"
+  log_header "Build off the VPS (vps-hosting.md §4 — Opção C)"
   cat <<'EOF'
 Avoid Clojars/Maven from the VPS entirely:
 

@@ -1,6 +1,6 @@
 (ns galaticos.analytics.player-stats-job-store
   "Last-success metadata for in-process player-stats jobs (single logical document in MongoDB).
-  See docs/informacao/analytics/architecture.md."
+  See docs/reference/analytics/architecture.md."
   (:require [clojure.tools.logging :as log]
             [galaticos.db.core :refer [db]]
             [monger.collection :as mc]))

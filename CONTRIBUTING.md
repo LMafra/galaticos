@@ -54,7 +54,7 @@ Antes de enviar um PR, certifique-se de:
 
 - [ ] O código compila sem erros
 - [ ] Todos os testes passam: `./bin/galaticos test`
-- [ ] **Cobertura backend atinge o Cloverage** (`min(% linhas, % forms)` ≥ `--fail-threshold` em `deps.edn`; veja [testing-coverage.md](docs/informacao/dominio/testing-coverage.md))
+- [ ] **Cobertura backend atinge o Cloverage** (`min(% linhas, % forms)` ≥ `--fail-threshold` em `deps.edn`; veja [testing-coverage.md](docs/reference/domain/testing-coverage.md))
 - [ ] Novos recursos incluem testes adequados
 - [ ] As dependências estão atualizadas
 - [ ] Não há warnings do compilador
@@ -84,9 +84,11 @@ open target/coverage-report/index.html
 3. Adicione testes para cobrir essas áreas
 4. Repita até o relatório indicar que os thresholds do Cloverage foram atingidos
 
-**Importante:** PRs que não atingirem os thresholds de cobertura serão bloqueados automaticamente pelo CI. Veja [docs/informacao/dominio/testing-coverage.md](docs/informacao/dominio/testing-coverage.md) para mais detalhes.
+**Importante:** PRs que não atingirem os thresholds de cobertura serão bloqueados automaticamente pelo CI. Veja [docs/reference/domain/testing-coverage.md](docs/reference/domain/testing-coverage.md) para mais detalhes.
 
 ## Ambiente de Desenvolvimento
+
+Overview and quick start: [README.md](README.md). Detailed setup, scripts, validation, local CI, and REPL examples: [docs/reference/development.md](docs/reference/development.md). Documentation hub: [docs/README.md](docs/README.md).
 
 ### Setup
 
@@ -98,11 +100,8 @@ open target/coverage-report/index.html
 ### Executando Localmente
 
 ```bash
-# Iniciar REPL
-clj -M:dev
-
-# Ou usar Docker
-docker compose -f config/docker/docker-compose.dev.yml up
+./bin/galaticos run
+# ou REPL: ./bin/galaticos console
 ```
 
 ## Perguntas?

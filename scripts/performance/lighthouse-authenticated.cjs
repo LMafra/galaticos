@@ -153,7 +153,7 @@ async function ensureLoggedIn(browser) {
 
 async function main() {
   if (!CHROME_PATH) {
-    console.error('Set CHROME_PATH to a Chrome/Chromium binary (see docs/informacao/performance/metodologia.md).');
+    console.error('Set CHROME_PATH to a Chrome/Chromium binary (see docs/reference/performance/methodology.md).');
     process.exit(1);
   }
 

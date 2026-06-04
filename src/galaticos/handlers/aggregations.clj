@@ -297,7 +297,7 @@
 
 (defn player-stats-jobs-status
   "Read-only: last successful job metadata (Mongo) + in-process executor queue depth. Auth required.
-  See docs/informacao/analytics/architecture.md and reconciliation-runbook."
+  See docs/reference/analytics/architecture.md and reconciliation-runbook."
   [_request]
   (try
     (let [doc (job-store/fetch-doc)
@@ -327,7 +327,7 @@
   "Manual reconciliation: validate data integrity (log warnings) then full player aggregated-stats
   recompute. Default: synchronous, returns :updated. Query `?async=true` (POST /api/aggregations/reconcile?async=true)
   enqueues on the in-process worker and returns 202 with :job-id.
-  See informacao/analytics/reconciliation-runbook.md."
+  See reference/analytics/reconciliation-runbook.md."
   [request]
   (try
     (log/info "Manual stats reconciliation started")

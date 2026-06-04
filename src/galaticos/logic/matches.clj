@@ -19,7 +19,7 @@
   Após cada operação, submit-recalc! envia intent para recálculo incremental
   que aplica merge-aggregated-stats preservando baseline híbrido.
   
-  Ver: docs/informacao/dominio/guia-partidas-temporadas-estatisticas-hibridas.md"
+  Ver: docs/reference/domain/matches-seasons-hybrid-stats.md"
   (:require [galaticos.analytics.player-stats-jobs :as player-stats-jobs]
             [galaticos.db.match-store :as store]
             [galaticos.db.matches :as matches-db]
