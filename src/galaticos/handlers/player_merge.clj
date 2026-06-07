@@ -105,7 +105,9 @@
                                      :similarity (/ (Math/round (* sim 10000.0)) 10000.0)
                                      :nickname (:nickname p)
                                      :position (:position p)
-                                     :shirt-number (:shirt-number p)})))))
+                                     :shirt-number (:shirt-number p)
+                                     :games (get-in p [:aggregated-stats :total :games] 0)
+                                     :goals (get-in p [:aggregated-stats :total :goals] 0)})))))
                       (sort-by :similarity >)
                       vec)]
         (resp/success rows)))

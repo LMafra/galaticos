@@ -1,4 +1,4 @@
-> **Archived** — historical NotebookLM material (may be Portuguese). For current docs see [docs/README.md](../../README.md) and [reference/](../../reference/).
+> **Archived** — historical NotebookLM material (may be Portuguese). For current docs see [docs/README.md](../../../README.md) and [reference/](../../../reference/).
 
 # NotebookLM Prompts – Design & Database Improvements
 
@@ -73,3 +73,5 @@ How do I keep the schema clear, avoid subtle bugs when updating cached data, and
 ---
 
 *After you get answers from NotebookLM, you can cross-reference with the project-specific suggestions in the main docs (e.g. `docs/README.md` or this folder) and with `docs/reference/domain/mongodb-schema.md` and `docs/reference/domain/business-rules.md`.*
+
+**UI/UX (notebook separado):** [notebooklm-prompts-uiux.md](../uiux/notebooklm-prompts-uiux.md) · [notebooklm-response-uiux.md](../uiux/notebooklm-response-uiux.md)

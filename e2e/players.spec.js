@@ -1,11 +1,11 @@
 const { test, expect } = require('@playwright/test');
-const { saveCoverage } = require('./_helpers');
+const { saveCoverage, pageHeading } = require('./_helpers');
 
 test.describe('Players list search and filter', { tag: '@search' }, () => {
   test('search by name filters the list', async ({ page }, testInfo) => {
     try {
       await page.goto('/#/players');
-      await expect(page.getByRole('heading', { name: 'Jogadores', level: 1 })).toBeVisible();
+      await expect(pageHeading(page, 'Jogadores')).toBeVisible();
       const searchInput = page.getByPlaceholder('Buscar jogador...');
       await searchInput.waitFor({ state: 'visible' });
       await searchInput.fill('x');
@@ -19,7 +19,7 @@ test.describe('Players list search and filter', { tag: '@search' }, () => {
   test('filter by position updates the list', async ({ page }, testInfo) => {
     try {
       await page.goto('/#/players');
-      await expect(page.getByRole('heading', { name: 'Jogadores', level: 1 })).toBeVisible();
+      await expect(pageHeading(page, 'Jogadores')).toBeVisible();
       const positionSelect = page.getByLabel(/^Posição/);
       await positionSelect.waitFor({ state: 'visible' });
       await positionSelect.selectOption({ index: 0 });
@@ -35,7 +35,7 @@ test.describe('Player detail tabs', { tag: '@crud' }, () => {
   test('player detail shows Informações and Estatísticas tabs', async ({ page }, testInfo) => {
     try {
       await page.goto('/#/players');
-      await expect(page.getByRole('heading', { name: 'Jogadores', level: 1 })).toBeVisible();
+      await expect(pageHeading(page, 'Jogadores')).toBeVisible();
       const firstRow = page.locator('table tbody tr').first();
       await firstRow.waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {});
       const rowCount = await page.locator('table tbody tr').count();

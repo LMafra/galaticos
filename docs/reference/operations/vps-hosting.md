@@ -10,6 +10,11 @@
 - Stack: [config/docker/docker-compose.prod.yml](../../../config/docker/docker-compose.prod.yml).
 - Example domain: `galaticosfr.com.br` / `www` at Locaweb; VPS hostname: `galaticosfr.vps-kinghost.net` (adjust to your DNS records).
 
+## Before you start
+
+- You need SSH key access to the VPS panel and `~/.ssh/config` with a dedicated host entry.
+- Production code lives at `/opt/galaticos`; data safety rules are in [production-runbook.md](production-runbook.md) — never run `docker compose down -v` on prod.
+
 ---
 
 ## 1. SSH access

@@ -4,7 +4,9 @@
             [clojure.string :as str]
             [galaticos.api :as api]
             [galaticos.components.common :as common]
-            [galaticos.state :as state]))
+            [galaticos.delete-undo :as delete-undo]
+            [galaticos.state :as state]
+            [galaticos.ui-copy :as ui-copy]))
 
 (def ^:private field-rows
   [{:kw :name :label "Nome"}
@@ -87,22 +89,32 @@
       (when-let [[_ idx] (re-find #"^merged-(\d+)$" s)]
         {:kind :merged :idx (js/parseInt idx 10)}))))
 
-(defn- run-merge! [st master-doc merged-docs-vec on-success on-close]
+(defn- run-merge! [st master-doc merged-docs-vec {:keys [on-success on-close]}]
   (when-not (:submitting? @st)
-    (swap! st assoc :submitting? true :error nil)
     (let [m-id (normalize-id (or (:_id master-doc) (:id master-doc)))
           merged-ids (mapv #(normalize-id (or (:_id %) (:id %))) merged-docs-vec)
           sels (:selections @st)
           payload {:master-id m-id
                    :merged-ids merged-ids
-                   :field-selections (into {} (map (fn [[k v]] [(name k) v]) sels))}]
-      (api/merge-players payload
-                         (fn [data]
-                           (swap! st assoc :submitting? false)
-                           (when on-success (on-success data))
-                           (on-close))
-                         (fn [err _]
-                           (swap! st assoc :submitting? false :error (str err)))))))
+                   :field-selections (into {} (map (fn [[k v]] [(name k) v]) sels))}
+          commit-merge!
+          (fn [commit-ok commit-err]
+            (swap! st assoc :submitting? true :error nil)
+            (api/merge-players payload
+                               (fn [data]
+                                 (swap! st assoc :submitting? false)
+                                 (commit-ok data)
+                                 (when on-success (on-success data))
+                                 (state/toast-success! ui-copy/merge-success))
+                               (fn [err _]
+                                 (swap! st assoc :submitting? false)
+                                 (commit-err err)
+                                 (state/toast-error! (str err)))))]
+      (when on-close (on-close))
+      (delete-undo/schedule!
+       {:message ui-copy/merge-undo-toast
+        :on-rollback #(state/toast-info! ui-copy/merge-cancelled)
+        :on-commit commit-merge!}))))
 
 (defn merge-workflow-modal
   [{:keys [championship-id roster-players initial-reference-id]}]
@@ -158,10 +170,25 @@
                           :master-id master
                           :selections (initial-selections)
                           :step :merge
-                          :loading? false)))))))]
+                          :loading? false)))))))
+        panel-ref (atom nil)
+        escape-handler (atom nil)
+        focus-cancel! (fn []
+                        (js/setTimeout
+                         #(when-let [p @panel-ref]
+                            (common/focus-modal-cancel! p))
+                         0))]
     (r/create-class
      {:component-did-mount
-      (fn [_]
+      (fn [this]
+        (focus-cancel!)
+        (let [handler (fn [e]
+                        (when (= "Escape" (.-key e))
+                          (.preventDefault e)
+                          (when-let [on-close (:on-close (r/props this))]
+                            (on-close))))]
+          (reset! escape-handler handler)
+          (.addEventListener js/document "keydown" handler true))
         (when initial-reference-id
           (swap! st assoc :reference-id (str initial-reference-id))
           (api/get-player
@@ -171,6 +198,13 @@
              (fetch-candidates! initial-reference-id))
            (fn [_ _]
              (swap! st assoc :error "Referência inválida.")))))
+      :component-did-update
+      (fn [_ _]
+        (focus-cancel!))
+      :component-will-unmount
+      (fn [_]
+        (when-let [handler @escape-handler]
+          (.removeEventListener js/document "keydown" handler true)))
       :reagent-render
       (fn [{:keys [on-close on-success]}]
         (let [{:keys [step reference-id ref-doc candidates checked-ids loading?
@@ -211,11 +245,20 @@
                                                          nil)))]))
                                    field-rows))))]
           [:div {:class "fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-3 sm:p-4 dark:bg-black/60"
-                 :role "dialog"}
-           [:div {:class "app-card flex max-h-[min(92vh,calc(100vh-1.5rem))] w-full max-w-5xl flex-col overflow-hidden shadow-xl"}
+                 :role "dialog"
+                 :aria-modal "true"
+                 :aria-labelledby "modal-merge-title"
+                 :tab-index -1
+                 :on-key-down (fn [e]
+                                (when (= "Escape" (.-key e))
+                                  (.preventDefault e)
+                                  (on-close)))}
+           [:div {:ref #(reset! panel-ref %)
+                  :class "app-card flex max-h-[min(92vh,calc(100vh-1.5rem))] w-full max-w-5xl flex-col overflow-hidden shadow-xl"}
             [:div {:class "flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-4 pb-3 pt-4 dark:border-slate-700 sm:px-6 sm:pt-6"}
              [:div {:class "min-w-0 pr-2"}
-              [:h2 {:class "text-lg font-semibold text-slate-900 sm:text-xl dark:text-slate-100"}
+              [:h2 {:id "modal-merge-title"
+                    :class "text-lg font-semibold text-slate-900 sm:text-xl dark:text-slate-100"}
                "Mesclar jogadores"]
               [:p {:class "mt-1 text-sm text-slate-500"}
                (case step
@@ -235,58 +278,62 @@
                [:div {:class "flex flex-1 items-center justify-center py-10"} [common/loading-spinner]]
                (case step
                  :pick-ref
-                 [:div {:class "min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:pb-6"}
-                  [:div {:class "space-y-4"}
-                 (when reference-id
-                   [:div {:class "rounded-lg border border-amber-200 bg-amber-50/80 p-3 text-sm dark:border-amber-900/50 dark:bg-amber-950/30"}
-                    [:span "Referência: " [:strong (or (:name ref-doc) reference-id)]]
-                    [:button {:type "button"
-                              :class "ml-3 text-brand-maroon underline"
-                              :on-click #(swap! st assoc :reference-id nil :ref-doc nil :candidates [] :checked-ids #{})}
-                     "Limpar"]])
-                 (if championship-mode?
-                   [:div {:class "space-y-2"}
-                    [:input {:type "text"
-                             :value step1-q
-                             :placeholder "Filtrar inscritos..."
-                             :on-change #(swap! st assoc :step1-q (-> % .-target .-value))
-                             :class "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800"}]
-                    [:ul {:class "max-h-56 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2 dark:border-slate-700"}
-                     (for [p roster-filtered]
-                       ^{:key (player-id-str p)}
-                       [:li
-                        [:button {:type "button"
-                                  :class "w-full rounded px-2 py-1.5 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
-                                  :on-click #(pick-reference! (player-id-str p) p)}
-                         (:name p) " — " (or (:position p) "—")]])]]
-                   [:div {:class "space-y-2"}
-                    [:div {:class "flex flex-wrap gap-2"}
-                     [:input {:type "text"
-                              :value step1-q
-                              :placeholder "Nome para buscar..."
-                              :on-change #(swap! st assoc :step1-q (-> % .-target .-value))
-                              :class "min-w-[200px] flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800"}]
-                     [common/button "Buscar"
-                      (fn []
-                        (swap! st assoc :searching? true)
-                        (api/search-players
-                         {:q (str/trim step1-q) :page 1 :limit 40}
-                         (fn [res]
-                           (swap! st assoc :searching? false :search-hits (api/coerce-player-list res)))
-                         (fn [err]
-                           (swap! st assoc :searching? false)
-                           (state/toast-error! (str err)))))
-                      :variant :outline
-                      :disabled (str/blank? (str/trim step1-q))]]
-                    (when searching? [:p {:class "text-xs text-slate-500"} "Buscando…"])
-                    [:ul {:class "max-h-56 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2 dark:border-slate-700"}
-                     (for [p search-hits]
-                       ^{:key (player-id-str p)}
-                       [:li
-                        [:button {:type "button"
-                                  :class "w-full rounded px-2 py-1.5 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
-                                  :on-click #(pick-reference! (player-id-str p) p)}
-                         (:name p)]])]])]]
+                 [:div {:class "flex min-h-0 flex-1 flex-col"}
+                  [:div {:class "min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:pb-4"}
+                   [:div {:class "space-y-4"}
+                    (when reference-id
+                      [:div {:class "rounded-lg border border-amber-200 bg-amber-50/80 p-3 text-sm dark:border-amber-900/50 dark:bg-amber-950/30"}
+                       [:span "Referência: " [:strong (or (:name ref-doc) reference-id)]]
+                       [:button {:type "button"
+                                 :class "ml-3 text-brand-maroon underline"
+                                 :on-click #(swap! st assoc :reference-id nil :ref-doc nil :candidates [] :checked-ids #{})}
+                        "Limpar"]])
+                    (if championship-mode?
+                      [:div {:class "space-y-2"}
+                       [:input {:type "text"
+                                :value step1-q
+                                :placeholder "Filtrar inscritos..."
+                                :on-change #(swap! st assoc :step1-q (-> % .-target .-value))
+                                :class "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800"}]
+                       [:ul {:class "max-h-56 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2 dark:border-slate-700"}
+                        (for [p roster-filtered]
+                          ^{:key (player-id-str p)}
+                          [:li
+                           [:button {:type "button"
+                                     :class "w-full rounded px-2 py-1.5 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
+                                     :on-click #(pick-reference! (player-id-str p) p)}
+                            (:name p) " — " (or (:position p) "—")]])]]
+                      [:div {:class "space-y-2"}
+                       [:div {:class "flex flex-wrap gap-2"}
+                        [:input {:type "text"
+                                 :value step1-q
+                                 :placeholder "Nome para buscar..."
+                                 :on-change #(swap! st assoc :step1-q (-> % .-target .-value))
+                                 :class "min-w-[200px] flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800"}]
+                        [common/button "Buscar"
+                         (fn []
+                           (swap! st assoc :searching? true)
+                           (api/search-players
+                            {:q (str/trim step1-q) :page 1 :limit 40}
+                            (fn [res]
+                              (swap! st assoc :searching? false :search-hits (api/coerce-player-list res)))
+                            (fn [err]
+                              (swap! st assoc :searching? false)
+                              (state/toast-error! (str err)))))
+                         :variant :outline
+                         :disabled (str/blank? (str/trim step1-q))]]
+                       (when searching? [:p {:class "text-xs text-slate-500"} "Buscando…"])
+                       [:ul {:class "max-h-56 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2 dark:border-slate-700"}
+                        (for [p search-hits]
+                          ^{:key (player-id-str p)}
+                          [:li
+                           [:button {:type "button"
+                                     :class "w-full rounded px-2 py-1.5 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
+                                     :on-click #(pick-reference! (player-id-str p) p)}
+                            (:name p)]])]])]]
+                  [:div {:class "shrink-0 border-t border-slate-200 bg-slate-50/95 px-4 py-4 dark:border-slate-700 dark:bg-slate-900/95 sm:px-6"}
+                   [:div {:class "flex justify-end"}
+                    [common/button "Cancelar" on-close :variant :outline :modal-cancel? true]]]]
 
                 :pick-candidates
                 [:div {:class "min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:pb-6"}
@@ -326,7 +373,7 @@
                          [:td {:class "py-2 px-2"} (or (:shirt-number row) "—")]])]]]
                    [:p {:class "text-sm text-slate-500"} "Nenhum candidato acima do limiar de similaridade."])
                  [:div {:class "flex justify-end gap-3"}
-                  [common/button "Cancelar" on-close :variant :outline]
+                  [common/button "Cancelar" on-close :variant :outline :modal-cancel? true]
                   [common/button
                    "Próximo: comparar"
                    #(load-step3!)
@@ -420,10 +467,10 @@
                      [common/button "← Voltar"
                       #(swap! st assoc :step :pick-candidates :docs-by-id nil :master-id nil)
                       :variant :outline]
-                     [common/button "Cancelar" on-close :variant :outline]
+                     [common/button "Cancelar" on-close :variant :outline :modal-cancel? true]
                      [common/button
                       (if submitting? "Mesclando…" "Confirmar mesclagem")
-                      #(run-merge! st master-doc merged-docs on-success on-close)
+                      #(run-merge! st master-doc merged-docs {:on-success on-success :on-close on-close})
                       :variant :primary
                       :disabled (or submitting? (zero? n-merged))]]])]
 

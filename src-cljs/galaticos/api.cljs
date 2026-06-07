@@ -364,8 +364,9 @@
 (defn get-player-evolution [player-id on-success on-error]
   (get-request (str "/api/aggregations/players/" player-id "/evolution") {} on-success on-error))
 
-(defn get-player-insights [player-id on-success on-error]
+(defn get-player-insights
   "GET /api/aggregations/players/:player-id/insights — derived + optional predictive."
+  [player-id on-success on-error]
   (get-request (str "/api/aggregations/players/" player-id "/insights") {} on-success on-error))
 
 (defn get-avg-goals-by-position [championship-id on-success on-error]

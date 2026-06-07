@@ -1,6 +1,6 @@
 # Operational incident: VPS deploy, Clojars, and frontend loading (May 2026)
 
-**Summary:** Context and decisions after resolving a production (VPS) chain: **Docker build**, **image without new code**, **browser cache**, and **ClojureScript lazy chunk failure**. Use for future operations and to align documentation with what actually happened.
+**Summary:** Post-mortem (May 2026): VPS Docker build timeouts, stale images, browser cache, and ClojureScript lazy chunk failures. Read this when production deploy or frontend loading fails after a seemingly successful build.
 
 **Related:** [vps-hosting.md](vps-hosting.md), [production-runbook.md](production-runbook.md), [`scripts/docker/prod-vps-build-app.sh`](../../../scripts/docker/prod-vps-build-app.sh), [`shadow-cljs.edn`](../../../shadow-cljs.edn), [`src-cljs/galaticos/lazy_pages.cljs`](../../../src-cljs/galaticos/lazy_pages.cljs).
 

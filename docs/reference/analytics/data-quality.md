@@ -1,10 +1,6 @@
 # Data Quality for Analytics
 
-**Summary:** Defines quality dimensions (completeness, consistency, uniqueness, reconciliation) and operational controls for analytics consumed via API, dashboard, and exports. Suggested SLOs cover post-match updates, daily full reconciliation, and critical error rates. Incident severities P1–P3 map to a short response playbook with clear engineering, product, and operations roles.
-
-## Purpose
-
-Ensure trust in metrics consumed via API, dashboard, and exports.
+**Summary:** Quality dimensions (completeness, consistency, uniqueness, reconciliation) and operational controls for analytics. Read this when you investigate metric trust issues or define SLOs. Incident severities P1–P3 map to a short response playbook.
 
 ## Quality dimensions
 

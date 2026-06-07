@@ -1,20 +1,32 @@
 # Galáticos documentation
 
-Central documentation organized by **audience and topic**, not project status. Entry points for humans and LLMs: [concepts.md](concepts.md), [llms.txt](../llms.txt), [root README](../README.md).
+Central documentation organized by **audience and topic**, not project status. Entry points: [concepts.md](concepts.md), [llms.txt](../llms.txt), [root README](../README.md).
 
-## Start here
+## Start here by role
 
-| Doc | Answers |
-|-----|---------|
+### New developer
+
+You need Java, the Clojure CLI, and Docker for the default workflow.
+
+| Doc | You will learn |
+|-----|----------------|
 | [concepts.md](concepts.md) | What terms mean (championship, season, aggregated-stats, RN-*) |
 | [reference/development.md](reference/development.md) | How to install, run, test, and replicate CI locally |
-| [authoring.md](authoring.md) | How to write and maintain docs (GEO-friendly) |
+| [reference/domain/business-rules.md](reference/domain/business-rules.md) | Domain rules (`RN-*`) the app enforces |
+| [reference/quality/ai-assisted-code-audit.md](reference/quality/ai-assisted-code-audit.md) | Stack pitfalls when using AI on this codebase |
 
-## Domain and data
+### Deploy and operations
 
-| Doc | Answers |
-|-----|---------|
-| [reference/domain/business-rules.md](reference/domain/business-rules.md) | All business rules (`RN-*`) — functional and technical |
+| Doc | You will learn |
+|-----|----------------|
+| [reference/operations/production-runbook.md](reference/operations/production-runbook.md) | Deploy, backup, seed without data loss |
+| [reference/operations/vps-hosting.md](reference/operations/vps-hosting.md) | VPS, Docker, Nginx, HTTPS checklist |
+| [reference/operations/incident-deploy-vps-frontend-2026-05.md](reference/operations/incident-deploy-vps-frontend-2026-05.md) | Post-incident notes (May 2026) |
+
+### Domain and data
+
+| Doc | You will learn |
+|-----|----------------|
 | [reference/domain/mongodb-schema.md](reference/domain/mongodb-schema.md) | MongoDB collections, embedding, relationships |
 | [reference/domain/matches-seasons-hybrid-stats.md](reference/domain/matches-seasons-hybrid-stats.md) | Matches, active seasons, hybrid stat model |
 | [reference/domain/business-rules-audit.md](reference/domain/business-rules-audit.md) | Rules vs implementation audit snapshot |
@@ -22,22 +34,27 @@ Central documentation organized by **audience and topic**, not project status. E
 
 Do not redefine metrics in other docs; link to the catalog.
 
+### UI contributor
+
+| Doc | You will learn |
+|-----|----------------|
+| [reference/ui/ui-decisions.md](reference/ui/ui-decisions.md) | UX rules, Portuguese vocabulary, responsive shell |
+| [reference/performance/page-inventory.md](reference/performance/page-inventory.md) | Routes, components, planned PT hash paths |
+| [concepts.md](concepts.md) | Domain terms shown in the UI |
+
+### Writing docs
+
+| Doc | You will learn |
+|-----|----------------|
+| [authoring.md](authoring.md) | Style, structure, and maintenance conventions |
+
 ## Engineering
 
 | Doc | Answers |
 |-----|---------|
 | [reference/architecture/functional-architecture.md](reference/architecture/functional-architecture.md) | OO → FP migration: `domain/*`, `logic/*`, tests |
 | [reference/domain/testing-coverage.md](reference/domain/testing-coverage.md) | Cloverage, E2E coverage, CI thresholds |
-| [reference/quality/ai-assisted-code-audit.md](reference/quality/ai-assisted-code-audit.md) | Auditing AI-assisted code (deps, Monger, Ring, CLJS) |
 | [backlog/fp-improvement-checklist.md](backlog/fp-improvement-checklist.md) | FP migration checklist (remaining code work) |
-
-## Operations
-
-| Doc | Answers |
-|-----|---------|
-| [reference/operations/production-runbook.md](reference/operations/production-runbook.md) | Production deploy, backup, seed without data loss |
-| [reference/operations/vps-hosting.md](reference/operations/vps-hosting.md) | VPS, Docker, Nginx, HTTPS, deploy checklist |
-| [reference/operations/incident-deploy-vps-frontend-2026-05.md](reference/operations/incident-deploy-vps-frontend-2026-05.md) | Post-incident notes (May 2026) |
 
 ## Analytics program
 
@@ -58,6 +75,7 @@ Do not redefine metrics in other docs; link to the catalog.
 | [reference/performance/overview.md](reference/performance/overview.md) | Goals, dev vs release, JWT audit limits |
 | [reference/performance/methodology.md](reference/performance/methodology.md) | Lighthouse methodology |
 | [reference/performance/page-inventory.md](reference/performance/page-inventory.md) | Routes and components to measure |
+| [backlog/performance/action-backlog.md](backlog/performance/action-backlog.md) | Open Lighthouse tasks |
 
 Local Lighthouse JSON: `docs/perf-output/` (gitignored).
 
@@ -70,11 +88,13 @@ Executable pending work — not stable reference:
 - [backlog/fp-design-improvements.md](backlog/fp-design-improvements.md)
 - [backlog/fp-improvement-checklist.md](backlog/fp-improvement-checklist.md)
 
+When backlog work ships, move knowledge to `reference/` or delete the item.
+
 ## Archive
 
-Historical NotebookLM and superseded OO checklists (optional reading):
+Historical NotebookLM research and superseded checklists (optional reading):
 
-- [archive/notebookLM/](archive/notebookLM/)
+- [archive/notebookLM/](archive/notebookLM/) — [oo/](archive/notebookLM/oo/) · [fp/](archive/notebookLM/fp/) · [uiux/](archive/notebookLM/uiux/)
 
 ## External references
 
@@ -85,8 +105,6 @@ Historical NotebookLM and superseded OO checklists (optional reading):
 
 1. Put new **stable** docs under `docs/reference/<topic>/`.
 2. Put **pending** work under `docs/backlog/`.
-3. When done, move to `reference/` or delete the backlog item.
+3. When done, move to `reference/` or delete the backlog item — do not leave all-`[x]` checklists in active docs.
 4. Update this README and [llms.txt](../llms.txt).
 5. One semantic source for metrics: [metrics-catalog.md](reference/analytics/metrics-catalog.md).
-
-**Moved from old paths:** `docs/reference/` → `docs/reference/`; `docs/backlog/` → `docs/backlog/`.

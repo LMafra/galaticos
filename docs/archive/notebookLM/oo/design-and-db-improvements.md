@@ -1,8 +1,8 @@
-> **Archived** — historical NotebookLM material (may be Portuguese). For current docs see [docs/README.md](../../README.md) and [reference/](../../reference/).
+> **Archived** — historical NotebookLM material (may be Portuguese). For current docs see [docs/README.md](../../../README.md) and [reference/](../../../reference/).
 
 # Design Patterns & Database Structure – Improvement Ideas
 
-> **Histórico OO:** secções abaixo que propõem `galaticos.service.*` / `galaticos.repository.*` são **superseded**. Código novo: `domain/*` + `logic/*` + `db/*` — ver [functional-architecture.md](../../reference/architecture/functional-architecture.md) e [fp-improvement-checklist.md](fp-improvement-checklist.md).
+> **Histórico OO:** secções abaixo que propõem `galaticos.service.*` / `galaticos.repository.*` são **superseded**. Código novo: `domain/*` + `logic/*` + `db/*` — ver [functional-architecture.md](../../../reference/architecture/functional-architecture.md) e [fp-improvement-checklist.md](../../../backlog/fp-improvement-checklist.md).
 
 Suggestions tailored to the Galáticos codebase. Use together with **NotebookLM** (see `notebooklm-prompts.md`) for general principles from your notebook sources.
 

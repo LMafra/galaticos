@@ -1,6 +1,7 @@
 (ns galaticos.logic.championships
   "Championship orchestration over ChampionshipStore."
-  (:require [galaticos.db.championship-store :as store]
+  (:require [clojure.string :as str]
+            [galaticos.db.championship-store :as store]
             [galaticos.db.protocol.championship-store :as protocol]
             [galaticos.domain.championships :as domain]
             [galaticos.domain.errors :as errors]
@@ -25,8 +26,8 @@
                    {:all-seasons (protocol/find-all-seasons-by-championship store cid)
                     :active-season (protocol/find-active-season-by-championship store cid)})))
 
-(defn list
-  ([request] (list store/*store* request))
+(defn list-championships
+  ([request] (list-championships store/*store* request))
   ([store request]
    (let [status (get-in request [:params :status])
          championships (map #(enrich-championship store %)
@@ -160,7 +161,7 @@
      (errors/not-found! "Championship not found")
      (let [union-ids (protocol/enrolled-player-object-ids store championship-id)
            players (protocol/find-players-by-ids store union-ids)]
-       (vec (sort-by (fn [p] (clojure.string/lower-case (str (:name p)))) players))))))
+       (vec (sort-by (fn [p] (str/lower-case (str (:name p)))) players))))))
 
 (defn finalize!
   ([championship-id body] (finalize! store/*store* championship-id body))
@@ -172,7 +173,7 @@
                         (protocol/find-championship-by-id store championship-id))
          decision (domain/finalization-decision active-season championship
                                                 winner-player-ids titles-award-count)
-         {:keys [target season championship titles-award-count]} (require-ok decision)]
+         {:keys [target season titles-award-count]} (require-ok decision)]
      (case target
        :season
        (do

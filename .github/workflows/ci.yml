@@ -64,7 +64,7 @@ jobs:
   e2e-dev:
     name: e2e (dev)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -99,6 +99,10 @@ jobs:
 
       - name: Install Node deps
         run: npm ci --no-fund --no-audit
+        shell: bash
+
+      - name: Check UI copy guard (UX-PLAN-21)
+        run: node scripts/check-ui-copy.js
         shell: bash
 
       - name: Install Playwright (with OS deps)

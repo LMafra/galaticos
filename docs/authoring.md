@@ -41,6 +41,19 @@ Use clear hierarchy, one term per concept, fenced code blocks, and a short **Sum
 
 When backlog work is done, move the doc to `reference/` (or delete the backlog entry) and update [docs/README.md](README.md).
 
+## Human readability
+
+Write for a human who needs an answer in under two minutes.
+
+- **Summary:** State what the page covers, who should read it, and prerequisites (tools, access, prior docs).
+- **Task-oriented headings:** Use "Run tests locally" instead of internal IDs or plan numbers.
+- **Second person:** On procedural pages, write "you" and active voice ("Run `./bin/galaticos test`" not "Tests should be run").
+- **Front-load essentials:** Put the most common path first; move edge cases and history lower.
+- **Scannable layout:** Short sections, tables for structured data, numbered steps for procedures.
+- **Table of contents:** Add `## Contents` with anchor links on pages longer than ~80 lines.
+- **Plain language:** Define acronyms on first use; link to [concepts.md](concepts.md) instead of repeating definitions.
+- **Finished work:** Delete or archive execution checklists once shipped — keep only stable reference.
+
 ## AI index
 
 - Primary agent index: [llms.txt](../llms.txt) (repository root).

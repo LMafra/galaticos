@@ -56,7 +56,7 @@
 
 (defn enroll!
   [season-id player-id]
-  (if-let [season (seasons-db/find-by-id season-id)]
+  (if (seasons-db/exists? season-id)
     (do
       (seasons-db/add-player season-id player-id)
       {:message "Player enrolled"})

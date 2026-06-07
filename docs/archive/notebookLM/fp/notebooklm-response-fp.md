@@ -1,10 +1,10 @@
-> **Archived** — historical NotebookLM material (may be Portuguese). For current docs see [docs/README.md](../../README.md) and [reference/](../../reference/).
+> **Archived** — historical NotebookLM material (may be Portuguese). For current docs see [docs/README.md](../../../README.md) and [reference/](../../../reference/).
 
 # NotebookLM Responses – Programação Funcional (Galáticos)
 
 Respostas do notebook **Clojure / ClojureScript**. Preencher após colar cada prompt de [notebooklm-prompts-fp.md](notebooklm-prompts-fp.md).
 
-**Workflow:** uma resposta por secção → extrair tarefas para [fp-improvement-checklist.md](../../backlog/fp-improvement-checklist.md) → actualizar [fp-design-improvements.md](../../backlog/fp-design-improvements.md) → revisar [fp-improvement-checklist.md](../../backlog/fp-improvement-checklist.md).
+**Workflow:** uma resposta por secção → extrair tarefas para [fp-improvement-checklist.md](../../../backlog/fp-improvement-checklist.md) → actualizar [fp-design-improvements.md](../../../backlog/fp-design-improvements.md) → revisar [fp-improvement-checklist.md](../../../backlog/fp-improvement-checklist.md).
 
 ### Instruções (acção manual)
 
@@ -13,7 +13,7 @@ Respostas do notebook **Clojure / ClojureScript**. Preencher após colar cada pr
 3. Colar no chat; aguardar resposta
 4. Colar a resposta na secção N abaixo
 5. Repetir para secções 1–10
-6. Preencher **Decisões consolidadas** e seguir [Como extrair tarefas](../../backlog/fp-improvement-checklist.md#como-extrair-tarefas-das-respostas)
+6. Preencher **Decisões consolidadas** e seguir [Como extrair tarefas](../../../backlog/fp-improvement-checklist.md#como-extrair-tarefas-das-respostas)
 
 ---
 
@@ -744,7 +744,7 @@ Aplique os novos princípios funcionais às fatias de **Matches** e **Players**.
 | CLJS | Event → reducer → `dispatch!`; `reaction` para derived state; efeitos em `effects.cljs` | 9 |
 | Ordem de implementação | 02 championships FP → 03 matches → 04 rollout → 05–07 analytics | 10 |
 
-Documentação derivada: [functional-architecture.md](../../reference/architecture/functional-architecture.md), [fp-improvement-checklist.md](../../backlog/fp-improvement-checklist.md).
+Documentação derivada: [functional-architecture.md](../../../reference/architecture/functional-architecture.md), [fp-improvement-checklist.md](../../../backlog/fp-improvement-checklist.md).
 
 ---
 
@@ -752,4 +752,4 @@ Documentação derivada: [functional-architecture.md](../../reference/architectu
 
 - Respostas completas (prompts 1–10) no notebook Clojure/CLJS.
 - Prompt 10 recomendava não refactorar championships de imediato; **decisão do projecto:** documentar migração FP completa e remoção de `service/*`/`repository/*` nos planos 02–07 (implementação em fase de código separada).
-- Validar símbolos contra `deps.edn` antes de codificar (ver [ai-assisted-code-audit.md](../../reference/quality/ai-assisted-code-audit.md)).
+- Validar símbolos contra `deps.edn` antes de codificar (ver [ai-assisted-code-audit.md](../../../reference/quality/ai-assisted-code-audit.md)).

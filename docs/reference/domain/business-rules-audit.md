@@ -1,6 +1,6 @@
 # Audit: business rules vs implementation
 
-**Summary:** Snapshot (2026-04-23) of **RN-*** / **BRM-*** coverage against code and tests (**119 tests, 472 assertions, 0 failures**). Line references in [business-rules.md](business-rules.md) are mostly stale; open product questions **Q-01–Q-06** remain.
+**Summary:** Snapshot (2026-04-23) of **RN-*** / **BRM-*** coverage against code and tests (**119 tests, 472 assertions, 0 failures**). Read this when you verify rule implementation — not for day-to-day rule lookup (use [business-rules.md](business-rules.md)). Line references in the main rules doc are mostly stale; open product questions **Q-01–Q-06** remain.
 
 **Date:** 2026-04-23  
 **Requirements source:** [business-rules.md](business-rules.md)  

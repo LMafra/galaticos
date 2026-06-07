@@ -29,6 +29,14 @@ fi
 # Set environment variable to enable coverage collection
 export COVERAGE=true
 
+if [[ -f "src-cljs/galaticos/components/matches.cljs" && -f "resources/public/js/compiled/app.js" ]]; then
+    if [[ "src-cljs/galaticos/components/matches.cljs" -nt "resources/public/js/compiled/app.js" ]]; then
+        log_warning "ClojureScript source is newer than resources/public/js/compiled/app.js"
+        log_warning "Restart ./bin/galaticos run (or compile frontend) so E2E hits fresh match-draft save logic"
+        echo ""
+    fi
+fi
+
 log_step "Running Playwright E2E tests with coverage..."
 echo ""
 

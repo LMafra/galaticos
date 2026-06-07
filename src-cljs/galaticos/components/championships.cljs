@@ -8,6 +8,8 @@
             [galaticos.components.merge-modal :as merge-modal]
             [galaticos.components.player-picker :as player-picker]
             [galaticos.effects :as effects]
+            [galaticos.delete-undo :as delete-undo]
+            [galaticos.ui-copy :as ui-copy]
             [clojure.string :as str]
             ["lucide-react" :refer [Trophy AlertTriangle]]))
 
@@ -70,11 +72,13 @@
                 [(api-get ch :name)
                  (api-get ch :season)
                  (api-get ch :format)
-                 (let [raw-status (or (api-get ch :status) "indefinido")]
+                 (let [raw-status (or (api-get ch :status) "active")]
                    [common/badge (common/status-label raw-status)
                     :variant (common/status-variant raw-status)])
                  (or (api-get ch :titles-count) 0)])
               championships)
+         :numeric-columns #{4}
+         :show-search? false
          :on-row-click (fn [ch]
                          (if-let [id (:_id ch)]
                            (rfe/push-state :championship-detail {:id id})
@@ -94,6 +98,7 @@
         titles-award-count (r/atom "1")
         new-season-label (r/atom "")
         finalizing? (r/atom false)
+        deleting? (r/atom false)
         loading? (r/atom true)
         error (r/atom nil)
         not-found? (r/atom false)
@@ -119,6 +124,44 @@
                                         :initial-ref (:initial-ref opts)
                                         :tick (inc (:tick @champ-merge-ui))}))
         close-champ-merge! #(swap! champ-merge-ui assoc :active false :initial-ref nil)
+        remove-enrolled! (fn [player]
+                           (let [pid (str (:_id player))
+                                 pname (:name player)]
+                             (delete-undo/schedule!
+                              {:message (ui-copy/roster-player-removed pname)
+                               :on-remove #(swap! enrolled-players
+                                                 (fn [ps]
+                                                   (vec (remove (fn [p] (= (str (:_id p)) pid)) ps))))
+                               :on-rollback #(swap! enrolled-players
+                                                  (fn [ps]
+                                                    (vec (sort-by (fn [p] (str/lower-case (str (:name p))))
+                                                                  (conj ps player)))))
+                               :on-commit (fn [on-success on-error]
+                                            (api/unenroll-player-from-championship
+                                             id pid
+                                             (fn [result]
+                                               (on-success result)
+                                               (api/get-championship-players id on-enrolled-loaded
+                                                                             (fn [e]
+                                                                               (let [msg (str "Erro ao carregar inscritos: " e)]
+                                                                                 (reset! error msg)
+                                                                                 (state/toast-error! msg)))))
+                                             on-error))})))
+        delete-championship! (fn []
+                               (delete-undo/schedule!
+                                {:message ui-copy/championship-removed
+                                 :on-remove #(rfe/push-state :championships)
+                                 :on-rollback #(rfe/push-state :championship-detail {:id id})
+                                 :on-commit (fn [on-success on-error]
+                                              (reset! deleting? true)
+                                              (api/delete-championship id
+                                                                       (fn [result]
+                                                                         (reset! deleting? false)
+                                                                         (on-success result)
+                                                                         (effects/ensure-championships! {:force? true}))
+                                                                       (fn [err]
+                                                                         (reset! deleting? false)
+                                                                         (on-error err))))}))
         load! (fn []
                 (reset! error nil)
                 (reset! not-found? false)
@@ -225,18 +268,8 @@
                                      (fn [] nil)
                                      (fn [err] (state/toast-error! err)))
                  :variant :outline]
-                [common/button "Deletar"
-                 (fn []
-                   (when (js/confirm "Tem certeza que deseja deletar este campeonato?")
-                     (api/delete-championship id
-                                              (fn [_result]
-                                                (effects/ensure-championships! {:force? true})
-                                                (rfe/push-state :championships))
-                                              (fn [err]
-                                                (let [msg (str "Erro ao deletar campeonato: " err)]
-                                                  (reset! error msg)
-                                                  (state/toast-error! msg))))))
-                 :variant :danger]]]
+                [common/button "Deletar" delete-championship!
+                 :variant :danger :disabled @deleting?]]]
 
               (when (seq @seasons)
                 [:div {:class "mt-3 flex flex-wrap items-center gap-3"}
@@ -347,7 +380,7 @@
                           [(or (common/format-match-calendar-date (:date match)) "—")
                            (:opponent match)
                            (:venue match)
-                           (common/format-match-result match)])
+                           (common/format-match-result (:result match))])
                         @matches)
                    :sortable? true
                    :dense? true]
@@ -437,22 +470,7 @@
                                    :on-click #(open-champ-merge! {:initial-ref (str (:_id player))})}
                           [:> AlertTriangle {:size 18}]])
                        [:span {:class "truncate text-slate-700"} (:name player)]]
-                      [common/button "Remover"
-                       (fn []
-                          (api/unenroll-player-from-championship
-                          id
-                          (str (:_id player))
-                          (fn [_result]
-                            (api/get-championship-players id
-                                                          on-enrolled-loaded
-                                                          (fn [e]
-                                                            (let [msg (str "Erro ao carregar inscritos: " e)]
-                                                              (reset! error msg)
-                                                              (state/toast-error! msg)))))
-                          (fn [err]
-                            (let [msg (str "Erro ao desinscrever jogador: " err)]
-                              (reset! error msg)
-                              (state/toast-error! msg)))))
+                      [common/button "Remover" #(remove-enrolled! player)
                        :variant :danger]])]
                   [:p {:class "app-muted"} "Nenhum jogador inscrito"])]
                [:div {:class "mt-4 border-t border-slate-200 pt-4 dark:border-slate-700"}
@@ -614,7 +632,7 @@
                          [(or (common/format-match-calendar-date (:date match)) "—")
                           (:opponent match)
                           (:venue match)
-                          (common/format-match-result match)])
+                          (common/format-match-result (:result match))])
                        @matches)
                   :sortable? true
                   :dense? true]

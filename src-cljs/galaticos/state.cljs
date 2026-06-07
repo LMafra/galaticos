@@ -37,7 +37,9 @@
            :auth-checked? false
            :route-match nil
            :ui {:sidebar-open? false
-                :theme (initial-theme)}
+                :theme (initial-theme)
+                :page-context nil
+                :last-route nil}
            :players []
            :players-loaded? false
            :players-loading? false
@@ -80,14 +82,15 @@
 
 (defn push-toast!
   "Adiciona um toast. Opts aceita :variant (:error|:success|:warning|:info),
-   :ttl (ms; 0 ou nil = não auto-dismiss), :id (opcional)."
+   :ttl (ms; 0 ou nil = não auto-dismiss), :id, :on-undo, :undo-label (opcional)."
   [message & [opts]]
   (when-let [msg (some-> message str not-empty)]
-    (let [{:keys [variant ttl id]} opts
+    (let [{:keys [variant ttl id on-undo undo-label]} opts
           variant (or variant :error)
           id (or id (next-toast-id))
           ttl (if (contains? opts :ttl) ttl (get default-ttl variant 5000))
-          toast {:id id :variant variant :message msg :ttl ttl}]
+          toast (cond-> {:id id :variant variant :message msg :ttl ttl}
+                 on-undo (assoc :on-undo on-undo :undo-label (or undo-label "Desfazer")))]
       (swap! app-state update :toasts (fnil conj []) toast)
       (when (and ttl (pos? ttl))
         (js/setTimeout #(dismiss-toast! id) ttl))
@@ -97,6 +100,18 @@
 (defn toast-success! [msg & [opts]] (push-toast! (i18n/t msg) (assoc opts :variant :success)))
 (defn toast-warning! [msg & [opts]] (push-toast! (i18n/t msg) (assoc opts :variant :warning)))
 (defn toast-info!    [msg & [opts]] (push-toast! (i18n/t msg) (assoc opts :variant :info)))
+
+(def ^:private undo-toast-ttl-ms 10000)
+
+(defn toast-with-undo!
+  "Toast persistente (~10s) com callback de desfazer."
+  [message on-undo & [opts]]
+  (push-toast! message
+               (merge {:variant :info
+                       :ttl undo-toast-ttl-ms
+                       :on-undo on-undo
+                       :undo-label "Desfazer"}
+                      opts)))
 
 (defn clear-toasts! []
   (swap! app-state assoc :toasts []))
@@ -119,6 +134,15 @@
     (apply-theme! theme)
     (persist-theme! theme)
     (swap! app-state assoc-in [:ui :theme] theme)))
+
+(defn set-page-context!
+  "Override header context badge/title for deep pages (match edit, player detail)."
+  [{:keys [badge title]}]
+  (swap! app-state assoc-in [:ui :page-context]
+         (when (or badge title) {:badge badge :title title})))
+
+(defn clear-page-context! []
+  (swap! app-state assoc-in [:ui :page-context] nil))
 
 (apply-theme! (get-in @app-state [:ui :theme]))
 
@@ -160,6 +184,17 @@
 
 (defn set-players! [players]
   (swap! app-state assoc :players players :players-loaded? true :players-loading? false :players-error nil))
+
+(defn patch-player-active!
+  "Optimistic :active flag in catalog (UX-PLAN-20)."
+  [player-id active?]
+  (let [pid (str player-id)]
+    (swap! app-state update :players
+           (fn [players]
+             (mapv #(if (= (str (or (:_id %) (:id %))) pid)
+                      (assoc % :active active?)
+                      %)
+                   (or players []))))))
 
 (defn set-championships! [championships]
   (swap! app-state assoc :championships championships :championships-loaded? true :championships-loading? false :championships-error nil))

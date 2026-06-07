@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { saveCoverage } = require('./_helpers');
+const { saveCoverage, pageHeading } = require('./_helpers');
 
 test('dashboard loads and shows overview stats', { tag: '@smoke' }, async ({ page }, testInfo) => {
   try {
@@ -33,7 +33,7 @@ test.describe('Dashboard card navigation', { tag: '@navigation' }, () => {
       await page.goto('/#/dashboard');
       await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible();
       await page.locator('main').getByRole('button').filter({ hasText: 'Jogadores' }).first().click();
-      await expect(page.getByRole('heading', { name: 'Jogadores', level: 1 })).toBeVisible();
+      await expect(pageHeading(page, 'Jogadores')).toBeVisible();
     } finally {
       await saveCoverage(page, testInfo);
     }
@@ -44,7 +44,7 @@ test.describe('Dashboard card navigation', { tag: '@navigation' }, () => {
       await page.goto('/#/dashboard');
       await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible();
       await page.locator('main').getByRole('button').filter({ hasText: 'Partidas' }).first().click();
-      await expect(page.getByRole('heading', { name: 'Partidas', level: 1 })).toBeVisible();
+      await expect(pageHeading(page, 'Partidas')).toBeVisible();
     } finally {
       await saveCoverage(page, testInfo);
     }
@@ -55,7 +55,7 @@ test.describe('Dashboard card navigation', { tag: '@navigation' }, () => {
       await page.goto('/#/dashboard');
       await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible();
       await page.locator('main').getByRole('button').filter({ hasText: 'Temporadas' }).first().click();
-      await expect(page.getByRole('heading', { name: 'Campeonatos', level: 1 })).toBeVisible();
+      await expect(pageHeading(page, 'Campeonatos')).toBeVisible();
     } finally {
       await saveCoverage(page, testInfo);
     }
@@ -66,7 +66,7 @@ test.describe('Dashboard card navigation', { tag: '@navigation' }, () => {
       await page.goto('/#/dashboard');
       await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible();
       await page.locator('main').getByRole('button').filter({ hasText: 'Gols' }).first().click();
-      await expect(page.getByRole('heading', { name: 'Jogadores', level: 1 })).toBeVisible();
+      await expect(pageHeading(page, 'Jogadores')).toBeVisible();
     } finally {
       await saveCoverage(page, testInfo);
     }

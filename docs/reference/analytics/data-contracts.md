@@ -1,10 +1,6 @@
 # Analytics Data Contracts
 
-**Summary:** Versioned contracts (`vMAJOR.MINOR`) for match player statistics, player aggregated stats cache, and the player insights API. Defines required and optional fields, rollup rules, derived metrics computed in memory, and readiness gating for predictive fields. Contract changes require updating this document, tests, and a reconciliation rollback plan.
-
-## Purpose
-
-Define explicit, versioned contracts for critical analytics data structures, reducing risk of metric regressions and integration breakage.
+**Summary:** Versioned contracts (`vMAJOR.MINOR`) for match player statistics, player aggregated stats cache, and the player insights API. Read this when you change analytics shapes or API responses. Contract changes require updating this document, tests, and a reconciliation rollback plan.
 
 ## Versioning policy
 

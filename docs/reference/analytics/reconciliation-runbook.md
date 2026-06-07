@@ -1,10 +1,11 @@
 # Analytics Data Reconciliation Runbook
 
-**Summary:** Standard procedure to reconcile the source of truth (`matches.player-statistics`) with the analytics cache (`players.aggregated-stats`). Covers daily full runs, sample checks before weekly rituals, and on-demand runs after incidents. Documents sync and async API, dev CLI, worker status endpoint, severity playbook, and minimum execution evidence.
+**Summary:** How you reconcile source of truth (`matches.player-statistics`) with cache (`players.aggregated-stats`). Read this after match fixes or before weekly rituals. Covers daily full runs, sample checks, sync/async API, dev CLI, and severity playbook.
 
-## Purpose
+## Before you start
 
-Standardize reconciliation between the source of truth (`matches.player-statistics`) and the analytics cache (`players.aggregated-stats`).
+- You need admin JWT (or dev REPL) for API reconciliation.
+- After editing match stats, fix the match document first, then reconcile — see [production-runbook.md](../operations/production-runbook.md).
 
 ## Operational frequency
 

@@ -1,14 +1,6 @@
 # Sports Data Analytics Strategy
 
-**Summary:** Positions Galáticos as a sports decision platform driven by match and player data. Prioritizes a single metric definition, data quality as a product requirement, and incremental evolution—consistency first, then advanced and predictive layers. Success is measured by update latency, data validity, reconciliation findings, and analytics usage.
-
-## Purpose
-
-Position Galáticos as a sports decision platform driven by match operational metrics and performance and season evolution analysis.
-
-## Vision
-
-Turn match and player data into actionable insights for coaching staff, management, and individual and team performance tracking.
+**Summary:** Why Galáticos invests in analytics: turn match and player data into coaching and management insights. Read this for vision and use cases; implementation detail lives in [architecture.md](architecture.md) and [roadmap.md](roadmap.md). One metric definition, data quality as a product requirement, incremental evolution. Success: update latency, data validity, reconciliation findings, dashboard usage.
 
 ## Principles
 

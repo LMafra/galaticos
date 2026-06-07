@@ -1,8 +1,6 @@
 # Test coverage — Galáticos
 
-**Summary:** How to run, interpret, and maintain backend (Cloverage) and E2E coverage, CI gates, analytics testing strategy, and troubleshooting. Thresholds live in `deps.edn` alias `:coverage` (currently **70** minimum of % lines and % forms).
-
-This document describes how to run, interpret, and maintain test coverage for the Galáticos project.
+**Summary:** How to run, interpret, and maintain backend (Cloverage) and E2E coverage, CI gates, and analytics testing strategy. Read this when you change tests, coverage thresholds, or metric formulas. Thresholds live in `deps.edn` alias `:coverage` (currently **70** minimum of % lines and % forms).
 
 ## Coverage requirements (backend — Cloverage)
 
@@ -15,7 +13,7 @@ In the version in use, the failure gate compares the threshold to the **minimum*
 
 So **both numbers matter**: low forms fail the build even when lines are high. This is **not** the same as Istanbul/Playwright “branch coverage”; the HTML report uses yellow/red for partial branches, but CI uses lines + forms as above.
 
-Thresholds are enforced in CI/CD and block merges that do not meet the requirement.
+Thresholds are enforced in CI/CD and block merges that do not meetlin the requirement.
 
 ## Testing strategy for sports data analytics
 
@@ -53,10 +51,10 @@ Any change to metric calculation or data contracts must:
 
 ### 5) Mandatory change checklist (metric/contract)
 
-- [ ] Metrics catalog updated (`docs/reference/analytics/metrics-catalog.md`).
-- [ ] Data contracts updated (`docs/reference/analytics/data-contracts.md`) when schema changes.
-- [ ] Contract and regression tests added/updated.
-- [ ] Reconciliation evidence recorded in the operational runbook.
+- Metrics catalog updated (`docs/reference/analytics/metrics-catalog.md`).
+- Data contracts updated (`docs/reference/analytics/data-contracts.md`) when schema changes.
+- Contract and regression tests added/updated.
+- Reconciliation evidence recorded in the operational runbook.
 
 ## Running coverage locally
 
@@ -253,7 +251,7 @@ Edit `deps.edn` if you need to exclude a specific namespace:
 **Exclusion regex:**
 
 - Separate namespaces with `|` (pipe)
-- Use `.*` to exclude all sub-namespaces
+- Use `.`* to exclude all sub-namespaces
 - Example: `galaticos.dev.*` excludes `galaticos.dev.fixtures`, `galaticos.dev.utils`, etc.
 
 ### When to exclude
@@ -467,6 +465,42 @@ test('user login flow', async ({ page }) => {
 - **Coveralls**: trend tracking
 - **SonarQube**: quality + coverage analysis
 
+## UX E2E matrix (Playwright)
+
+Automated UI regression tests live under `e2e/ux-*.spec.js`, tagged `@ux` (plus `@ux-mobile`, `@ux-a11y`, `@ux-slow`). UX rules: [ui-decisions.md](../ui/ui-decisions.md).
+
+
+| Area                                  | Spec file                        | Notes                                             |
+| ------------------------------------- | -------------------------------- | ------------------------------------------------- |
+| Design system, UI kit, perceived perf | `e2e/ux-foundation.spec.js`      | tabular-nums, ui-lab, badges                      |
+| Navigation, scroll, match-return      | `e2e/ux-navigation.spec.js`      | breadcrumbs; PT hash routes skipped until phase 1 |
+| Undo deletes                          | `e2e/ux-undo.spec.js`            | undo toasts, commit failure, roster undo          |
+| Auth and session                      | `e2e/auth.spec.js`               | login/session                                     |
+| Forms and lists                       | `e2e/ux-forms-lists.spec.js`     | 400 retention, loading label                      |
+| Match form                            | `e2e/ux-matches.spec.js`         | steppers, skeleton, draft, mobile FAB             |
+| Players and merge                     | `e2e/ux-players-merge.spec.js`   | merge 3-step, undo                                |
+| Championships and seasons             | `e2e/ux-championships.spec.js`   | enrollment, max players, finalize                 |
+| Teams and dashboard                   | `e2e/ux-teams-dashboard.spec.js` | teams, dashboard export                           |
+| Accessibility                         | `e2e/ux-a11y.spec.js`            | keyboard, aria, scope                             |
+| UI copy guard                         | `scripts/check-ui-copy.js`       | no `js/confirm` in components                     |
+| Mobile shell                          | `e2e/ux-mobile-shell.spec.js`    | bottom tab (Pixel 5 project)                      |
+
+
+**Run locally:**
+
+```bash
+./bin/galaticos docker:dev start
+until curl -sf http://localhost:3000/health; do sleep 2; done
+./bin/galaticos db:seed-smoke
+npm ci --no-fund --no-audit
+npx playwright install --with-deps chromium
+./bin/galaticos e2e http://localhost:3000 -- --grep @ux
+./bin/galaticos e2e http://localhost:3000 -- --project=chromium-mobile
+node scripts/check-ui-copy.js
+```
+
+Copy guard runs in CI before Playwright (see `.github/workflows/ci.yml`).
+
 ## Additional resources
 
 - [Cloverage Documentation](https://github.com/cloverage/cloverage)
@@ -482,3 +516,4 @@ If you have questions about test coverage:
 2. See examples in `test/` and `test-cljs/`
 3. Ask on the team development channel
 4. Open an issue to improve this documentation
+

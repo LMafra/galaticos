@@ -1,10 +1,6 @@
 # Galáticos frontend performance
 
-**Summary:** Standardizes how we measure and improve **loading and interactivity** (Core Web Vitals and related metrics) on each SPA route. This folder links page inventory, audit methodology, and an actionable backlog.
-
-## Objective
-
-Same scope as above: connect inventory, methodology, and backlog for consistent performance work.
+**Summary:** How you measure and improve **loading and interactivity** (Core Web Vitals) on each SPA route. Links page inventory, audit methodology, and the open task backlog. Perceived UX patterns (skeletons, undo): [ui-decisions.md](../ui/ui-decisions.md).
 
 ## Documents
 

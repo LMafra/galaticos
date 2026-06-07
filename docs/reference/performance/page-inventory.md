@@ -1,11 +1,13 @@
 # Page inventory (performance)
 
-**Summary:** Route table for Lighthouse and backlog work: Reitit name, hash path, auth, main component, and example URL. Update when `routes.cljs` or `core.cljs` changes.
+**Summary:** Route table for Lighthouse audits and performance backlog work. Read this when you add routes or measure page load. Lists Reitit name, hash path, auth, main component, and example URL. UI shell rules: [ui-decisions.md](../ui/ui-decisions.md). Update when `routes.cljs` or `core.cljs` changes.
 
 Source of truth for routes: [src-cljs/galaticos/routes.cljs](../../src-cljs/galaticos/routes.cljs).  
 Route → UI mapping: [src-cljs/galaticos/core.cljs](../../src-cljs/galaticos/core.cljs) (`current-page`).
 
 Routing uses **hash** (`:use-fragment true` in `core.cljs`); in the browser URLs look like `http://localhost:3000/#/dashboard`, etc.
+
+Until Portuguese hash aliases ship (phase 1), examples below use English paths only. See [Portuguese hash migration (planned)](#portuguese-hash-migration-planned).
 
 | Reitit name | Path (fragment after `#`) | UI title — auth? | Main component | Example URL |
 |-------------|---------------------------|------------------|----------------|-------------|
@@ -31,6 +33,57 @@ Routing uses **hash** (`:use-fragment true` in `core.cljs`); in the browser URLs
 | `:team-new` | `/teams/new` | New Team — yes | `galaticos.components.teams/team-form` | `http://localhost:3000/#/teams/new` |
 | `:team-detail` | `/teams/:id` | Team Details — yes | `galaticos.components.teams/team-detail` | `http://localhost:3000/#/teams/{id}` |
 | `:team-edit` | `/teams/:id/edit` | Edit Team — yes | `galaticos.components.teams/team-form` | `http://localhost:3000/#/teams/{id}/edit` |
+
+## Portuguese hash migration (planned)
+
+Reitit route names (`:players`, etc.) stay English in code; only hash segments change for the UI. Implementation notes live in `routes.cljs`.
+
+### Route map (EN → PT)
+
+| Reitit name | Current hash | Proposed PT hash |
+|-------------|--------------|------------------|
+| `:home` | `/` | `/` |
+| `:login` | `/login` | `/entrar` |
+| `:dashboard` | `/dashboard` | `/painel` |
+| `:stats` | `/stats` | `/estatisticas` |
+| `:players` | `/players` | `/jogadores` |
+| `:player-new` | `/players/new` | `/jogadores/novo` |
+| `:player-detail` | `/players/:id` | `/jogadores/:id` |
+| `:player-edit` | `/players/:id/edit` | `/jogadores/:id/editar` |
+| `:matches` | `/matches` | `/partidas` |
+| `:match-new` | `/matches/new` | `/partidas/nova` |
+| `:match-new-in-championship` | `/matches/by-championship/:championship-id/new` | `/partidas/campeonato/:championship-id/nova` |
+| `:match-detail` | `/matches/:id` | `/partidas/:id` |
+| `:match-edit` | `/matches/:id/edit` | `/partidas/:id/editar` |
+| `:championships` | `/championships` | `/campeonatos` |
+| `:championship-new` | `/championships/new` | `/campeonatos/novo` |
+| `:championship-detail` | `/championships/:id` | `/campeonatos/:id` |
+| `:championship-season-detail` | `/championships/:id/seasons/:season-id` | `/campeonatos/:id/temporadas/:season-id` |
+| `:championship-edit` | `/championships/:id/edit` | `/campeonatos/:id/editar` |
+| `:teams` | `/teams` | `/times` |
+| `:team-new` | `/teams/new` | `/times/novo` |
+| `:team-detail` | `/teams/:id` | `/times/:id` |
+| `:team-edit` | `/teams/:id/edit` | `/times/:id/editar` |
+| `:ui-lab` | `/ui-lab` | `/ui-lab` (dev) |
+
+### Rollout phases
+
+| Phase | Scope | Breaking? |
+|-------|--------|-----------|
+| **1** | Register each PT hash as an additional route; both EN and PT work; duplicate Lighthouse inventory lines | No |
+| **2** | New links use PT; visiting EN hash silently `replace-state` to PT | No (EN bookmarks still work) |
+| **3** | Remove EN routes or 404 with “old URL” message | Yes — requires release notes |
+
+Hash SPAs have no HTTP 301; use `reitit.frontend.easy` + EN→PT lookup in phase 2.
+
+### Risks
+
+| Risk | Mitigation |
+|------|------------|
+| Shared bookmarks / links | Phases 1–2 keep EN; phase 3 needs changelog |
+| Lighthouse scripts | Add PT example URLs in phase 1 |
+| Reitit route order (`/new` vs `/:id`) | Mirror static-before-dynamic order in PT paths |
+| E2E tests with fixed paths | Parametrize or switch to PT in phase 2 |
 
 ## Notes
 

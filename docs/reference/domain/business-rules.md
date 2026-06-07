@@ -1,6 +1,6 @@
 # Business rules — Galáticos
 
-**Summary:** This document catalogs business rules implemented in the Galáticos roster-management system, identified from source-code analysis. Each rule has a stable `RN-*` identifier, a description, implementation references, and expected behavior. An appendix maps a subset of requirements to the Business Rules Manifesto model (terms, facts, BRM rules). For cross-checks against the codebase, see [business-rules-audit.md](business-rules-audit.md). Metric definitions and analytics contracts live under `docs/reference/analytics/`.
+**Summary:** Canonical catalog of Galáticos business rules. Each rule has a stable `RN-*` identifier, description, implementation references, and expected behavior. Read this when you implement or change domain behavior. Terms: [concepts.md](../../concepts.md). Implementation audit: [business-rules-audit.md](business-rules-audit.md). Metrics: [metrics-catalog.md](../analytics/metrics-catalog.md) — do not redefine KPIs here.
 
 **Last updated:** April 23, 2026
 

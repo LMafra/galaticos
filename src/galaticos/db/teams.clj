@@ -78,8 +78,9 @@
   (some? (find-by-id id)))
 
 (defn has-players?
-  "Check if team has any active players"
+  "True when the team roster or player.team-id references block delete."
   [team-id]
-  (let [players (players-db/find-by-team team-id)]
-    (seq players)))
+  (or (seq (players-db/find-by-team team-id))
+      (when-let [team (find-by-id team-id)]
+        (seq (:active-player-ids team)))))
 

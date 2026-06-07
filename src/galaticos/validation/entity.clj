@@ -87,7 +87,8 @@
   #{:name :position})
 
 (def allowed-team-fields
-  #{:name :city :coach :stadium :founded-year :logo-url :active-player-ids :notes})
+  #{:name :abbreviation :category :city :coach :stadium :founded-year :logo-url
+    :active-player-ids :notes})
 
 (def required-team-fields
   #{:name})

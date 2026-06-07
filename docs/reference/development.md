@@ -1,6 +1,6 @@
 # Development guide
 
-Detailed setup, scripts, testing, and backend REPL examples for Galáticos. For a quick overview and minimal commands, see the [root README](../../README.md).
+**Summary:** How to install, run, test, and debug Galáticos locally. You need Java, the Clojure CLI, Docker (recommended), and Node.js 18+ if you build ClojureScript without Docker. For minimal commands only, see the [root README](../../README.md). Domain terms: [concepts.md](../../concepts.md).
 
 ## Contents
 
@@ -256,6 +256,8 @@ npx playwright install --with-deps chromium
 ```
 
 Optional filter: `./bin/galaticos e2e http://localhost:3000 -- --grep @smoke`
+
+UX plans: `./bin/galaticos e2e http://localhost:3000 -- --grep @ux` (see [testing-coverage.md](domain/testing-coverage.md#ux-e2e-matrix-playwright)). Mobile shell: `--project=chromium-mobile`. Copy guard: `node scripts/check-ui-copy.js`.
 
 ### All-in-one (lint + frontend + unit)
 

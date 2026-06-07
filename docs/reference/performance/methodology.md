@@ -1,6 +1,6 @@
 # Performance audit methodology
 
-**Summary:** How to run Lighthouse (DevTools and CLI), handle WSL/Chrome, build release bundles in Docker, and record results in the performance backlog for public and authenticated routes.
+**Summary:** How you run Lighthouse (DevTools and CLI), handle WSL/Chrome, build release bundles in Docker, and record results in the performance backlog. Read this before filling baseline cells in [action-backlog.md](../../backlog/performance/action-backlog.md).
 
 ## Base URL and prerequisites
 
