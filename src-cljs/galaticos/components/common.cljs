@@ -56,7 +56,7 @@
 
 (defn delayed-loading-panel
   "Spinner first; after `delay-ms` still loading → `skeleton` (UX-PLAN-17)."
-  [loading? skeleton & children]
+  [loading? _skeleton & _children]
   (let [delay-ms 1000
         show-skeleton? (r/atom false)
         alive? (r/atom true)]
@@ -592,7 +592,7 @@
 
 (defn modal
   "Accessible dialog: Esc closes, Tab cycles inside, initial focus on .modal-cancel (UX-PLAN-19)."
-  [{:keys [title content on-close actions]}]
+  [_props]
   (let [title-id "modal-title"
         panel-ref (atom nil)
         overlay-ref (atom nil)]

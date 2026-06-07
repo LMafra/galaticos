@@ -82,7 +82,7 @@
            (fn [_]
              (js/requestAnimationFrame
               (fn [_]
-                (js/setTimeout (fn [] (try-restore-scroll! y 0 gen)) 50)))))))
+                (js/setTimeout (fn [] (try-restore-scroll! y 0 gen)) 50))))))))
     (catch :default _ nil)))
 
 (def ^:private match-return-key "galaticos.match-return")

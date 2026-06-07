@@ -6,7 +6,7 @@
 
 (defn list-championships
   [request]
-  (resp/success (logic/list request)))
+  (resp/success (logic/list-championships request)))
 
 (defn get-championship
   [request]

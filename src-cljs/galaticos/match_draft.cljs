@@ -1,5 +1,6 @@
 (ns galaticos.match-draft
-  "Local draft + last championship for match form (UX-PLAN-09).")
+  "Local draft + last championship for match form (UX-PLAN-09)."
+  (:require [clojure.string :as str]))
 
 (def ^:private draft-prefix "galaticos.match-draft.")
 (def ^:private last-championship-key "galaticos.match-last-championship")
@@ -12,7 +13,7 @@
   [is-edit? match-id preset-championship-id]
   (if is-edit?
     (str "edit-" match-id)
-    (if (clojure.string/blank? (str preset-championship-id))
+    (if (str/blank? (str preset-championship-id))
       "new"
       (str "new-" preset-championship-id))))
 

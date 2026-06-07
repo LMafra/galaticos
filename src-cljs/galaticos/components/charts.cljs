@@ -15,7 +15,9 @@
   (when (number? v) (str v)))
 
 (defn line-chart [{:keys [data x-key y-key stroke label]}]
-  (let [{:keys [grid axis label tooltip-bg tooltip-border]} (chart-theme)
+  (let [theme (chart-theme)
+        {:keys [grid axis tooltip-bg tooltip-border]} theme
+        label-color (:label theme)
         stroke-color (or stroke "#820000")]
     [:> ResponsiveContainer {:width "100%" :height 260}
      [:> LineChart {:data data}
@@ -32,10 +34,12 @@
                 :strokeWidth 2
                 :dot {:r 3 :fill stroke-color}
                 :activeDot {:r 5}}]
-      [:> LabelList {:dataKey y-key :position "top" :fill label :fontSize 11 :formatter value-label}]]]))
+      [:> LabelList {:dataKey y-key :position "top" :fill label-color :fontSize 11 :formatter value-label}]]]))
 
 (defn bar-chart [{:keys [data x-key y-key fill label]}]
-  (let [{:keys [grid axis label tooltip-bg tooltip-border]} (chart-theme)
+  (let [theme (chart-theme)
+        {:keys [grid axis tooltip-bg tooltip-border]} theme
+        label-color (:label theme)
         fill-color (or fill "#820000")]
     [:> ResponsiveContainer {:width "100%" :height 260}
      [:> BarChart {:data data}
@@ -47,11 +51,11 @@
                                  :borderRadius "8px"}}]
       [:> Legend {:wrapperStyle {:fontSize "12px"}}]
       [:> Bar {:dataKey y-key :name (or label "Valor") :fill fill-color :radius [4 4 0 0]}
-       [:> LabelList {:dataKey y-key :position "top" :fill label :fontSize 11 :formatter value-label}]]]]))
+       [:> LabelList {:dataKey y-key :position "top" :fill label-color :fontSize 11 :formatter value-label}]]]]))
 
 (defn pie-chart [{:keys [data name-key value-key colors]}]
   (let [colors (or colors ["#820000" "#FFD500" "#3B82F6" "#10B981" "#F97316"])
-        {:keys [grid axis tooltip-bg tooltip-border]} (chart-theme)]
+        {:keys [tooltip-bg tooltip-border]} (chart-theme)]
     [:> ResponsiveContainer {:width "100%" :height 260}
      [:> PieChart
       [:> Pie {:data data
@@ -73,7 +77,9 @@
       [:> Legend {:formatter (fn [v _entry] v) :wrapperStyle {:fontSize "12px"}}]]]))
 
 (defn area-chart [{:keys [data x-key y-key stroke fill label]}]
-  (let [{:keys [grid axis label tooltip-bg tooltip-border]} (chart-theme)
+  (let [theme (chart-theme)
+        {:keys [grid axis tooltip-bg tooltip-border]} theme
+        label-color (:label theme)
         stroke-color (or stroke "#820000")]
     [:> ResponsiveContainer {:width "100%" :height 260}
      [:> AreaChart {:data data}
@@ -87,4 +93,4 @@
                 :name (or label "Valor")
                 :stroke stroke-color
                 :fill (or fill "rgba(130,0,0,0.15)")}]
-      [:> LabelList {:dataKey y-key :position "top" :fill label :fontSize 11 :formatter value-label}]]]))
+      [:> LabelList {:dataKey y-key :position "top" :fill label-color :fontSize 11 :formatter value-label}]]]))

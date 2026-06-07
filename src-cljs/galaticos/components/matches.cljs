@@ -355,10 +355,10 @@
      (stat-grid-cell form-data dirty-cells pid stat row-idx 5 :played? touch? row-count)]))
 
 (defn- player-stat-card
-  [form-data player stats-map dirty-cells row-idx touch?]
+  [_form-data player _stats-map _dirty-cells _row-idx _touch?]
   (let [expanded? (r/atom false)
         pid (str (:_id player))]
-    (fn [form-data player stats-map dirty-cells row-idx touch?]
+    (fn [form-data player stats-map dirty-cells _row-idx _touch?]
       (let [stat (merge (default-player-stat) (get stats-map pid))]
         [:div {:class "rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900/90"}
          [:button {:type "button"

@@ -107,7 +107,7 @@
                (state/set-players! result)
                (effects/restore-list-scroll! :players))
              (fn [err _resp]
-               (state/set-resource-error! :players err))))]
+               (state/set-resource-error! :players err)))))]
     (r/create-class
      {:display-name "galaticos.player-list"
       :component-did-mount
