@@ -1,4 +1,4 @@
-> **Archived** — historical NotebookLM material (may be Portuguese). For current docs see [docs/README.md](../../README.md) and [reference/](../../reference/).
+> **Archived** — historical NotebookLM material (may be Portuguese). For current docs see [docs/README.md](../../../README.md) and [reference/](../../../reference/).
 
 1.
 

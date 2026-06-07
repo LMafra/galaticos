@@ -12,6 +12,7 @@
 - [Metrics catalog](docs/reference/analytics/metrics-catalog.md): KPI definitions (semantic source of truth).
 - [Production runbook](docs/reference/operations/production-runbook.md): Deploy, backup, seed, indexes in production.
 - [AI-assisted code audit](docs/reference/quality/ai-assisted-code-audit.md): Stack verification for AI-generated code (Monger, Ring, CLJS).
+- [UI decisions](docs/reference/ui/ui-decisions.md): UX rules, Portuguese UI vocabulary, responsive shell.
 
 ## Documentation hub
 

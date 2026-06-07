@@ -1,10 +1,6 @@
 # Analytics Operating Model
 
-**Summary:** Defines how the team operates, evolves, and governs sports analytics metrics in Galáticos. Roles include analytics product owner, engineering, and data analyst; cadence covers weekly quality reviews, biweekly roadmap prioritization, and monthly catalog adherence. Every metric or contract change requires catalog/contract updates and validation evidence.
-
-## Purpose
-
-Define how the team operates, evolves, and governs sports analytics metrics in Galáticos.
+**Summary:** How the team governs analytics metrics: roles, cadence, and change rules. Read this when you own metric or contract changes. Weekly quality reviews, biweekly roadmap prioritization, monthly catalog adherence.
 
 ## Roles
 

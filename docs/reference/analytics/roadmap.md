@@ -1,10 +1,6 @@
 # Sports Data Analytics Roadmap
 
-**Summary:** Three-phase roadmap from operational analytics with semantic standardization and data quality (Phase 1), through decoupled recomputation and job observability (Phase 2), to derived metrics and gated predictive insights (Phase 3). Cross-cutting dependencies include continuous data quality, metric regression tests, and living documentation.
-
-## Overview
-
-Three-phase roadmap to evolve Galáticos from operational analytics to advanced analytics with greater scale and governance.
+**Summary:** Three-phase roadmap: Phase 1 semantic standardization and data quality, Phase 2 decoupled recomputation and job observability, Phase 3 derived metrics and gated predictive insights. Read this when you prioritize analytics work. Strategy context: [strategy.md](strategy.md).
 
 ## Phase 1: Semantic standardization and data quality
 

@@ -1,59 +1,21 @@
 const { test, expect } = require('@playwright/test');
-const { saveCoverage, getAdminToken, apiJson, activateChampionshipSeason } = require('./_helpers');
-
-/**
- * Championship with active season + Galáticos player enrolled on that season (required for new matches).
- */
-async function setupActiveChampionshipWithEnrolledGalaticosPlayer(request) {
-  const token = await getAdminToken(request);
-  expect(token, 'admin token (db:seed-smoke: admin/admin)').toBeTruthy();
-
-  const unique = Date.now();
-  const { response: cRes, body: cBody } = await apiJson(request, token, 'POST', '/api/championships', {
-    name: `E2E Champ ${unique}`,
-    season: '2026',
-    'titles-count': 0,
-    status: 'active',
-  });
-  expect(cRes.ok(), JSON.stringify(cBody)).toBeTruthy();
-  const championshipId = cBody?.data?._id;
-  expect(championshipId).toBeTruthy();
-  const seasonId = await activateChampionshipSeason(request, token, championshipId);
-  expect(seasonId, 'active season for match create').toBeTruthy();
-
-  const { response: tRes, body: tBody } = await apiJson(request, token, 'GET', '/api/teams');
-  expect(tRes.ok()).toBeTruthy();
-  const teams = Array.isArray(tBody?.data) ? tBody.data : [];
-  const galaticos = teams.find((t) => t?.name === 'Galáticos' || t?.name === 'Galaticos');
-  expect(galaticos?._id, 'Need Galáticos team (db:seed-smoke)').toBeTruthy();
-  const teamId = galaticos._id;
-
-  const { response: pRes, body: pBody } = await apiJson(request, token, 'POST', '/api/players', {
-    name: `E2E Match Roster ${unique}`,
-    position: 'Atacante',
-    'team-id': teamId,
-  });
-  expect(pRes.ok(), JSON.stringify(pBody)).toBeTruthy();
-  const playerId = pBody?.data?._id;
-  expect(playerId).toBeTruthy();
-
-  const { response: eRes, body: eBody } = await apiJson(
-    request,
-    token,
-    'POST',
-    `/api/championships/${championshipId}/enroll/${playerId}`,
-    {}
-  );
-  expect(eRes.ok(), JSON.stringify(eBody)).toBeTruthy();
-
-  return String(championshipId);
-}
+const {
+  saveCoverage,
+  pageHeading,
+  bannerHeading,
+  expectPageTitle,
+  setupActiveChampionshipWithEnrolledGalaticosPlayer,
+  fillMatchMinimal,
+  expectUndoToast,
+  clickUndo,
+} = require('./_helpers');
 
 test('create team', { tag: '@crud' }, async ({ page }, testInfo) => {
   try {
     await test.step('navigate to new team form', async () => {
       await page.goto('/#/teams');
-      await expect(page.getByRole('heading', { name: 'Times', level: 1 })).toBeVisible();
+      await expect(page).toHaveURL(/\/#\/teams/);
+      await expectPageTitle(page, 'Times');
       await page.getByRole('button', { name: 'Novo Time' }).click();
     });
 
@@ -61,12 +23,14 @@ test('create team', { tag: '@crud' }, async ({ page }, testInfo) => {
       await expect(page.getByRole('heading', { name: 'Novo Time' })).toBeVisible();
       const uniqueName = `Time E2E ${Date.now()}`;
       await page.getByLabel(/^Nome/).fill(uniqueName);
+      await page.getByLabel(/^Sigla/).fill('TE2');
+      await page.getByLabel(/^Categoria/).selectOption('adulto');
       await page.getByRole('button', { name: 'Criar' }).click();
     });
 
     await test.step('verify redirect to teams list', async () => {
       await expect(page).toHaveURL(/\#\/teams$/);
-      await expect(page.getByRole('heading', { name: 'Times', level: 1 })).toBeVisible({ timeout: 15_000 });
+      await expectPageTitle(page, 'Times', { timeout: 15_000 });
     });
   } finally {
     await saveCoverage(page, testInfo);
@@ -77,7 +41,7 @@ test('create player (minimal)', { tag: '@crud' }, async ({ page }, testInfo) => 
   try {
     await test.step('navigate to new player form', async () => {
       await page.goto('/#/players');
-      await expect(page.getByRole('heading', { name: 'Jogadores', level: 1 })).toBeVisible();
+      await expect(pageHeading(page, 'Jogadores')).toBeVisible();
       await page.getByRole('button', { name: 'Novo Jogador' }).click();
     });
 
@@ -89,7 +53,7 @@ test('create player (minimal)', { tag: '@crud' }, async ({ page }, testInfo) => 
     });
 
     await test.step('verify redirect to players list', async () => {
-      await expect(page.getByRole('heading', { name: 'Jogadores', level: 1 })).toBeVisible({ timeout: 10_000 });
+      await expect(pageHeading(page, 'Jogadores')).toBeVisible({ timeout: 10_000 });
     });
   } finally {
     await saveCoverage(page, testInfo);
@@ -100,7 +64,7 @@ test('create championship', { tag: '@crud' }, async ({ page }, testInfo) => {
   try {
     await test.step('navigate to new championship form', async () => {
       await page.goto('/#/championships');
-      await expect(page.getByRole('heading', { name: 'Campeonatos', level: 1 })).toBeVisible();
+      await expect(pageHeading(page, 'Campeonatos')).toBeVisible();
       await page.getByRole('button', { name: 'Novo Campeonato' }).click();
     });
 
@@ -115,7 +79,7 @@ test('create championship', { tag: '@crud' }, async ({ page }, testInfo) => {
 
     await test.step('verify redirect to championships list', async () => {
       await expect(page).toHaveURL(/\#\/championships$/);
-      await expect(page.getByRole('heading', { name: 'Campeonatos', level: 1 })).toBeVisible({ timeout: 15_000 });
+      await expect(pageHeading(page, 'Campeonatos')).toBeVisible({ timeout: 15_000 });
     });
   } finally {
     await saveCoverage(page, testInfo);
@@ -129,16 +93,12 @@ test('create match with one player statistic', { tag: '@crud' }, async ({ page, 
       champId = await setupActiveChampionshipWithEnrolledGalaticosPlayer(request);
     });
     await page.goto(`/#/matches/by-championship/${champId}/new`);
-    await expect(page.getByRole('heading', { name: 'Nova Partida' })).toBeVisible();
+    await expect(pageHeading(page, 'Nova Partida')).toBeVisible();
     await page.getByText('Carregando jogadores inscritos...').waitFor({ state: 'hidden', timeout: 15_000 }).catch(() => {});
 
     await expect(page.locator('table tbody tr').first()).toBeVisible({ timeout: 15_000 });
 
-    await page.getByLabel(/^Data/).fill('2025-06-01');
-    await page.getByLabel(/^Adversário/).fill('Adversário E2E');
-
-    // Player stats use number-stepper (+/-), not spinbuttons; one goal includes this row in the payload.
-    await page.locator('table tbody tr').first().locator('td').nth(1).getByRole('button', { name: '+' }).click();
+    await fillMatchMinimal(page);
 
     const createMatchResp = page.waitForResponse((r) => {
       if (r.request().method() !== 'POST') return false;
@@ -152,8 +112,11 @@ test('create match with one player statistic', { tag: '@crud' }, async ({ page, 
     await page.getByRole('button', { name: 'Criar Partida' }).click();
     const resp = await createMatchResp;
     expect(resp.status(), await resp.text()).toBe(201);
-    await expect(page).toHaveURL(/\#\/matches$/);
-    await expect(page.getByRole('heading', { name: 'Partidas', level: 1 })).toBeVisible({ timeout: 15_000 });
+    await expect(page).toHaveURL(/\#\/matches(\/championship\/[^/]+)?$/);
+    await expect(bannerHeading(page, 'Partidas')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('button', { name: 'Nova Partida' }).first()).toBeVisible({
+      timeout: 15_000,
+    });
   } finally {
     await saveCoverage(page, testInfo);
   }
@@ -162,7 +125,7 @@ test('create match with one player statistic', { tag: '@crud' }, async ({ page, 
 test('edit player', { tag: '@crud' }, async ({ page }, testInfo) => {
   try {
     await page.goto('/#/players');
-    await expect(page.getByRole('heading', { name: 'Jogadores', level: 1 })).toBeVisible();
+    await expect(pageHeading(page, 'Jogadores')).toBeVisible();
     const firstRow = page.locator('table tbody tr').first();
     await firstRow.waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {});
     const rowCount = await page.locator('table tbody tr').count();
@@ -176,7 +139,7 @@ test('edit player', { tag: '@crud' }, async ({ page }, testInfo) => {
     await expect(page.getByRole('heading', { name: 'Editar Jogador' })).toBeVisible();
     await page.getByLabel(/^Apelido/).fill(`E2E Apelido ${Date.now()}`);
     await page.getByRole('button', { name: 'Atualizar' }).click();
-    const onList = page.getByRole('heading', { name: 'Jogadores', level: 1 });
+    const onList = pageHeading(page, 'Jogadores');
     const onDetail = page.getByRole('button', { name: 'Informações' });
     const onError = page.getByText(/Erro ao .* jogador/);
     await expect(onList.or(onDetail).or(onError)).toBeVisible({ timeout: 25_000 });
@@ -191,21 +154,25 @@ test('edit player', { tag: '@crud' }, async ({ page }, testInfo) => {
 test('edit team', { tag: '@crud' }, async ({ page }, testInfo) => {
   try {
     await page.goto('/#/teams');
-    await expect(page.getByRole('heading', { name: 'Times', level: 1 })).toBeVisible();
-    const firstRow = page.locator('table tbody tr').first();
-    await firstRow.waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {});
-    const rowCount = await page.locator('table tbody tr').count();
-    if (rowCount === 0) {
+    await expect(page).toHaveURL(/\/#\/teams/);
+    await expectPageTitle(page, 'Times');
+    const teamCards = page.locator('main .grid.gap-4 .app-card').filter({
+      has: page.getByRole('button', { name: 'Ver elenco' }),
+    });
+    await teamCards.first().waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {});
+    const cardCount = await teamCards.count();
+    if (cardCount === 0) {
       test.skip(true, 'No teams in list');
       return;
     }
-    await firstRow.click();
-    await expect(page.getByRole('button', { name: 'Editar' })).toBeVisible({ timeout: 5000 });
-    await page.getByRole('button', { name: 'Editar' }).click();
+    const galaticosCard = teamCards.filter({ hasText: 'Galáticos' }).first();
+    const teamCard = (await galaticosCard.count()) > 0 ? galaticosCard : teamCards.first();
+    await teamCard.getByRole('button', { name: 'Editar' }).click();
     await expect(page.getByRole('heading', { name: 'Editar Time' })).toBeVisible();
-    await page.getByLabel(/^Cidade/).fill('Cidade E2E');
+    await page.getByLabel(/^Categoria/).selectOption('adulto');
+    await page.getByLabel(/^Sigla/).fill('GAL');
     await page.getByRole('button', { name: 'Atualizar' }).click();
-    await expect(page.getByRole('heading', { name: 'Times', level: 1 })).toBeVisible({ timeout: 10_000 });
+    await expectPageTitle(page, 'Times', { timeout: 10_000 });
   } finally {
     await saveCoverage(page, testInfo);
   }
@@ -214,7 +181,7 @@ test('edit team', { tag: '@crud' }, async ({ page }, testInfo) => {
 test('delete player (soft delete)', { tag: '@crud' }, async ({ page }, testInfo) => {
   try {
     await page.goto('/#/players');
-    await expect(page.getByRole('heading', { name: 'Jogadores', level: 1 })).toBeVisible();
+    await expect(pageHeading(page, 'Jogadores')).toBeVisible();
     const firstRow = page.locator('table tbody tr').first();
     await firstRow.waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {});
     const rowCount = await page.locator('table tbody tr').count();
@@ -224,9 +191,11 @@ test('delete player (soft delete)', { tag: '@crud' }, async ({ page }, testInfo)
     }
     await firstRow.click();
     await expect(page.getByRole('button', { name: 'Deletar' })).toBeVisible({ timeout: 5000 });
-    page.on('dialog', (dialog) => dialog.accept());
     await page.getByRole('button', { name: 'Deletar' }).click();
-    await expect(page.getByRole('heading', { name: 'Jogadores', level: 1 })).toBeVisible({ timeout: 10_000 });
+    await expectUndoToast(page, /Jogador removido/i);
+    await expect(pageHeading(page, 'Jogadores')).toBeVisible({ timeout: 10_000 });
+    await clickUndo(page);
+    await expect(page.getByRole('button', { name: 'Deletar' })).toBeVisible({ timeout: 10_000 });
   } finally {
     await saveCoverage(page, testInfo);
   }

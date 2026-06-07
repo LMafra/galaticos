@@ -1,10 +1,6 @@
 # Analytics Metrics Catalog
 
-**Summary:** Canonical semantic source for platform sports metrics. Each entry defines grain, formula, source fields, and interpretation. New metrics must be added here before API or UI exposure; formula changes require versioning and changelog communication.
-
-## Purpose
-
-Be the semantic source of truth for platform sports metrics.
+**Summary:** Canonical semantic source for platform sports metrics. Read this before exposing a KPI in API or UI. Each entry defines grain, formula, source fields, and interpretation. Formula changes require versioning and changelog communication.
 
 ## Catalog conventions
 

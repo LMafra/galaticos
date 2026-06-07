@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { saveCoverage } = require('./_helpers');
+const { saveCoverage, pageHeading, expectPageTitle } = require('./_helpers');
 
 test('dashboard loads stats endpoint', { tag: '@smoke' }, async ({ page }, testInfo) => {
   try {
@@ -16,15 +16,15 @@ test('dashboard loads stats endpoint', { tag: '@smoke' }, async ({ page }, testI
 test('players/matches/championships list pages render without errors', { tag: '@smoke' }, async ({ page }, testInfo) => {
   try {
     await page.goto('/#/players');
-    await expect(page.getByRole('heading', { name: 'Jogadores', level: 1 })).toBeVisible();
+    await expect(pageHeading(page, 'Jogadores')).toBeVisible();
     await expect(page.getByText('Erro ao carregar players')).toHaveCount(0);
 
     await page.goto('/#/matches');
-    await expect(page.getByRole('heading', { name: 'Partidas', level: 1 })).toBeVisible();
+    await expect(pageHeading(page, 'Partidas')).toBeVisible();
     await expect(page.getByText('Erro ao carregar matches')).toHaveCount(0);
 
     await page.goto('/#/championships');
-    await expect(page.getByRole('heading', { name: 'Campeonatos', level: 1 })).toBeVisible();
+    await expect(pageHeading(page, 'Campeonatos')).toBeVisible();
     await expect(page.getByText('Erro ao carregar championships')).toHaveCount(0);
   } finally {
     await saveCoverage(page, testInfo);
@@ -34,7 +34,8 @@ test('players/matches/championships list pages render without errors', { tag: '@
 test('teams list page renders without error', { tag: '@smoke' }, async ({ page }, testInfo) => {
   try {
     await page.goto('/#/teams');
-    await expect(page.getByRole('heading', { name: 'Times', level: 1 })).toBeVisible();
+    await expect(page).toHaveURL(/\/#\/teams/);
+    await expectPageTitle(page, 'Times');
     await expect(page.getByText('Erro ao carregar')).toHaveCount(0);
   } finally {
     await saveCoverage(page, testInfo);

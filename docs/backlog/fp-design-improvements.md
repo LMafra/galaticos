@@ -2,13 +2,13 @@
 
 ## Summary
 
-Project-specific map from NotebookLM FP guidance to Galáticos: `domain` + `logic` + protocols instead of service/repository layers; `{:ok}`/`{:error}` in domain and `ex-info` in logic; validation via `comp` without Malli for now; analytics rollups pure in domain; CLJS reducer + reactions. Implementation order: Phases B–E in [fp-improvement-checklist.md](fp-improvement-checklist.md); championships pilot (Option C) deletes OO layers in Phase B.
+Design map for Galáticos FP layout: `domain` + `logic` + protocols instead of service/repository layers. Read this when you plan a migration PR. **Open code work:** Phases B–C in [fp-improvement-checklist.md](fp-improvement-checklist.md). Analytics and CLJS reducer patterns are already shipped.
 
-**Project-specific** translation of NotebookLM FP responses. Complements [design-and-db-improvements.md](../archive/notebookLM/design-and-db-improvements.md) (OO/service layer oriented — **historical**).
+**Project-specific** translation of NotebookLM FP responses. Complements [design-and-db-improvements.md](../archive/notebookLM/oo/design-and-db-improvements.md) (OO/service layer oriented — **historical**).
 
 **Main guide:** [functional-architecture.md](../reference/architecture/functional-architecture.md)  
-**Prompts:** [notebooklm-prompts-fp.md](../archive/notebookLM/notebooklm-prompts-fp.md)  
-**Responses:** [notebooklm-response-fp.md](../archive/notebookLM/notebooklm-response-fp.md)  
+**Prompts:** [notebooklm-prompts-fp.md](../archive/notebookLM/fp/notebooklm-prompts-fp.md)  
+**Responses:** [notebooklm-response-fp.md](../archive/notebookLM/fp/notebooklm-response-fp.md)  
 **Checklist:** [fp-improvement-checklist.md](fp-improvement-checklist.md)
 
 ---
@@ -116,7 +116,7 @@ See [business-rules.md](../reference/domain/business-rules.md).
 - Testable invariant: `recompute(all-matches) == cache`
 - Jobs: `{:op :recalc-stats :player-ids [...]}`
 
-Analytics phases (E): largely done in code; see checklist. [reconciliation-runbook.md](../reference/analytics/reconciliation-runbook.md).
+Analytics phases (E): done in code. [reconciliation-runbook.md](../reference/analytics/reconciliation-runbook.md).
 
 ---
 
@@ -145,7 +145,7 @@ Analytics phases (E): largely done in code; see checklist. [reconciliation-runbo
 
 ## 7. Championships pilot
 
-**Decision:** **Option C** — refactor to FP in Plan 02; delete `service/*` and `repository/*`. OO code remains in the repo until you execute that plan.
+**Decision:** **Option C** — refactor to FP in Phase B; delete `service/*` and `repository/*`. OO pilot still in repo until Phase B ships.
 
 ---
 

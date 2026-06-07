@@ -6,7 +6,9 @@
             [galaticos.routes :as routes]
             [galaticos.components.layout :as layout]
             [galaticos.components.login :as login]
+            [galaticos.components.common :as common]
             [galaticos.components.toast :as toast]
+            [galaticos.components.ui-lab :as ui-lab]
             [galaticos.lazy-pages :as lazy-p]
             [galaticos.effects :as effects]
             [galaticos.state :as state]))
@@ -16,20 +18,28 @@
 (defonce react-root (atom nil))
 
 (defn not-found-page []
-  [:div
-   [:h2 "404"]
-   [:p "Página não encontrada."]])
+  [:div {:class "mx-auto max-w-lg space-y-4 py-8"}
+   [:h2 {:class "text-2xl font-semibold text-slate-900 dark:text-slate-100"} "Página não encontrada"]
+   [:p {:class "text-slate-600 dark:text-slate-400"}
+    "O endereço não existe ou foi alterado. Use os atalhos abaixo para voltar ao app."]
+   [:div {:class "flex flex-wrap gap-2"}
+    [common/button "Dashboard" #(rfe/push-state :dashboard) :variant :primary]
+    [common/button "Jogadores" #(rfe/push-state :players) :variant :outline]
+    [common/button "Partidas" #(rfe/push-state :matches) :variant :outline]]])
 
 (defn unauthenticated-page []
   [:div
    [:h2 "Não autenticado"]
    [:p "Sua sessão não está ativa. Faça login para continuar."]])
 
-(def ^:private protected-routes
-  #{:player-new :player-edit
-    :match-new :match-new-in-championship :match-edit
-    :championship-new :championship-edit
-    :teams :team-detail :team-new :team-edit})
+(defn- auth-gate-panel [auth-checked?]
+  [:div {:class "mx-auto max-w-md space-y-3 py-16 text-center"}
+   [:div {:class "mx-auto h-0.5 w-48 overflow-hidden rounded-full bg-brand-maroon/20"}
+    [:div {:class "h-full w-1/2 animate-pulse bg-brand-maroon"}]]
+   [:p {:class "text-sm text-slate-500 dark:text-slate-400" :aria-live "polite"}
+    (if auth-checked?
+      "A redirecionar…"
+      "A verificar sessão…")]])
 
 (defn current-page
   "Determine which page to render based on current route"
@@ -38,22 +48,18 @@
         route-name (when match (get-in match [:data :name]))
         path-params (when match (:path-params match))]
     (cond
-      ;; Show loading state while checking auth
-      auth-loading? [:div {:style {:text-align "center" :padding "40px"}} "Carregando autenticação..."]
-      
-      ;; Login page - show regardless of auth status (component handles redirect)
+      auth-loading? [auth-gate-panel false]
+
       (= route-name :login) [login/login-page]
-      
-      ;; No match found
+
+      (= route-name :ui-lab) [ui-lab/ui-lab-page]
+
       (nil? match) [not-found-page]
-      
-      ;; Protected routes - require authentication
-      (and auth-checked? (not authenticated) (contains? protected-routes route-name))
-      (do
-        (rfe/push-state :dashboard)
-        [:div {:style {:text-align "center" :padding "40px"}} "Redirecionando..."])
-      
-      ;; Authenticated routes (page components bundled in main release chunk)
+
+      (and (routes/protected-route? route-name)
+           (or (not auth-checked?) (not authenticated)))
+      [auth-gate-panel auth-checked?]
+
       match (case route-name
               :home [lazy-p/loadable-route lazy-p/dashboard]
               :dashboard [lazy-p/loadable-route lazy-p/dashboard]
@@ -83,16 +89,16 @@
               :team-edit [lazy-p/loadable-route lazy-p/team-form path-params]
               :team-detail [lazy-p/loadable-route lazy-p/team-detail path-params]
               [not-found-page])
-      
+
       :else [:div {:style {:text-align "center" :padding "40px"}} "Loading..."])))
 
 (defn app
   "Main application component"
   []
   (let [route-name (when @current-match (get-in @current-match [:data :name]))]
-    (if (= route-name :login)
+    (if (#{:login :ui-lab} route-name)
       (when @current-match
-        ;; Login is rendered outside `layout` (no chrome); still mount toasts for API errors.
+        ;; Login / UI lab render outside `layout`; still mount toasts for API errors.
         [:<> [current-page @current-match] [toast/toast-container]])
       [layout/layout route-name
        (when @current-match
@@ -108,29 +114,27 @@
         (reset! react-root root-obj)
         (.render root-obj (r/as-element [app]))))))
 
+(defn- canonicalize-match [m]
+  (some-> m (update-in [:data :name] routes/canonical-route-name)))
+
+(defn- on-navigate! [m _]
+  (let [m (canonicalize-match m)]
+    (reset! current-match m)
+    (swap! state/app-state assoc :route-match m)
+    ;; Defer route effects so React finishes mounting before atom-driven re-renders.
+    (js/setTimeout
+     (fn []
+       (effects/maybe-redirect-unauthenticated!)
+       (effects/on-route! m))
+     0)))
+
 (defn init
   "Initialize the application (called from shadow-cljs init-fn)."
   []
   (when (compare-and-set! app-started? false true)
-    ;; Yield one tick so the shell can paint before auth + router work.
-    (js/setTimeout (fn [] (effects/ensure-auth!)) 0)
-    (rfe/start!
-     routes/router
-     (fn [m _]
-       (reset! current-match m)
-       (swap! state/app-state assoc :route-match m)
-        (let [route-name (when m (get-in m [:data :name]))
-             {:keys [authenticated auth-checked?]} @state/app-state]
-         ;; Redirect to login only for write routes.
-         (when (and auth-checked?
-                    (not authenticated)
-                    (contains? protected-routes route-name))
-           (rfe/push-state :dashboard))
-         (effects/on-route! m)))
-     {:use-fragment true
-      :default :dashboard})
-    (mount-root)))
+    (rfe/start! routes/router on-navigate! {:use-fragment true :default :dashboard})
+    (mount-root)
+    (js/setTimeout #(effects/ensure-auth!) 0)))
 
 (defn ^:dev/after-load reload []
   (mount-root))
-

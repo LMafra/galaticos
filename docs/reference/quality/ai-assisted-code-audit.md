@@ -1,12 +1,10 @@
 # AI-assisted code audit (anti-hallucination)
 
-**Summary:** This guide helps you review the **Galáticos** repository for typical large-language-model mistakes: nonexistent APIs, wrong `require` forms, patterns from other frameworks, and fictional dependencies. It focuses on **code, dependencies, and tooling**—not business-rule validation (see [business-rules-audit.md](../domain/business-rules-audit.md)). Use the three levels below (per-file prompts, dependency metadata, and automated checks) together for reliable results.
+**Summary:** How you review AI-generated code for typical LLM mistakes: nonexistent APIs, wrong `require` forms, Rails/Luminus patterns, fictional dependencies. Read this before merging AI-assisted PRs. Business rules: [business-rules-audit.md](../domain/business-rules-audit.md). UI rules: [ui-decisions.md](../ui/ui-decisions.md).
 
-## Purpose and scope
+## Scope
 
-**Hallucination**, in this document, means any snippet that *looks* plausible but does not match the project’s real ecosystem: a function or macro that does not exist in the declared library, a wrong namespace, invalid syntax, an invented directory layout, or incorrect Maven/Clojars coordinates.
-
-**Out of scope:** validating business rules against the domain (use [business-rules-audit.md](../domain/business-rules-audit.md) for that). This guide covers **code, dependencies, and tools**.
+**Hallucination** means any snippet that looks plausible but does not match this repo: missing functions, wrong namespaces, invented paths, or bad Maven coordinates. This guide covers code, dependencies, and tools — not domain rule correctness.
 
 ## Reference stack (Galáticos)
 

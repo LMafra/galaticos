@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { loginAsAdmin, getStoredToken, saveCoverage } = require('./_helpers');
+const { loginAsAdmin, getStoredToken, saveCoverage, pageHeading } = require('./_helpers');
 
 test('login -> check -> logout', { tag: '@auth' }, async ({ page, request }, testInfo) => {
   try {
@@ -45,7 +45,7 @@ test('invalid credentials show error message', { tag: '@auth' }, async ({ page }
     await page.getByPlaceholder('Digite sua senha').fill('wrong');
     await page.getByRole('button', { name: 'Entrar' }).click();
 
-    await expect(page.getByText(/Erro ao fazer login/i)).toBeVisible();
+    await expect(page.getByText(/Não foi possível entrar/i)).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Login - Galáticos' })).toBeVisible();
   } finally {
     await saveCoverage(page, testInfo);
@@ -55,8 +55,8 @@ test('invalid credentials show error message', { tag: '@auth' }, async ({ page }
 test('unauthenticated user can access dashboard in read-only mode', { tag: '@auth' }, async ({ page }, testInfo) => {
   try {
     await page.goto('/#/dashboard');
-    await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Entrar' })).toBeVisible();
+    await expect(pageHeading(page, 'Dashboard')).toBeVisible();
+    await expect(page.locator('header').getByRole('button', { name: 'Entrar' })).toBeVisible();
   } finally {
     await saveCoverage(page, testInfo);
   }

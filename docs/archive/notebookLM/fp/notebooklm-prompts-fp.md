@@ -1,4 +1,4 @@
-> **Archived** — historical NotebookLM material (may be Portuguese). For current docs see [docs/README.md](../../README.md) and [reference/](../../reference/).
+> **Archived** — historical NotebookLM material (may be Portuguese). For current docs see [docs/README.md](../../../README.md) and [reference/](../../../reference/).
 
 # NotebookLM Prompts – Programação Funcional (Galáticos)
 
@@ -11,9 +11,9 @@ Use estes prompts no notebook **Clojure / ClojureScript** do NotebookLM. Cole **
 **Fluxo após respostas:**
 
 1. Guardar em [notebooklm-response-fp.md](notebooklm-response-fp.md)
-2. Extrair tarefas para [fp-improvement-checklist.md](../../backlog/fp-improvement-checklist.md)
-3. Actualizar [fp-design-improvements.md](../../backlog/fp-design-improvements.md)
-4. Revisar [fp-improvement-checklist.md](../../backlog/fp-improvement-checklist.md) antes de implementar
+2. Extrair tarefas para [fp-improvement-checklist.md](../../../backlog/fp-improvement-checklist.md)
+3. Actualizar [fp-design-improvements.md](../../../backlog/fp-design-improvements.md)
+4. Revisar [fp-improvement-checklist.md](../../../backlog/fp-improvement-checklist.md) antes de implementar
 
 ---
 
@@ -376,9 +376,10 @@ Give a phased checklist I can turn into implementation plans.
 
 ## Referências do projecto
 
-- Respostas OO anteriores: [notebooklm-response.md](notebooklm-response.md)
-- Checklist OO (histórico): [improvement-checklist.md](../../backlog/improvement-checklist.md)
-- Regras de negócio: [business-rules.md](../domain/business-rules.md)
-- Schema MongoDB: [mongodb-schema.md](../domain/mongodb-schema.md)
-- Arquitectura analytics: [architecture.md](../analytics/architecture.md)
-- Auditoria IA (APIs válidas): [ai-assisted-code-audit.md](../../reference/quality/ai-assisted-code-audit.md)
+- UI/UX (prompts e respostas): [notebooklm-prompts-uiux.md](../uiux/notebooklm-prompts-uiux.md) · [notebooklm-response-uiux.md](../uiux/notebooklm-response-uiux.md)
+- Respostas OO anteriores: [notebooklm-response.md](../oo/notebooklm-response.md)
+- Checklist OO (histórico): [improvement-checklist.md](../oo/improvement-checklist.md)
+- Regras de negócio: [business-rules.md](../../../reference/domain/business-rules.md)
+- Schema MongoDB: [mongodb-schema.md](../../../reference/domain/mongodb-schema.md)
+- Arquitectura analytics: [architecture.md](../../../reference/analytics/architecture.md)
+- Auditoria IA (APIs válidas): [ai-assisted-code-audit.md](../../../reference/quality/ai-assisted-code-audit.md)

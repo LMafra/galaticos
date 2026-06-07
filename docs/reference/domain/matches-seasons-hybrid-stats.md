@@ -2,7 +2,7 @@
 
 **Last updated:** June 2026
 
-**Summary:** Implementation guide for match CRUD, active seasons, and the hybrid aggregated-stats model (`pre-match-stats`, `baseline-match-rollup`, fan-out). Use with [business-rules.md](business-rules.md) (`RN-MATCH-*`, `RN-STATS-*`) and the tests listed below.
+**Summary:** Implementation guide for match CRUD, active seasons, and the hybrid aggregated-stats model (`pre-match-stats`, `baseline-match-rollup`, fan-out). Read this when you touch match writes or stat rollups. Use with [concepts.md](../../concepts.md), [business-rules.md](business-rules.md) (`RN-MATCH-*`, `RN-STATS-*`), and the tests listed below.
 
 ## Contents
 

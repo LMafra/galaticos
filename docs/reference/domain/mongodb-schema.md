@@ -2,6 +2,8 @@
 
 ## Summary
 
+Read this when you change collections, indexes, or embedding. Vocabulary: [concepts.md](../../concepts.md).
+
 Galáticos stores sports roster data in six MongoDB collections: `championships`, `seasons`, `players`, `matches`, `teams`, and `admins`. Championships are the root entity; seasons reference championships and track enrolled players and matches; matches embed per-player statistics and reference a season. Players cache aggregated stats per season for fast reads, while match documents remain the source of truth for game-level stats. Denormalized fields (`championship-name`, `player-name`, etc.) speed up dashboards and listings and must be kept in sync via writes and background jobs. Indexes are defined in `scripts/mongodb/mongodb-indexes.js`.
 
 ## 1. Collection Structure

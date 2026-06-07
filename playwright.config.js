@@ -1,6 +1,8 @@
 // @ts-check
 const { defineConfig, devices } = require('@playwright/test');
 
+const storageState = 'e2e/.auth/user.json';
+
 /**
  * @see https://playwright.dev/docs/test-configuration
  */
@@ -23,10 +25,19 @@ module.exports = defineConfig({
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
-        storageState: 'e2e/.auth/user.json',
+        storageState,
       },
       dependencies: ['setup'],
-      testIgnore: [/auth\.spec\.js/],
+      testIgnore: [/auth\.spec\.js/, /ux-mobile-shell\.spec\.js/],
+    },
+    {
+      name: 'chromium-mobile',
+      use: {
+        ...devices['Pixel 5'],
+        storageState,
+      },
+      dependencies: ['setup'],
+      testMatch: /ux-mobile-shell\.spec\.js/,
     },
     {
       name: 'auth',
@@ -35,5 +46,3 @@ module.exports = defineConfig({
     },
   ],
 });
-
-

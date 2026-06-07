@@ -1,10 +1,10 @@
-> **Archived** — historical NotebookLM material (may be Portuguese). For current docs see [docs/README.md](../../README.md) and [reference/](../../reference/).
+> **Archived** — historical NotebookLM material (may be Portuguese). For current docs see [docs/README.md](../../../README.md) and [reference/](../../../reference/).
 
 # Improvement Checklist (from NotebookLM Responses)
 
-This checklist turns the recommendations from [notebooklm-response.md](../../reference/notebookLM/notebooklm-response.md) into concrete, trackable tasks. It follows the refactoring order suggested in NotebookLM response 3 (safety net → repository → service → thin handlers → DI → refinements). For project-specific context, see [design-and-db-improvements.md](design-and-db-improvements.md).
+This checklist turns the recommendations from [notebooklm-response.md](notebooklm-response.md) into concrete, trackable tasks. It follows the refactoring order suggested in NotebookLM response 3 (safety net → repository → service → thin handlers → DI → refinements). For project-specific context, see [design-and-db-improvements.md](design-and-db-improvements.md).
 
-**Nota:** Para abordagem **programação funcional**, usar [fp-improvement-checklist.md](fp-improvement-checklist.md), [fp-design-improvements.md](fp-design-improvements.md) e [functional-architecture.md](../../reference/architecture/functional-architecture.md). **Fases 2–5 abaixo estão superseded** pela trilha FP ([fp-improvement-checklist.md](../../backlog/fp-improvement-checklist.md)); o código OO actual (`service/*`, `repository/*`) será removido na fase de implementação FP, não expandido.
+**Nota:** Para abordagem **programação funcional**, usar [fp-improvement-checklist.md](../../../backlog/fp-improvement-checklist.md), [fp-design-improvements.md](../../../backlog/fp-design-improvements.md) e [functional-architecture.md](../../../reference/architecture/functional-architecture.md). **Fases 2–5 abaixo estão superseded** pela trilha FP ([fp-improvement-checklist.md](../../../backlog/fp-improvement-checklist.md)); o código OO actual (`service/*`, `repository/*`) será removido na fase de implementação FP, não expandido.
 
 ---
 
@@ -17,7 +17,7 @@ This checklist turns the recommendations from [notebooklm-response.md](../../ref
 
 ## Phase 2: Repository layer — **superseded by FP checklist**
 
-> Não implementar camada `repository/*`. Alvo: `db.protocol/*` + `db/*` + `logic/*`. Ver [fp-improvement-checklist.md](fp-improvement-checklist.md) Fase B–D.
+> Não implementar camada `repository/*`. Alvo: `db.protocol/*` + `db/*` + `logic/*`. Ver [fp-improvement-checklist.md](../../../backlog/fp-improvement-checklist.md) Fase B–D.
 
 - [ ] ~~Introduce repository namespaces~~ — **cancelado (FP)**
 - [ ] ~~Move all DB access behind repositories~~ — **cancelado (FP)**
@@ -27,7 +27,7 @@ This checklist turns the recommendations from [notebooklm-response.md](../../ref
 
 ## Phase 3: Service layer — **superseded by FP checklist**
 
-> Não expandir `service/*`. Alvo: `domain/*` (puro) + `logic/*` (orquestração). Ver [fp-improvement-checklist.md](../../backlog/fp-improvement-checklist.md) (Phase B).
+> Não expandir `service/*`. Alvo: `domain/*` (puro) + `logic/*` (orquestração). Ver [fp-improvement-checklist.md](../../../backlog/fp-improvement-checklist.md) (Phase B).
 
 - [ ] ~~Add service namespaces~~ — **cancelado (FP)**
 - [ ] ~~Move business rules into services~~ — **cancelado (FP)**
@@ -38,7 +38,7 @@ This checklist turns the recommendations from [notebooklm-response.md](../../ref
 
 ## Phase 4: Thin handlers — **superseded by FP checklist**
 
-> Handlers finos via `logic/*` + middleware unificado; ver [functional-architecture.md](../../reference/architecture/functional-architecture.md).
+> Handlers finos via `logic/*` + middleware unificado; ver [functional-architecture.md](../../../reference/architecture/functional-architecture.md).
 
 - [ ] ~~Restrict handlers to parse → service → HTTP~~ — **substituído:** parse → `logic/*` → HTTP
 - [ ] ~~Remove validation from handlers~~ — parcialmente feito; validação em `validation/entity`
@@ -48,7 +48,7 @@ This checklist turns the recommendations from [notebooklm-response.md](../../ref
 
 ## Phase 5: Dependency injection / testability — **superseded by FP checklist**
 
-> DI via `defprotocol` + `reify`; **proibido** `repo-call`/`ns-resolve`. Ver Prompt 5 em [notebooklm-response-fp.md](../../reference/notebookLM/notebooklm-response-fp.md).
+> DI via `defprotocol` + `reify`; **proibido** `repo-call`/`ns-resolve`. Ver Prompt 5 em [notebooklm-response-fp.md](../fp/notebooklm-response-fp.md).
 
 - [ ] ~~Inject repositories into services~~ — **cancelado (FP)**
 - [ ] ~~Unit tests for services with mocks~~ — **substituído:** `logic/*_test` com `reify`
@@ -66,10 +66,10 @@ This checklist turns the recommendations from [notebooklm-response.md](../../ref
 
 ## Phase 7: Data and schema
 
-- [ ] Document System of Record vs derived data in [../../reference/domain/mongodb-schema.md](../../reference/domain/mongodb-schema.md) (matches = source of truth; `players.aggregated-stats` = derived).
+- [ ] Document System of Record vs derived data in [../../reference/domain/mongodb-schema.md](../../../reference/domain/mongodb-schema.md) (matches = source of truth; `players.aggregated-stats` = derived).
 - [ ] Ensure no dual writes: derived stats updated only via CDC, background job, or single-write path + deterministic recompute.
 - [ ] Add "recalc" path: admin or script to recompute all aggregated stats from matches; use for audits and tests.
-- [ ] Document indexes and denormalization policy in [../../reference/domain/mongodb-schema.md](../../reference/domain/mongodb-schema.md).
+- [ ] Document indexes and denormalization policy in [../../reference/domain/mongodb-schema.md](../../../reference/domain/mongodb-schema.md).
 - [ ] (Optional) Implement CDC or background job to update aggregates from match events.
 
 ---

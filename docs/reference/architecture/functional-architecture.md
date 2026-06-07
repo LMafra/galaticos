@@ -1,6 +1,6 @@
 # Functional architecture (Clojure / ClojureScript)
 
-**Summary:** Reference guide for migrating Galáticos from **OO to functional programming**. Consolidated decisions live in [notebooklm-response-fp.md](../../archive/notebookLM/notebooklm-response-fp.md). Remaining implementation work is tracked in [fp-improvement-checklist.md](../../backlog/fp-improvement-checklist.md).
+**Summary:** Reference guide for Galáticos’ **functional** backend layout (`domain/*`, `logic/*`, `db/*`). Read this when you add handlers, pure rules, or persistence. Historical decisions: [notebooklm-response-fp.md](../../archive/notebookLM/fp/notebooklm-response-fp.md). Open migration tasks: [fp-improvement-checklist.md](../../backlog/fp-improvement-checklist.md).
 
 ---
 
@@ -118,24 +118,13 @@ flowchart TB
 
 ---
 
-## OO removal (code checklist — future phase)
+## Remaining OO cleanup
 
-When implementing plans 02–07:
-
-- [ ] Delete `src/galaticos/service/championships.clj`
-- [ ] Delete `src/galaticos/repository/championships.clj`
-- [ ] Delete `test/galaticos/service/championships_test.clj` (replace with domain/logic tests)
-- [ ] Delete `handlers/util.clj` if middleware covers everything
-- [ ] Verify: `rg 'galaticos\.(service|repository)' src/ test/` → zero results
-- [ ] `./bin/galaticos test` green + contract tests
-
-**Current repo state:** OO pilot in championships still present — target described in [fp-improvement-checklist.md](../../backlog/fp-improvement-checklist.md) (Phase B).
+Championships and matches still need full FP migration (delete `service/*` and `repository/*` pilots, add domain/logic tests). Track open items in [fp-improvement-checklist.md](../../backlog/fp-improvement-checklist.md) — do not duplicate that checklist here.
 
 ---
 
-## Execution (code phase — outside this doc)
-
-Suggested PR order:
+## Suggested PR order
 
 1. **Shared infra** — `db.protocol/*`, extend `wrap-errors`, handler wiring
 2. **Phase B** — championships FP; remove OO

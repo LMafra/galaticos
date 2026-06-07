@@ -4,6 +4,12 @@
 
 For typical operations on a **VPS with an external domain** (SSH, `.env` location, Nginx, Clojars timeouts during `docker build`, seed with `MONGO_URI`), see [vps-hosting.md](vps-hosting.md). For a **synthetic timeline** of a real incident (May 2026) in that environment, see [incident-deploy-vps-frontend-2026-05.md](incident-deploy-vps-frontend-2026-05.md).
 
+## Before you start
+
+- You need SSH access to the production host and the production `.env` (never commit secrets).
+- Confirm the MongoDB volume name is `mongodb-data-prod` before any `docker compose` command.
+- Take a backup (`db:backup`) before seed with `--reset` or any destructive data operation.
+
 ## Principles
 
 - Data persists in the named Docker volume **`mongodb-data-prod`** ([config/docker/docker-compose.prod.yml](../../../config/docker/docker-compose.prod.yml)).
@@ -124,6 +130,15 @@ Without `--drop`, `mongorestore` **merges** with existing data. With `--drop`, i
 | `GALATICOS_ENV=production` | Recommended when running tools against production; with this value, `--reset` in the seed requires `ALLOW_DESTRUCTIVE_SEED=1`. |
 | `ALLOW_DESTRUCTIVE_SEED=1` | Allows `seed_mongodb.py --reset` when `GALATICOS_ENV` is production. |
 | `MONGO_URI` / `DB_NAME` | MongoDB connection (aligned with the string used by the app, including `authSource=admin` if applicable). |
+
+## When things go wrong
+
+| Symptom | What to do |
+|---------|------------|
+| Aggregated player stats look wrong | Fix match documents, then `POST /api/aggregations/reconcile` — [reconciliation-runbook](../analytics/reconciliation-runbook.md) |
+| Database empty after deploy | You likely ran `docker compose down -v`; restore from backup — never use `-v` in production |
+| Seed fails with Mongo auth error | Set `MONGO_URI` with credentials and `authSource=admin` — see [vps-hosting.md](vps-hosting.md) |
+| App serves old frontend after deploy | Run `./bin/galaticos docker:prod deploy` (rebuild), hard-refresh browser; see [incident notes](incident-deploy-vps-frontend-2026-05.md) |
 
 ## Quick reference
 

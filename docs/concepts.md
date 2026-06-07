@@ -4,6 +4,8 @@ Canonical vocabulary for Galáticos documentation and code. Use these terms cons
 
 **Summary:** Galáticos manages a single squad’s players, championships, seasons, and matches. Match lineups hold per-player stats; `players.aggregated-stats` is a cache updated by analytics jobs. One admin authenticates with JWT.
 
+You will see these terms in [business rules](reference/domain/business-rules.md), [MongoDB schema](reference/domain/mongodb-schema.md), API handlers, and the Portuguese UI ([ui-decisions.md](reference/ui/ui-decisions.md)).
+
 ## Product
 
 | Term | Definition |

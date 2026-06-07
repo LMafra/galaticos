@@ -1,10 +1,6 @@
 # Analytics Architecture
 
-**Summary:** Describes the end-to-end analytics flow from match capture through API, dashboard, and exports. Match data is the source of truth; `players.aggregated-stats` is a reconcilable cache updated by in-process jobs after CRUD. Operational reconciliation and data contracts are documented in linked runbooks.
-
-## Scope
-
-This document describes Galáticos’ main analytics flow, from match data capture through consumption via API, dashboard, and exports.
+**Summary:** End-to-end analytics flow from match capture through API, dashboard, and exports. Read this when you change jobs, rollups, or analytics endpoints. Match data is source of truth; `players.aggregated-stats` is a reconcilable cache updated by in-process jobs after CRUD. Reconciliation: [reconciliation-runbook.md](reconciliation-runbook.md). Contracts: [data-contracts.md](data-contracts.md).
 
 ## End-to-end flow
 
