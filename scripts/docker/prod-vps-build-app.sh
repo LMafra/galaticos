@@ -127,9 +127,10 @@ cmd_host() {
   tag="$(resolve_app_image_tag)"
   log_info "Image tag: $tag"
   log_step "docker build --network host ${extra[*]:-} -f config/docker/Dockerfile.prod -t \"$tag\" ."
+  # BuildKit picks config/docker/Dockerfile.prod.dockerignore automatically (-f …).
+  # Do not use --ignorefile: not supported on older Docker on VPS.
   DOCKER_BUILDKIT=1 docker build --network host "${extra[@]}" \
     -f config/docker/Dockerfile.prod \
-    --ignorefile config/docker/.dockerignore \
     -t "$tag" \
     .
   log_success "Host-network build finished."
