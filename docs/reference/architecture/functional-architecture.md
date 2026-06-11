@@ -118,17 +118,17 @@ flowchart TB
 
 ---
 
-## Remaining OO cleanup
+## FP migration status
 
-Championships and matches still need full FP migration (delete `service/*` and `repository/*` pilots, add domain/logic tests). Track open items in [fp-improvement-checklist.md](../../backlog/fp-improvement-checklist.md) — do not duplicate that checklist here.
+Phases B–C (championships, matches) and global OO cleanup are **done**. Optional refactors: [fp-improvement-checklist.md](../../backlog/fp-improvement-checklist.md#optional-follow-ups).
 
 ---
 
-## Suggested PR order
+## Suggested PR order (historical)
 
 1. **Shared infra** — `db.protocol/*`, extend `wrap-errors`, handler wiring
 2. **Phase B** — championships FP; remove OO
-3. **Phases C–E** — matches, rollout, analytics (see checklist; much of analytics/CLJS already done)
+3. **Phases C–E** — matches, rollout, analytics (all shipped)
 
 Team rule: do not mix structural refactor with feature work in the same PR.
 

@@ -1,8 +1,10 @@
 # Functional Programming — Galáticos Improvements
 
+Summarized in [development-roadmap.md](development-roadmap.md).
+
 ## Summary
 
-Design map for Galáticos FP layout: `domain` + `logic` + protocols instead of service/repository layers. Read this when you plan a migration PR. **Open code work:** Phases B–C in [fp-improvement-checklist.md](fp-improvement-checklist.md). Analytics and CLJS reducer patterns are already shipped.
+Design map for Galáticos FP layout: `domain` + `logic` + protocols instead of service/repository layers. Read this when you plan a migration PR. **Migration closed** (Phases 0–E); optional follow-ups in [fp-improvement-checklist.md](fp-improvement-checklist.md).
 
 **Project-specific** translation of NotebookLM FP responses. Complements [design-and-db-improvements.md](../archive/notebookLM/oo/design-and-db-improvements.md) (OO/service layer oriented — **historical**).
 

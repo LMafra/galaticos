@@ -84,6 +84,7 @@ Local Lighthouse JSON: `docs/perf-output/` (gitignored).
 
 Executable pending work — not stable reference:
 
+- [backlog/development-roadmap.md](backlog/development-roadmap.md) — **master index** of all pending development work (start here)
 - [backlog/uiux/wave-0-audit.md](backlog/uiux/wave-0-audit.md)
 - [backlog/analytics/advanced-analytics-backlog.md](backlog/analytics/advanced-analytics-backlog.md)
 - [backlog/performance/action-backlog.md](backlog/performance/action-backlog.md)
