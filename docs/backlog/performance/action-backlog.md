@@ -1,5 +1,7 @@
 # Performance Action Backlog
 
+Summarized in [development-roadmap.md](../development-roadmap.md).
+
 ## Summary
 
 Open Lighthouse and bundle tasks. Most route work shipped in 2026 (code splitting, lazy pages, gzip, dashboard deferral, championship lazy leaderboards). **You still need:** match-form picker optimization and form skeleton. Re-measure with **release** + **mobile** after changes — [methodology.md](../../reference/performance/methodology.md).
