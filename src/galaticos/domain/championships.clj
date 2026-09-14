@@ -9,10 +9,24 @@
 (defn- ok [data]
   {:ok data})
 
+(defn- coerce-long
+  "Coerce titles/counts from Mongo (number, numeric string, or nil) to long.
+  Avoids ClassCastException when legacy docs store titles-count as string."
+  [v]
+  (cond
+    (nil? v) 0
+    (number? v) (long v)
+    (string? v) (let [trimmed (str/trim v)]
+                  (if (str/blank? trimmed)
+                    0
+                    (try (Long/parseLong trimmed)
+                         (catch NumberFormatException _ 0))))
+    :else 0))
+
 (defn sum-season-titles-across
   [season-rows]
   (long (reduce + 0
-                (map #(long (or (:titles-count %) 0))
+                (map #(coerce-long (:titles-count %))
                      season-rows))))
 
 (defn- season-year-sort-key
@@ -20,14 +34,19 @@
   (try (Long/parseLong (str/trim (str (:season season-row ""))))
        (catch Exception _ Long/MIN_VALUE)))
 
+(defn- updated-at-ms
+  [season-row]
+  (let [t (:updated-at season-row)]
+    (if (instance? Date t) (.getTime ^Date t) 0)))
+
 (defn pick-latest-season-for-display
+  "Pick season with highest year label, then latest updated-at.
+  Avoids `(- Long/MIN_VALUE)` overflow when season label is unparseable."
   [season-rows]
   (when (seq season-rows)
-    (first (sort-by (fn [s]
-                      (let [t (:updated-at s)]
-                        [(- (season-year-sort-key s))
-                         (- (if (instance? Date t) (.getTime ^Date t) 0))]))
-                    season-rows))))
+    (->> season-rows
+         (sort-by (juxt season-year-sort-key updated-at-ms))
+         last)))
 
 (defn merge-display-from-season-row
   [championship row]

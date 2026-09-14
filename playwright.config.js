@@ -28,7 +28,7 @@ module.exports = defineConfig({
         storageState,
       },
       dependencies: ['setup'],
-      testIgnore: [/auth\.spec\.js/, /ux-mobile-shell\.spec\.js/],
+      testIgnore: [/auth\.spec\.js/, /ux-auth-gates\.spec\.js/, /ux-mobile-shell\.spec\.js/],
     },
     {
       name: 'chromium-mobile',
@@ -42,7 +42,7 @@ module.exports = defineConfig({
     {
       name: 'auth',
       use: { ...devices['Desktop Chrome'] },
-      testMatch: /auth\.spec\.js/,
+      testMatch: /auth\.spec\.js|ux-auth-gates\.spec\.js/,
     },
   ],
 });
