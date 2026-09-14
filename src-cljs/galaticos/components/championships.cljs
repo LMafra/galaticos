@@ -271,7 +271,7 @@
                                        (fn [err] (state/toast-error! err)))
                    :variant :outline]
                   [common/button "Deletar" delete-championship!
-                   :variant :danger :disabled @deleting?]])
+                   :variant :danger :disabled @deleting?]])]
 
               (when (and authenticated (seq @seasons))
                 [:div {:class "mt-3 flex flex-wrap items-center gap-3"}
@@ -540,7 +540,7 @@
                                  (reset! error msg)
                                  (state/toast-error! msg))))))
                         :variant :primary
-                        :disabled (or @finalizing? (not can-submit?))])])])]]
+                        :disabled (or @finalizing? (not can-submit?))])])])]
 
               (when (and (:active @champ-merge-ui) authenticated)
                 ^{:key (:tick @champ-merge-ui)}
