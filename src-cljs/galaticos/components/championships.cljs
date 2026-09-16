@@ -9,15 +9,24 @@
             [galaticos.components.player-picker :as player-picker]
             [galaticos.effects :as effects]
             [galaticos.delete-undo :as delete-undo]
+            [galaticos.enrollment :as enrollment]
+            [galaticos.finalization :as finalization]
+            [galaticos.breadcrumbs :as breadcrumbs]
             [galaticos.ui-copy :as ui-copy]
             [clojure.string :as str]
-            ["lucide-react" :refer [Trophy AlertTriangle]]))
+            ["lucide-react" :refer [Trophy AlertTriangle Check Circle]]))
 
 (defn- api-get
   "Read API map field with keyword or string key (JSON interop)."
   [m k]
   (when m
     (or (get m k) (get m (name k)))))
+
+(defn- normalize-id [v]
+  (cond
+    (string? v) v
+    (map? v) (or (get v "$oid") (get v :$oid))
+    :else (when v (str v))))
 
 (defn- leaderboard-mini
   "Small ordered list for one metric (rows from /leaderboards API)."
@@ -27,11 +36,20 @@
    (if (seq rows)
      [:ol {:class "mt-2 list-decimal list-inside space-y-1 text-sm text-slate-700"}
       (for [row rows]
-        ^{:key (str (:player-id row) "-" (:name row))}
-        [:li
-         [:span (:name row)]
-         " — "
-         [:span {:class "font-medium tabular-nums"} (str (get row metric-key 0))]])]
+        (let [pid (normalize-id (or (:player-id row) (:_id row)))]
+          ^{:key (str pid "-" (:name row))}
+          [:li (cond-> {:class "rounded px-1 py-0.5"}
+                 pid (assoc :class "cursor-pointer rounded px-1 py-0.5 hover:bg-slate-100 dark:hover:bg-slate-800"
+                            :role "link"
+                            :tab-index 0
+                            :on-click #(rfe/push-state :player-detail {:id pid})
+                            :on-key-down (fn [e]
+                                           (when (#{"Enter" " "} (.-key e))
+                                             (.preventDefault e)
+                                             (rfe/push-state :player-detail {:id pid})))))
+           [:span (:name row)]
+           " — "
+           [:span {:class "font-medium tabular-nums"} (str (get row metric-key 0))]]))]
      [:p {:class "app-muted text-sm mt-2"} "Sem dados"])])
 
 (defn- champ-dup-candidates-seq [entry]
@@ -52,41 +70,311 @@
   (let [v (cond (vector? rows) rows (sequential? rows) (vec rows) :else [])]
     (into {} (keep (fn [r] (when-let [row (champ-normalize-dup-row r)] [(:player-id row) row])) v))))
 
-(defn championship-list []
-  (let [{:keys [authenticated championships championships-loading?]} @state/app-state]
-    [:div {:class "space-y-6"}
-     [:div {:class "flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"}
-      [:div
-       [:p {:class "text-sm text-slate-500"} "Gestão de competições"]
-       [:h2 {:class "text-2xl font-semibold text-slate-900 dark:text-slate-100"} "Campeonatos"]]
-      [:div {:class "flex flex-wrap gap-2"}
-       (when authenticated
-         [common/button "Novo Campeonato" #(rfe/push-state :championship-new) :variant :primary])
-       [common/button "Atualizar" #(effects/ensure-championships! {:force? true}) :variant :outline]]]
-     [common/card
-      (cond
-        championships-loading? [common/loading-spinner]
-        (seq championships)
+(defn- enrollment-progress-bar
+  "RVMF progress bar for n/max. Pure presentational."
+  [{:keys [ratio at-limit?]}]
+  (when (some? ratio)
+    (let [pct (int (* 100 ratio))
+          fill (if at-limit?
+                 "bg-amber-500 dark:bg-amber-400"
+                 "bg-brand-maroon")]
+      [:div {:class "h-2 w-24 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700"
+             :role "progressbar"
+             :aria-valuemin 0
+             :aria-valuemax 100
+             :aria-valuenow pct}
+       [:div {:class (common/merge-classes "h-full rounded-full transition-all" fill)
+              :style {:width (str pct "%")}}]])))
+
+(defn- enrolled-roster
+  "Desktop compact table + mobile card stack (≥44px targets)."
+  [{:keys [players authenticated? dup-report teams on-remove on-merge]}]
+  (let [by-id (enrollment/teams-index teams)
+        rows (mapv #(enrollment/enrolled-display-row % by-id) players)]
+    (if-not (seq rows)
+      [:p {:class "app-muted"} ui-copy/empty-championship-roster]
+      [:<>
+       [:div {:class "hidden lg:block"}
         [common/table
-         ["Nome" "Temporada" "Formato" "Status" "Títulos"]
-         (map (fn [ch]
-                [(api-get ch :name)
-                 (api-get ch :season)
-                 (api-get ch :format)
-                 (let [raw-status (or (api-get ch :status) "active")]
-                   [common/badge (common/status-label raw-status)
-                    :variant (common/status-variant raw-status)])
-                 (or (api-get ch :titles-count) 0)])
-              championships)
-         :numeric-columns #{4}
+         ["Atleta" "Posição" "Time Base" "Ação"]
+         (map (fn [{:keys [id label position team-base player]}]
+                (let [dup? (and authenticated?
+                                (seq (:candidates (get dup-report id))))]
+                  [[:div {:class "flex min-w-0 items-center gap-2"}
+                    (when dup?
+                      [:button {:type "button"
+                                :class "shrink-0 text-amber-500 hover:text-amber-600"
+                                :aria-label "Possível duplicado — mesclar"
+                                :on-click #(on-merge id)}
+                       [:> AlertTriangle {:size 18}]])
+                    [:span {:class "truncate font-medium text-slate-800 dark:text-slate-100"} label]]
+                   position
+                   team-base
+                   (when authenticated?
+                     [common/button "Remover" #(on-remove player)
+                      :variant :danger
+                      :class "min-h-[36px]"])]))
+              rows)
          :show-search? false
-         :on-row-click (fn [ch]
-                         (if-let [id (:_id ch)]
-                           (rfe/push-state :championship-detail {:id id})
-                           (state/set-error! "ID do campeonato ausente; não foi possível abrir detalhes.")))
-         :row-data championships
-         :sortable? true]
-        :else [:p {:class "app-muted"} "Nenhum campeonato encontrado"])]]))
+         :dense? true
+         :sortable? true
+         :row-data rows
+         :on-row-click (fn [{:keys [id]}]
+                         (when-let [pid (normalize-id id)]
+                           (rfe/push-state :player-detail {:id pid})))]]
+       [:div {:class "space-y-2 lg:hidden"}
+        (doall
+         (for [{:keys [id label position team-base player]} rows]
+           (let [dup? (and authenticated?
+                           (seq (:candidates (get dup-report id))))
+                 go-player! #(when-let [pid (normalize-id id)]
+                               (rfe/push-state :player-detail {:id pid}))]
+             ^{:key id}
+             [:div {:class "cursor-pointer rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900/80"
+                    :role "link"
+                    :tab-index 0
+                    :on-click go-player!
+                    :on-key-down (fn [e]
+                                   (when (#{"Enter" " "} (.-key e))
+                                     (.preventDefault e)
+                                     (go-player!)))}
+              [:div {:class "flex items-start gap-2"}
+               (when dup?
+                 [:button {:type "button"
+                           :class "mt-1 flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center text-amber-500 hover:text-amber-600"
+                           :aria-label "Possível duplicado — mesclar"
+                           :on-click (fn [e]
+                                       (.stopPropagation e)
+                                       (on-merge id))}
+                  [:> AlertTriangle {:size 20}]])
+               [:div {:class "min-w-0 flex-1"}
+                [:p {:class "text-sm font-semibold text-slate-900 dark:text-slate-100"} label]
+                [:p {:class "mt-1 text-xs text-slate-500"} (str position " · " team-base)]]]
+              (when authenticated?
+                [:div {:class "mt-3"
+                       :on-click #(.stopPropagation %)}
+                 [common/button "Remover" #(on-remove player)
+                  :variant :danger
+                  :class "w-full min-h-[44px]"]])])))]])))
+
+(defn- enroll-sequential!
+  "POST enroll one-by-one via existing API. Calls on-done with result rows."
+  [championship-id player-ids on-done]
+  (let [results (atom [])]
+    (letfn [(step [remaining]
+              (if (empty? remaining)
+                (on-done @results)
+                (let [pid (first remaining)]
+                  (api/enroll-player-in-championship
+                   championship-id pid
+                   (fn [_]
+                     (swap! results conj {:id pid :ok? true})
+                     (step (rest remaining)))
+                   (fn [err]
+                     (swap! results conj {:id pid :ok? false :error err})
+                     (step (rest remaining)))))))]
+      (step (vec player-ids)))))
+
+(defn- batch-enroll-modal
+  "Modal: local search + checkboxes over non-enrolled; submit via existing enroll API."
+  [_props]
+  (let [query (r/atom "")
+        selected (r/atom #{})
+        submitting? (r/atom false)
+        local-error (r/atom nil)]
+    (fn [{:keys [open? on-close players exclude-ids enrolled-count max-players
+                 championship-id on-enrolled-reload]}]
+      (when open?
+        (let [remaining (enrollment/remaining-slots enrolled-count max-players)
+              eligible (player-picker/sorted-eligible-for-picker
+                        players exclude-ids @query)
+              available-count (count (player-picker/eligible-players
+                                     players exclude-ids))
+              selected-count (count @selected)
+              confirm? (and (enrollment/can-confirm-batch? @selected)
+                            (not @submitting?))
+              close! (fn []
+                       (when-not @submitting?
+                         (reset! query "")
+                         (reset! selected #{})
+                         (reset! local-error nil)
+                         (on-close)))
+              confirm! (fn []
+                         (when confirm?
+                           (reset! submitting? true)
+                           (reset! local-error nil)
+                           (let [ids (vec @selected)
+                                 name-by-id (into {}
+                                                  (keep (fn [p]
+                                                          (when-let [pid (player-picker/player-id p)]
+                                                            [pid (or (:name p) (get p "name") pid)]))
+                                                        players))
+                                 after-enroll!
+                                 (fn [rows]
+                                   (let [{:keys [succeeded failed]}
+                                         (enrollment/partition-batch-results rows)
+                                         ok-n (count succeeded)
+                                         finish!
+                                         (fn []
+                                           (reset! submitting? false)
+                                           (if (empty? failed)
+                                             (do
+                                               (state/toast-success! (ui-copy/batch-enroll-success ok-n))
+                                               (close!))
+                                             (let [labels (mapv #(or (get name-by-id %) %) failed)
+                                                   msg (ui-copy/batch-enroll-partial-failure ok-n labels)]
+                                               (reset! local-error msg)
+                                               (state/toast-error! msg)
+                                               (swap! selected
+                                                      (fn [s]
+                                                        (into #{} (remove (set succeeded) s)))))))]
+                                     (api/get-championship-players
+                                      championship-id
+                                      (fn [player-rows]
+                                        (on-enrolled-reload player-rows)
+                                        (finish!))
+                                      (fn [err]
+                                        (state/toast-error! (str "Erro ao carregar inscritos: " err))
+                                        (finish!)))))]
+                             (enroll-sequential! championship-id ids after-enroll!))))]
+          [common/modal
+           {:title ui-copy/batch-enroll-title
+            :on-close close!
+            :content
+            [:div {:class "space-y-3"}
+             [:p {:class "text-sm font-medium tabular-nums text-slate-700 dark:text-slate-200"
+                  :aria-live "polite"}
+              (enrollment/batch-selection-label selected-count available-count)]
+             (when (and remaining (zero? remaining))
+               [:p {:class "text-sm text-amber-700 dark:text-amber-300"}
+                (ui-copy/enrollment-limit-reached (long (enrollment/normalize-max-players max-players)))])
+             (when @local-error
+               [common/alert @local-error :variant :warning])
+             [:input {:type "search"
+                      :class "app-input w-full min-h-[44px]"
+                      :placeholder ui-copy/batch-enroll-search-placeholder
+                      :value @query
+                      :disabled @submitting?
+                      :on-change #(reset! query (.. % -target -value))}]
+             [:div {:class "max-h-72 space-y-1 overflow-y-auto rounded-md border border-slate-200 p-2 dark:border-slate-700"}
+              (cond
+                (zero? available-count)
+                [:p {:class "app-muted p-2"} ui-copy/batch-enroll-empty]
+                (empty? eligible)
+                [:p {:class "app-muted p-2"} ui-copy/batch-enroll-none-match]
+                :else
+                (doall
+                 (for [p eligible]
+                   (let [pid (player-picker/player-id p)
+                         checked? (contains? @selected pid)
+                         allow? (enrollment/batch-select-allowed? @selected pid remaining)
+                         disabled? (or @submitting? (and (not checked?) (not allow?)))]
+                     ^{:key pid}
+                     [:label {:class (common/merge-classes
+                                      "flex min-h-[44px] cursor-pointer items-center gap-3 rounded-md px-2 py-2"
+                                      (when disabled? "opacity-50")
+                                      (when checked? "bg-brand-maroon/5"))}
+                      [:input {:type "checkbox"
+                               :class "h-5 w-5 shrink-0"
+                               :checked checked?
+                               :disabled disabled?
+                               :on-change #(swap! selected
+                                                  enrollment/toggle-batch-id
+                                                  pid remaining)}]
+                      [:span {:class "min-w-0 flex-1 text-sm text-slate-800 dark:text-slate-100"}
+                       (enrollment/athlete-label p)]]))))]]
+            :actions
+            [:<>
+             [common/button "Cancelar" close!
+              :variant :outline
+              :modal-cancel? true
+              :disabled @submitting?]
+             [common/button ui-copy/batch-enroll-confirm confirm!
+              :variant :primary
+              :loading? @submitting?
+              :disabled (not confirm?)]]}])))))
+
+(defn- finalization-checklist-ui
+  "Forcing-function checklist — green/amber rows; no dismiss."
+  [items]
+  [:div {:class "space-y-2" :aria-label ui-copy/finalize-checklist-title}
+   [:div {:class "flex items-center justify-between gap-2"}
+    [:h5 {:class "text-xs font-semibold uppercase tracking-wide text-slate-500"}
+     ui-copy/finalize-checklist-title]
+    [:span {:class "text-xs tabular-nums text-slate-500"}
+     (finalization/checklist-summary-label items)]]
+   [:ul {:class "space-y-1.5"}
+    (doall
+     (for [{:keys [id label ok?]} items]
+       ^{:key (name id)}
+       [:li {:class (common/merge-classes
+                     "flex min-h-[44px] items-center gap-2 rounded-md border px-3 py-2 text-sm"
+                     (if ok?
+                       "border-emerald-200 bg-emerald-50/80 text-emerald-800 dark:border-emerald-800/40 dark:bg-emerald-950/30 dark:text-emerald-200"
+                       "border-amber-200 bg-amber-50/80 text-amber-800 dark:border-amber-800/40 dark:bg-amber-950/30 dark:text-amber-200"))}
+        (if ok?
+          [:> Check {:size 18 :className "shrink-0"}]
+          [:> Circle {:size 18 :className "shrink-0 opacity-60"}])
+        [:span label]]))]])
+
+(defn championship-list []
+  (let [search (r/atom "")]
+    (fn []
+      (let [{:keys [authenticated championships championships-loading?]} @state/app-state
+            q (str/lower-case (str/trim @search))
+            filtered (if (str/blank? q)
+                       championships
+                       (filterv (fn [ch]
+                                  (str/includes?
+                                   (str/lower-case (str (or (api-get ch :name) "")))
+                                   q))
+                                championships))]
+        [:div {:class "space-y-6"}
+         [:div {:class "flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"}
+          [:div
+           [:p {:class "text-sm text-slate-500"} "Gestão de competições"]
+           [:h2 {:class "text-2xl font-semibold text-slate-900 dark:text-slate-100"} "Campeonatos"]]
+          [:div {:class "flex flex-wrap gap-2"}
+           (when authenticated
+             [common/button "Novo Campeonato" #(rfe/push-state :championship-new) :variant :primary])
+           [common/button "Atualizar" #(effects/ensure-championships! {:force? true}) :variant :outline]]]
+         [common/card
+          [common/list-toolbar
+           {:search @search
+            :search-id "championships-search"
+            :search-placeholder "Buscar campeonato..."
+            :on-search-change #(reset! search %)
+            :result-count (when-not championships-loading? (count filtered))
+            :on-clear #(reset! search "")
+            :clear-disabled? (str/blank? @search)}]
+          (cond
+            championships-loading?
+            [common/skeleton-table ["Nome" "Temporada" "Formato" "Status" "Títulos"] :rows 6 :class "mt-3"]
+            (seq filtered)
+            [common/table
+             ["Nome" "Temporada" "Formato" "Status" "Títulos"]
+             (map (fn [ch]
+                    [(api-get ch :name)
+                     (api-get ch :season)
+                     (api-get ch :format)
+                     (let [raw-status (or (api-get ch :status) "active")]
+                       [common/badge (common/status-label raw-status)
+                        :variant (common/status-variant raw-status)])
+                     (or (api-get ch :titles-count) 0)])
+                  filtered)
+             :numeric-columns #{4}
+             :show-search? false
+             :on-row-click (fn [ch]
+                             (if-let [id (:_id ch)]
+                               (rfe/push-state :championship-detail {:id id})
+                               (state/set-error! "ID do campeonato ausente; não foi possível abrir detalhes.")))
+             :row-data filtered
+             :sortable? true
+             :class "mt-3"]
+            :else [:p {:class "app-muted mt-3"}
+                   (if (str/blank? @search)
+                     "Nenhum campeonato encontrado"
+                     "Nenhum campeonato corresponde à busca.")])]]))))
 
 (defn championship-detail [params]
   (let [championship (r/atom nil)
@@ -97,6 +385,7 @@
         players-catalog-ready? (r/atom false)
         selected-winners (r/atom #{})
         titles-award-count (r/atom "1")
+        finalize-reason (r/atom "")
         new-season-label (r/atom "")
         finalizing? (r/atom false)
         deleting? (r/atom false)
@@ -106,6 +395,7 @@
         leaderboards (r/atom nil)
         champ-dup-report (r/atom {})
         champ-merge-ui (r/atom {:active false :initial-ref nil :tick 0})
+        batch-enroll-open? (r/atom false)
         id (:id params)
         refresh-champ-dups!
         (fn []
@@ -135,8 +425,7 @@
                                                    (vec (remove (fn [p] (= (str (:_id p)) pid)) ps))))
                                :on-rollback #(swap! enrolled-players
                                                   (fn [ps]
-                                                    (vec (sort-by (fn [p] (str/lower-case (str (:name p))))
-                                                                  (conj ps player)))))
+                                                    (enrollment/sort-enrolled-players (conj ps player))))
                                :on-commit (fn [on-success on-error]
                                             (api/unenroll-player-from-championship
                                              id pid
@@ -219,7 +508,9 @@
                                      (reset! error msg)
                                      (state/toast-error! msg)))))]
     (r/create-class
-     {:component-did-mount (fn [] (load!))
+     {:component-did-mount (fn []
+                             (effects/ensure-teams!)
+                             (load!))
       :reagent-render
       (fn []
         (let [ch @championship
@@ -230,8 +521,13 @@
                                 (filter #(contains? winner-ids (str (:_id %))))
                                 (map :name)
                                 (sort))
-              enrolled-sorted (sort-by #(str/lower-case (str (:name %))) @enrolled-players)
+              enrolled-sorted (enrollment/sort-enrolled-players @enrolled-players)
               enrolled-exclude-ids (into #{} (keep player-picker/player-id @enrolled-players))
+              teams (:teams @state/app-state)
+              capacity (enrollment/enrollment-capacity
+                        (count @enrolled-players)
+                        (api-get ch :max-players))
+              at-limit? (:at-limit? capacity)
               awarded-count (or (api-get ch :titles-award-count) 0)
               active-season-id (api-get ch :active-season-id)
               season-options (map (fn [s]
@@ -247,11 +543,15 @@
                 [common/button "Tentar novamente" load! :variant :outline]])
 
              @loading?
-             [:div {:class "min-h-[20rem] flex items-center justify-center"}
-              [common/loading-spinner]]
+             [:div {:class "min-h-[20rem] space-y-4"}
+              [common/skeleton-line :class "h-8 w-64"]
+              [common/skeleton-table ["Col" "Col" "Col"] :rows 4]]
 
              @championship
              [:<>
+              [common/breadcrumb
+               (breadcrumbs/build-breadcrumbs :championship-detail {:id id}
+                                              :entity-label (api-get ch :name))]
               [:div {:class "flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"}
                [:div {:class "flex items-center gap-3"}
                 [:div {:class "rounded-xl bg-brand-maroon/10 p-3 text-brand-maroon"}
@@ -298,8 +598,11 @@
                  [:p [:span {:class "font-medium text-slate-800"} "Títulos (temporada ativa): "] (or (api-get ch :titles-count) 0)]
                  [:p [:span {:class "font-medium text-slate-800"} "Total de títulos (todas as temporadas): "]
                   (or (api-get ch :total-titles-across-seasons) 0)]
-                 (when-let [max-players (api-get ch :max-players)]
-                   [:p [:span {:class "font-medium text-slate-800"} "Limite de jogadores: "] max-players])
+                 (when (some? (:max capacity))
+                   [:p [:span {:class "font-medium text-slate-800"} "Limite de jogadores: "]
+                    [:span {:class "tabular-nums"} (:label capacity)]
+                    (when at-limit?
+                      [:span {:class "ml-2 text-amber-600 dark:text-amber-400"} "(limite atingido)"])])
                  (when-let [location (api-get ch :location)]
                    [:p [:span {:class "font-medium text-slate-800"} "Local: "] location])
                  (when-let [notes (api-get ch :notes)]
@@ -330,52 +633,92 @@
                                  (state/toast-error! msg)))))))
                       :variant :outline]])
                   (when (seq @seasons)
-                    [:div {:class "mt-2"}
-                     [common/table
-                      ["Temporada" "Detalhes" "Status" "Inscritos" "Partidas" "Títulos" "Ações"]
-                      (map (fn [s]
-                             (let [sid (str (:_id s))
-                                   s-status (or (:status s) "inactive")
-                                   enrolled-count (count (or (:enrolled-player-ids s) []))
-                                   match-n (count (or (:match-ids s) []))
-                                   titles (or (:titles-count s) 0)
-                                   is-active? (= sid (str active-season-id))
-                                   detail-parts (filter seq
-                                                     [(or (:format s) "")
-                                                      (when (:start-date s) (str "Início: " (:start-date s)))
-                                                      (when (:end-date s) (str "Fim: " (:end-date s)))])]
-                               [(:season s)
-                                [:span {:class "text-xs text-slate-600"} (if (seq detail-parts)
-                                                                           (str/join " · " detail-parts)
-                                                                           "—")]
-                                [common/badge (common/status-label s-status)
-                                 :variant (common/status-variant s-status)]
-                                enrolled-count
-                                match-n
-                                titles
-                                [:div {:class "flex flex-wrap gap-1 justify-end"}
-                                 [common/button
-                                  "Ver"
-                                  #(rfe/push-state :championship-season-detail {:id id :season-id sid})
-                                  :variant :outline]
-                                 (when authenticated
-                                   (if is-active?
-                                     [common/badge "Ativa" :variant :success]
-                                     [common/button
-                                      "Ativar"
-                                      (fn []
-                                        (api/activate-season
-                                         sid
-                                         (fn [_] (load!))
-                                         (fn [err]
-                                           (let [msg (str "Erro ao ativar temporada: " err)]
-                                             (reset! error msg)
-                                             (state/toast-error! msg)))))
-                                      :variant :outline]))]]))
-                           (sort-by (fn [s] (str (:season s))) @seasons))
-                      :dense? true
-                      :show-search? false
-                      :sortable? true]])]]]
+                    (let [sorted-seasons (sort-by (fn [s] (str (:season s))) @seasons)
+                          season-actions
+                          (fn [s]
+                            (let [sid (str (:_id s))
+                                  is-active? (= sid (str active-season-id))]
+                              [:div {:class "flex flex-wrap gap-2"}
+                               [common/button
+                                "Ver"
+                                #(rfe/push-state :championship-season-detail {:id id :season-id sid})
+                                :variant :outline
+                                :class "min-h-[44px]"]
+                               (when authenticated
+                                 (if is-active?
+                                   [common/badge "Ativa" :variant :success]
+                                   [common/button
+                                    "Ativar"
+                                    (fn []
+                                      (api/activate-season
+                                       sid
+                                       (fn [_] (load!))
+                                       (fn [err]
+                                         (let [msg (str "Erro ao ativar temporada: " err)]
+                                           (reset! error msg)
+                                           (state/toast-error! msg)))))
+                                    :variant :outline
+                                    :class "min-h-[44px]"]))]))]
+                      [:div {:class "mt-2"}
+                       [:div {:class "space-y-2 lg:hidden"}
+                        (doall
+                         (for [s sorted-seasons]
+                           (let [sid (str (:_id s))
+                                 s-status (or (:status s) "inactive")
+                                 enrolled-count (count (or (:enrolled-player-ids s) []))
+                                 match-n (count (or (:match-ids s) []))
+                                 titles (or (:titles-count s) 0)
+                                 go-season! #(rfe/push-state :championship-season-detail
+                                                             {:id id :season-id sid})]
+                             ^{:key sid}
+                             [:div {:class "cursor-pointer rounded-lg border border-slate-200 p-3 dark:border-slate-700"
+                                    :role "link"
+                                    :tab-index 0
+                                    :on-click go-season!
+                                    :on-key-down (fn [e]
+                                                   (when (#{"Enter" " "} (.-key e))
+                                                     (.preventDefault e)
+                                                     (go-season!)))}
+                              [:div {:class "flex items-start justify-between gap-2"}
+                               [:p {:class "font-semibold text-slate-900 dark:text-slate-100"} (:season s)]
+                               [common/badge (common/status-label s-status)
+                                :variant (common/status-variant s-status)]]
+                              [:p {:class "mt-2 text-xs tabular-nums text-slate-500"}
+                               (str enrolled-count " inscritos · " match-n " partidas · " titles " títulos")]
+                              [:div {:class "mt-3"
+                                     :on-click #(.stopPropagation %)}
+                               (season-actions s)]])))]
+                       [:div {:class "hidden lg:block"}
+                        [common/table
+                         ["Temporada" "Detalhes" "Status" "Inscritos" "Partidas" "Títulos" "Ações"]
+                         (map (fn [s]
+                                (let [s-status (or (:status s) "inactive")
+                                      enrolled-count (count (or (:enrolled-player-ids s) []))
+                                      match-n (count (or (:match-ids s) []))
+                                      titles (or (:titles-count s) 0)
+                                      detail-parts (filter seq
+                                                        [(or (:format s) "")
+                                                         (when (:start-date s) (str "Início: " (:start-date s)))
+                                                         (when (:end-date s) (str "Fim: " (:end-date s)))])]
+                                  [(:season s)
+                                   [:span {:class "text-xs text-slate-600"} (if (seq detail-parts)
+                                                                              (str/join " · " detail-parts)
+                                                                              "—")]
+                                   [common/badge (common/status-label s-status)
+                                    :variant (common/status-variant s-status)]
+                                   enrolled-count
+                                   match-n
+                                   titles
+                                   (season-actions s)]))
+                              sorted-seasons)
+                         :dense? true
+                         :show-search? false
+                         :sortable? true
+                         :row-data sorted-seasons
+                         :on-row-click (fn [s]
+                                         (when-let [sid (normalize-id (:_id s))]
+                                           (rfe/push-state :championship-season-detail
+                                                           {:id id :season-id sid})))]]]))]]]
                [common/card
                 [:h3 {:class "app-section-title"} "Partidas"]
                 (if (seq @matches)
@@ -388,7 +731,11 @@
                            (common/format-match-result (:result match))])
                         @matches)
                    :sortable? true
-                   :dense? true]
+                   :dense? true
+                   :row-data @matches
+                   :on-row-click (fn [match]
+                                   (when-let [mid (normalize-id (:_id match))]
+                                     (rfe/push-state :match-detail {:id mid})))]
                   [:p {:class "app-muted"} "Nenhuma partida encontrada"])]]
 
               (let [lb (or @leaderboards {})]
@@ -404,82 +751,115 @@
 
               [common/card
                [:div {:class "flex flex-wrap items-center justify-between gap-2"}
-                [:h3 {:class "app-section-title"} "Inscrições"]
-                (when authenticated
-                  [common/button "Mesclar jogadores"
-                   #(open-champ-merge! {:initial-ref nil})
-                   :variant :outline])]
+                [:h3 {:class "app-section-title"} "Inscrições no Campeonato"]
+                [:div {:class "flex flex-wrap items-center gap-2"}
+                 [:span {:class (common/merge-classes
+                                 "inline-flex items-center rounded-md border px-2.5 py-1 text-sm font-semibold tabular-nums"
+                                 (if at-limit?
+                                   "border-amber-300 bg-amber-500/10 text-amber-800 dark:border-amber-500/30 dark:text-amber-300"
+                                   "border-brand-maroon/20 bg-brand-maroon/10 text-brand-maroon"))
+                         :aria-label (ui-copy/enrollment-counter-label (:label capacity))}
+                  (:label capacity) " inscritos"]
+                 [enrollment-progress-bar capacity]
+                 (when authenticated
+                   [:<>
+                    [common/button ui-copy/batch-enroll-button
+                     #(reset! batch-enroll-open? true)
+                     :variant :secondary
+                     :disabled at-limit?
+                     :aria-label ui-copy/batch-enroll-button]
+                    [common/button "Mesclar jogadores"
+                     #(open-champ-merge! {:initial-ref nil})
+                     :variant :outline]])]]
                [:div {:class "mt-3 space-y-3"}
+                (when (and authenticated at-limit? (:max capacity))
+                  [common/persistent-banner
+                   (ui-copy/enrollment-limit-reached (long (:max capacity)))
+                   :how-to-fix ui-copy/enrollment-limit-how-to-fix
+                   :variant :warning])
+                (when (and authenticated
+                           (seq @seasons)
+                           (str/blank? (str (or active-season-id ""))))
+                  [common/persistent-banner
+                   ui-copy/no-active-season-banner
+                   :how-to-fix ui-copy/no-active-season-how-to-fix
+                   :variant :warning])
                 (when authenticated
                   [player-picker/player-search-add-panel
-                   {:label "Adicionar jogador"
-                    :players @all-players
-                    :players-loading? (not @players-catalog-ready?)
-                    :exclude-ids enrolled-exclude-ids
-                    :action-label "Inscrever"
-                    :on-pick-player
-                    (fn [player]
-                      (when-let [pid (player-picker/player-id player)]
-                        (api/enroll-player-in-championship
-                         id pid
-                         (fn [_result]
-                           (api/get-championship-players id
-                                                         on-enrolled-loaded
-                                                         (fn [e]
-                                                           (let [msg (str "Erro ao carregar inscritos: " e)]
-                                                             (reset! error msg)
-                                                             (state/toast-error! msg)))))
-                         (fn [err]
-                           (let [msg (str "Erro ao inscrever jogador: " err)]
-                             (reset! error msg)
-                             (state/toast-error! msg))))))
-                    :on-quick-create
-                    (fn [name ok err]
-                      (api/create-player
-                       {:name name :position player-picker/quick-create-position}
-                       (fn [created]
-                         (if-let [pid (player-picker/player-id created)]
-                           (do
-                             (swap! all-players conj created)
-                             (api/enroll-player-in-championship
-                              id pid
-                              (fn [_result]
-                                (api/get-championship-players
-                                 id
-                                 (fn [rows]
-                                   (on-enrolled-loaded rows)
-                                   (ok created))
+                   (cond-> {:label "Adicionar jogador"
+                            :players @all-players
+                            :players-loading? (not @players-catalog-ready?)
+                            :exclude-ids enrolled-exclude-ids
+                            :action-label "Inscrever"
+                            :search-placeholder "Buscar jogador por nome..."
+                            :disabled? at-limit?
+                            :on-pick-player
+                            (fn [player]
+                              (when (and (enrollment/can-enroll?
+                                          (count @enrolled-players)
+                                          (api-get ch :max-players))
+                                         (player-picker/player-id player))
+                                (let [pid (player-picker/player-id player)]
+                                  (api/enroll-player-in-championship
+                                   id pid
+                                   (fn [_result]
+                                     (api/get-championship-players id
+                                                                   on-enrolled-loaded
+                                                                   (fn [e]
+                                                                     (let [msg (str "Erro ao carregar inscritos: " e)]
+                                                                       (reset! error msg)
+                                                                       (state/toast-error! msg)))))
+                                   (fn [err]
+                                     (let [msg (str "Erro ao inscrever jogador: " err)]
+                                       (reset! error msg)
+                                       (state/toast-error! msg)))))))
+                            :on-quick-create
+                            (fn [name ok err]
+                              (if-not (enrollment/can-enroll?
+                                       (count @enrolled-players)
+                                       (api-get ch :max-players))
+                                (err (ui-copy/enrollment-limit-reached
+                                      (or (:max capacity) (api-get ch :max-players))))
+                                (api/create-player
+                                 {:name name :position player-picker/quick-create-position}
+                                 (fn [created]
+                                   (if-let [pid (player-picker/player-id created)]
+                                     (do
+                                       (swap! all-players conj created)
+                                       (api/enroll-player-in-championship
+                                        id pid
+                                        (fn [_result]
+                                          (api/get-championship-players
+                                           id
+                                           (fn [rows]
+                                             (on-enrolled-loaded rows)
+                                             (ok created))
+                                           (fn [e]
+                                             (let [msg (str "Erro ao carregar inscritos: " e)]
+                                               (reset! error msg)
+                                               (state/toast-error! msg)
+                                               (err msg)))))
+                                        (fn [e]
+                                          (let [msg (str "Erro ao inscrever novo jogador: " e)]
+                                            (reset! error msg)
+                                            (state/toast-error! msg)
+                                            (err msg)))))
+                                     (err "Jogador criado sem ID retornado.")))
                                  (fn [e]
-                                   (let [msg (str "Erro ao carregar inscritos: " e)]
-                                     (reset! error msg)
-                                     (state/toast-error! msg)
-                                     (err msg)))))
-                              (fn [e]
-                                (let [msg (str "Erro ao inscrever novo jogador: " e)]
-                                  (reset! error msg)
-                                  (state/toast-error! msg)
-                                  (err msg)))))
-                           (err "Jogador criado sem ID retornado.")))
-                       (fn [e]
-                         (err (str "Erro ao criar jogador: " e)))))}])
-                (if (seq @enrolled-players)
-                  [:div {:class "space-y-2"}
-                   (for [player enrolled-sorted]
-                     ^{:key (:_id player)}
-                     [:div {:class "flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900/80"}
-                      [:div {:class "flex min-w-0 flex-1 items-center gap-2"}
-                       (when (and authenticated
-                                    (seq (:candidates (get @champ-dup-report (str (:_id player))))))
-                         [:button {:type "button"
-                                   :class "shrink-0 text-amber-500 hover:text-amber-600"
-                                   :aria-label "Possível duplicado — mesclar"
-                                   :on-click #(open-champ-merge! {:initial-ref (str (:_id player))})}
-                          [:> AlertTriangle {:size 18}]])
-                       [:span {:class "truncate text-slate-700"} (:name player)]]
-                      (when authenticated
-                        [common/button "Remover" #(remove-enrolled! player)
-                         :variant :danger])])]
-                  [:p {:class "app-muted"} "Nenhum jogador inscrito"])]
+                                   (err (str "Erro ao criar jogador: " e))))))}
+                     at-limit?
+                     (assoc :search-placeholder
+                            (ui-copy/enrollment-limit-placeholder
+                             (:enrolled capacity)
+                             (long (:max capacity)))
+                            :disabled-hint ui-copy/enrollment-limit-how-to-fix))])
+                [enrolled-roster
+                 {:players enrolled-sorted
+                  :authenticated? authenticated
+                  :dup-report @champ-dup-report
+                  :teams teams
+                  :on-remove remove-enrolled!
+                  :on-merge #(open-champ-merge! {:initial-ref %})}]
                (when (and (seq winner-ids) (not authenticated))
                  [:div {:class "mt-4 border-t border-slate-200 pt-4 dark:border-slate-700"}
                   [:h4 {:class "text-sm font-semibold text-slate-800"} "Finalização do campeonato"]
@@ -499,28 +879,45 @@
                           (when (pos? awarded-count) (str " • Títulos concedidos: " awarded-count)))]
 
                     :else
-                    [:div {:class "mt-3 space-y-2"}
-                     [common/input-field "Títulos a conceder" @titles-award-count #(reset! titles-award-count %)
-                      :type "number" :placeholder "1"]
-                     (if (seq @enrolled-players)
-                       [:div {:class "space-y-2"}
-                        (for [player enrolled-sorted]
-                          ^{:key (:_id player)}
-                          [:label {:class "flex items-center gap-2 text-xs text-slate-700"}
-                           [:input {:type "checkbox"
-                                    :checked (contains? @selected-winners (str (:_id player)))
-                                    :on-change #(swap! selected-winners
-                                                       (fn [current]
-                                                         (let [pid (str (:_id player))]
-                                                           (if (contains? current pid)
-                                                             (disj current pid)
-                                                             (conj current pid)))))}]
-                           [:span (:name player)]])]
-                       [:p {:class "text-xs text-slate-500"} "Inscreva jogadores antes de finalizar."])
-                     (let [count-num (let [v @titles-award-count]
-                                       (if (str/blank? v) 0 (js/parseInt v 10)))
-                           need-winners? (and (number? count-num) (pos? count-num))
-                           can-submit? (or (not need-winners?) (seq @selected-winners))]
+                    (let [checklist (finalization/finalization-checklist
+                                    {:status (api-get ch :status)
+                                     :finished-at (api-get ch :finished-at)
+                                     :enrolled-count (count @enrolled-players)
+                                     :max-players (api-get ch :max-players)
+                                     :titles-award-count @titles-award-count
+                                     :winner-ids @selected-winners
+                                     :match-count (count @matches)
+                                     :reason @finalize-reason})
+                          can-submit? (finalization/checklist-complete? checklist)]
+                      [:div {:class "mt-3 space-y-3"}
+                       [common/input-field "Títulos a conceder" @titles-award-count #(reset! titles-award-count %)
+                        :type "number" :placeholder "1"]
+                       (if (seq @enrolled-players)
+                         [:div {:class "space-y-2"}
+                          (for [player enrolled-sorted]
+                            ^{:key (:_id player)}
+                            [:label {:class "flex min-h-[44px] items-center gap-2 text-sm text-slate-700 dark:text-slate-200"}
+                             [:input {:type "checkbox"
+                                      :class "h-5 w-5"
+                                      :checked (contains? @selected-winners (str (:_id player)))
+                                      :on-change #(swap! selected-winners
+                                                         (fn [current]
+                                                           (let [pid (str (:_id player))]
+                                                             (if (contains? current pid)
+                                                               (disj current pid)
+                                                               (conj current pid)))))}]
+                             [:span (:name player)]])]
+                         [:p {:class "text-xs text-slate-500"} "Inscreva jogadores antes de finalizar."])
+                       [:div
+                        [:label {:class "block text-sm font-medium text-slate-700 dark:text-slate-200"}
+                         ui-copy/sensitive-reason-label]
+                        [:p {:class "mt-1 text-xs text-slate-500"} ui-copy/sensitive-reason-hint]
+                        [:textarea {:class "app-input mt-2 w-full min-h-[72px]"
+                                    :placeholder ui-copy/finalize-reason-placeholder
+                                    :value @finalize-reason
+                                    :disabled @finalizing?
+                                    :on-change #(reset! finalize-reason (.. % -target -value))}]]
+                       [finalization-checklist-ui checklist]
                        [common/button (if @finalizing? "Finalizando..." "Finalizar campeonato")
                         (fn []
                           (when can-submit?
@@ -533,14 +930,27 @@
                                (reset! finalizing? false)
                                (reset! selected-winners #{})
                                (reset! titles-award-count "1")
+                               (reset! finalize-reason "")
                                (load!))
                              (fn [err]
                                (reset! finalizing? false)
-                               (let [msg (str "Erro ao finalizar campeonato: " err)]
+                               (let [msg (ui-copy/finalize-season-error err)]
                                  (reset! error msg)
-                                 (state/toast-error! msg))))))
+                                 (state/toast-error! msg)))
+                             :reason (finalization/normalize-reason @finalize-reason))))
                         :variant :primary
-                        :disabled (or @finalizing? (not can-submit?))])])])]
+                        :disabled (or @finalizing? (not can-submit?))]]))])]]
+
+              (when (and @batch-enroll-open? authenticated)
+                [batch-enroll-modal
+                 {:open? true
+                  :on-close #(reset! batch-enroll-open? false)
+                  :players @all-players
+                  :exclude-ids enrolled-exclude-ids
+                  :enrolled-count (count @enrolled-players)
+                  :max-players (api-get ch :max-players)
+                  :championship-id id
+                  :on-enrolled-reload on-enrolled-loaded}])
 
               (when (and (:active @champ-merge-ui) authenticated)
                 ^{:key (:tick @champ-merge-ui)}
@@ -600,15 +1010,17 @@
               raw (or (when @season (:status @season)) "indefinido")
               enrolled-sorted (sort-by #(str/lower-case (str (:name %))) @players)]
           [:div {:class "space-y-6"}
-           [common/button "Voltar ao campeonato"
-            #(rfe/push-state :championship-detail {:id cid})
-            :variant :outline]
+           [common/breadcrumb
+            (breadcrumbs/build-breadcrumbs :championship-season-detail
+                                           {:id cid :season-id sid}
+                                           :championship-label (or (:championship-name @season) "Campeonato")
+                                           :season-label (or (:season @season) "Temporada"))]
            (cond
              @error
              [:div [common/button "Tentar novamente" load! :variant :outline]]
 
              @loading?
-             [common/loading-spinner]
+             [common/skeleton-table ["Campo" "Valor"] :rows 4]
 
              @season
              [:<>
@@ -634,8 +1046,18 @@
                (if (seq @players)
                  [:ul {:class "mt-2 divide-y divide-slate-100 text-sm text-slate-700"}
                   (for [p enrolled-sorted]
-                    ^{:key (:_id p)}
-                    [:li {:class "py-2"} (:name p)])]
+                    (let [pid (normalize-id (or (:_id p) (:id p)))]
+                      ^{:key pid}
+                      [:li (cond-> {:class "py-2"}
+                             pid (assoc :class "cursor-pointer py-2 hover:bg-slate-50 dark:hover:bg-slate-900/50"
+                                        :role "link"
+                                        :tab-index 0
+                                        :on-click #(rfe/push-state :player-detail {:id pid})
+                                        :on-key-down (fn [e]
+                                                       (when (#{"Enter" " "} (.-key e))
+                                                         (.preventDefault e)
+                                                         (rfe/push-state :player-detail {:id pid})))))
+                       (:name p)]))]
                  [:p {:class "app-muted"} "Nenhum jogador inscrito nesta temporada."])]
               [common/card
                [:h3 {:class "app-section-title"} "Partidas"]
@@ -649,7 +1071,11 @@
                           (common/format-match-result (:result match))])
                        @matches)
                   :sortable? true
-                  :dense? true]
+                  :dense? true
+                  :row-data @matches
+                  :on-row-click (fn [match]
+                                  (when-let [mid (normalize-id (:_id match))]
+                                    (rfe/push-state :match-detail {:id mid})))]
                  [:p {:class "app-muted"} "Nenhuma partida nesta temporada."])]]
 
              :else
@@ -732,11 +1158,16 @@
       :reagent-render
       (fn []
         [:div {:class "space-y-6"}
+         [common/breadcrumb
+          (breadcrumbs/build-breadcrumbs (if is-edit? :championship-edit :championship-new)
+                                         (when is-edit? {:id id})
+                                         :entity-label (or (:name @form-data)
+                                                           (if is-edit? "Campeonato" "Novo")))]
          [:div
           [:p {:class "text-sm text-slate-500"} "Cadastro"]
           [:h2 {:class "text-2xl font-semibold text-slate-900 dark:text-slate-100"} (if is-edit? "Editar Campeonato" "Novo Campeonato")]]
          (if @championship-loading?
-           [common/loading-spinner]
+           [common/skeleton-table ["Campo" "Valor"] :rows 5]
            [:form {:class "space-y-6"
                    :on-submit (fn [e]
                                 (.preventDefault e)

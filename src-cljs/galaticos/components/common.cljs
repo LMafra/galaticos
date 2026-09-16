@@ -1,7 +1,7 @@
 (ns galaticos.components.common
   "Shared/common UI components.
 
-  Design system (UX-PLAN-01) — Tailwind tokens:
+  Design system (UX-PLAN-01 / Wave 4) — Tailwind tokens via `design-tokens`:
   - color-brand: `brand-maroon` (primary actions, links)
   - color-surface-page: `bg-slate-50` / `dark:bg-slate-950`
   - color-surface-card: `app-card` — white + `shadow-sm`; dark `border-slate-800` `bg-slate-900`
@@ -9,12 +9,28 @@
   - spacing grid: 8px (Tailwind 2 = 8px: p-2, gap-2, py-3, etc.)
   - radius: cards `rounded-lg`, inputs `rounded-md`, badges `rounded-full`
   - typography stats: `tabular-nums` on numeric table columns via `:numeric-columns`
-  - status badges: `badge` variants (:success :warning :danger :info :maroon)"
+  - status badges: `badge` variants (:success :warning :danger :info :maroon)
+  - buttons: :primary :secondary :outline :ghost :danger
+  - alerts: :error :success :warning :info"
   (:require [reagent.core :as r]
             [clojure.string :as str]
             [reitit.frontend.easy :as rfe]
             [galaticos.routes :as routes]
             [galaticos.ui-copy :as ui-copy]))
+
+(def design-tokens
+  "Named Tailwind class bundles — single source for surfaces/radius/shadow."
+  {:color-brand "brand-maroon"
+   :surface-page "bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100"
+   :surface-card "rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900"
+   :surface-muted "bg-slate-50 dark:bg-slate-800/80"
+   :radius-card "rounded-lg"
+   :radius-input "rounded-md"
+   :radius-badge "rounded-full"
+   :shadow-card "shadow-sm"
+   :table-wrap "overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900"
+   :table-head "bg-slate-50 dark:bg-slate-800/80"
+   :table-divide "divide-y divide-slate-200 dark:divide-slate-700"})
 
 (defn merge-classes
   "Join non-blank Tailwind class strings."
@@ -101,7 +117,7 @@
         cols (count headers)]
     [:div {:class (merge-classes "overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900" class)}
      [:table {:class "min-w-full divide-y divide-slate-200 dark:divide-slate-700"}
-      [:thead {:class "bg-slate-50 dark:bg-slate-800/80"}
+      [:thead {:class (:table-head design-tokens)}
        [:tr
         (for [idx (range cols)]
           ^{:key idx}
@@ -125,6 +141,18 @@
                  "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800/50 dark:bg-rose-950/40 dark:text-rose-200")]
     [:div {:class (merge-classes "rounded-xl border px-4 py-3 text-sm" styles class)}
      message]))
+
+(defn persistent-banner
+  "Non-dismissible RVMF banner at the decision point (Wave 3 / SarradaBet 04).
+   No close control — stays until the underlying condition clears."
+  [what-happened & {:keys [how-to-fix variant class]}]
+  [alert
+   [:div {:class "space-y-1"}
+    [:p what-happened]
+    (when how-to-fix
+      [:p how-to-fix])]
+   :variant (or variant :warning)
+   :class class])
 
 (defn error-message [message]
   [alert message :variant :error])
@@ -489,8 +517,8 @@
                :aria-live "polite"}
         "A filtrar…"])]]
    (when (seq filter-controls)
-     [:div {:class "flex flex-wrap items-end gap-3"}
-      filter-controls])
+     (into [:div {:class "flex flex-wrap items-end gap-3"}]
+           filter-controls))
    [:div {:class "flex flex-wrap items-center gap-2 sm:ml-auto"}
     (when (some? result-count)
       [:p {:class "text-sm tabular-nums text-slate-600 dark:text-slate-300"
@@ -501,7 +529,7 @@
        :variant :ghost
        :disabled clear-disabled?
        :class "text-sm"])
-    extra-actions]]))
+    (when extra-actions extra-actions)]]))
 
 (defn skeleton-score-header
   "Placar + adversário placeholder while match form loads (UX-PLAN-08)."
@@ -658,6 +686,17 @@
       b-num 1
       :else (compare (str/lower-case a-str) (str/lower-case b-str)))))
 
+(defn- interactive-event-target?
+  "True when the event originated on (or inside) a control that should not
+  trigger row navigation (buttons, links, inputs, role=button)."
+  [e]
+  (when-let [target (.-target e)]
+    (boolean
+     (or (and (.-closest target)
+              (.closest target "button, a, input, select, textarea, [role=button]"))
+         (let [tag (some-> (.-tagName target) str/lower-case)]
+           (#{"button" "a" "input" "select" "textarea"} tag))))))
+
 (defn table [_headers _rows & _opts]
   (let [search-query (r/atom "")
         sort-column (r/atom nil)
@@ -702,7 +741,10 @@
                            filtered-pairs)
             final-rows (mapv first sorted-pairs)
             final-row-data (mapv second sorted-pairs)
-            cell-class (if dense? "px-3 py-2 text-sm" "px-4 py-3 text-sm")]
+            cell-class (if dense? "px-3 py-2 text-sm" "px-4 py-3 text-sm")
+            handle-row-activate (fn [idx e]
+                                  (when (and on-row-click (not (interactive-event-target? e)))
+                                    (on-row-click (nth final-row-data idx))))]
         [:div {:class (merge-classes (if show-search? "space-y-3" "") class)}
          (when show-search?
            [:div {:class "flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"}
@@ -711,9 +753,9 @@
                      :on-change #(reset! search-query (-> % .-target .-value))
                      :placeholder "Buscar..."
                      :class (merge-classes input-base-class "max-w-sm focus:border-brand-maroon focus:ring-brand-maroon/20")}]])
-         [:div {:class "overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900"}
+         [:div {:class (:table-wrap design-tokens)}
           [:table {:class "min-w-full divide-y divide-slate-200 dark:divide-slate-700"}
-           [:thead {:class "bg-slate-50 dark:bg-slate-800/80"}
+           [:thead {:class (:table-head design-tokens)}
             [:tr
              (doall
               (map-indexed
@@ -736,9 +778,15 @@
              (map-indexed
               (fn [idx row]
                 ^{:key idx}
-                [:tr {:on-click (when on-row-click #(on-row-click (nth final-row-data idx)))
-                      :class (merge-classes "hover:bg-slate-50 dark:hover:bg-slate-900/50"
-                                            (when on-row-click "cursor-pointer"))}
+                [:tr (cond-> {:on-click (when on-row-click #(handle-row-activate idx %))
+                              :class (merge-classes "hover:bg-slate-50 dark:hover:bg-slate-900/50"
+                                                    (when on-row-click "cursor-pointer"))}
+                       on-row-click (assoc :tab-index 0
+                                           :role "link"
+                                           :on-key-down (fn [e]
+                                                          (when (#{"Enter" " "} (.-key e))
+                                                            (.preventDefault e)
+                                                            (handle-row-activate idx e)))))
                  (doall
                   (map-indexed
                    (fn [idx2 cell]

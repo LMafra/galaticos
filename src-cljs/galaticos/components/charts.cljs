@@ -4,7 +4,7 @@
             ["recharts" :refer [ResponsiveContainer LineChart Line CartesianGrid XAxis YAxis Tooltip BarChart Bar PieChart Pie Cell AreaChart Area LabelList Legend]]))
 
 (defn- chart-theme []
-  (let [dark? (= "dark" (get-in @state/app-state [:ui :theme]))]
+  (let [dark? (state/dark-theme?)]
     {:grid (if dark? "#334155" "#E2E8F0")
      :axis (if dark? "#94A3B8" "#64748B")
      :label (if dark? "#E2E8F0" "#334155")
@@ -69,7 +69,7 @@
          (fn [idx _entry]
            ^{:key idx}
            [:> Cell {:fill (nth colors (mod idx (count colors)))
-                     :stroke (if (= "dark" (get-in @state/app-state [:ui :theme])) "#0f172a" "#fff")
+                     :stroke (if (state/dark-theme?) "#0f172a" "#fff")
                      :strokeWidth 2}])
          data))]
       [:> Tooltip {:contentStyle {:backgroundColor tooltip-bg

@@ -476,11 +476,18 @@ Automated UI regression tests live under `e2e/ux-*.spec.js`, tagged `@ux` (plus 
 | Navigation, scroll, match-return      | `e2e/ux-navigation.spec.js`      | breadcrumbs; PT hash routes skipped until phase 1 |
 | Undo deletes                          | `e2e/ux-undo.spec.js`            | undo toasts, commit failure, roster undo          |
 | Auth and session                      | `e2e/auth.spec.js`               | login/session                                     |
+| Auth gates (guest write routes)       | `e2e/ux-auth-gates.spec.js`      | protected hashes → dashboard; write CTAs hidden   |
 | Forms and lists                       | `e2e/ux-forms-lists.spec.js`     | 400 retention, loading label                      |
 | Match form                            | `e2e/ux-matches.spec.js`         | steppers, skeleton, draft, mobile FAB             |
-| Players and merge                     | `e2e/ux-players-merge.spec.js`   | merge 3-step, undo                                |
-| Championships and seasons             | `e2e/ux-championships.spec.js`   | enrollment, max players, finalize                 |
-| Teams and dashboard                   | `e2e/ux-teams-dashboard.spec.js` | teams, dashboard export                           |
+| Match lifecycle                       | `e2e/ux-match-lifecycle.spec.js` | detail, edit persist, championship hub            |
+| Players and merge                     | `e2e/ux-players-merge.spec.js`   | search rows, dup badge → merge, 3-step undo       |
+| Championships and seasons             | `e2e/ux-championships.spec.js`   | UI enroll, over-max toast, finalize click-through |
+| Teams roster                          | `e2e/ux-teams-roster.spec.js`    | picker Adicionar / Remover on team detail         |
+| Teams and dashboard                   | `e2e/ux-teams-dashboard.spec.js` | teams, dashboard export (fail if CSV missing)     |
+| Dashboard depth                       | `e2e/ux-dashboard-depth.spec.js` | champ filter, charts, CSV toast                   |
+| Stats reconcile / filters             | `e2e/ux-stats-reconcile.spec.js` | Executar reconciliação, global filters            |
+| Theme                                 | `e2e/ux-theme.spec.js`           | dark class + `galaticos.theme` persist            |
+| Route 404                             | `e2e/not-found.spec.js`          | resource + unknown hash `Página não encontrada`   |
 | Accessibility                         | `e2e/ux-a11y.spec.js`            | keyboard, aria, scope                             |
 | UI copy guard                         | `scripts/check-ui-copy.js`       | no `js/confirm` in components                     |
 | Mobile shell                          | `e2e/ux-mobile-shell.spec.js`    | bottom tab (Pixel 5 project)                      |

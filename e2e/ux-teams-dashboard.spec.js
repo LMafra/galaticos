@@ -84,10 +84,9 @@ test.describe('UX teams and dashboard', { tag: '@ux' }, () => {
     try {
       await page.goto('/#/dashboard');
       const exportBtn = page.getByRole('button', { name: /Exportar CSV/i });
-      if ((await exportBtn.count()) === 0) {
-        test.skip(true, 'Export not visible (auth/layout)');
-        return;
-      }
+      await expect(exportBtn, 'Exportar CSV must be visible when authenticated').toBeVisible({
+        timeout: 10_000,
+      });
       await exportBtn.click();
       await expect(toastRegion(page).getByText(/exportado com sucesso/i)).toBeVisible({ timeout: 15_000 });
     } finally {

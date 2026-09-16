@@ -94,6 +94,7 @@
         audit-id (ObjectId.)
         request {:json-body {:master-id master-id
                               :merged-ids [merged-id]
+                              :reason "Duplicado no import"
                               :field-selections {:name "merged-0"
                                                  :nickname "master"}}}
         result (with-redefs [auth/current-user (constantly "admin")
@@ -126,6 +127,7 @@
            @incremental-args))
     (is (= master-id (str (:master-id @audit-payload))))
     (is (= [merged-id] (map str (:merged-ids @audit-payload))))
+    (is (= "Duplicado no import" (:reason @audit-payload)))
     (is (= (str audit-id) (get-in body [:data :audit-id])))))
 
 (deftest merge-players-validation
@@ -139,11 +141,19 @@
     (let [id "507f1f77bcf86cd799439011"
           r (merge-handlers/merge-players {:json-body {:master-id id :merged-ids [id] :field-selections {:name "master"}}})]
       (is (= 400 (:status r)))))
+  (testing "missing reason"
+    (let [mid (str (ObjectId.))
+          merge-id (str (ObjectId.))
+          r (merge-handlers/merge-players {:json-body {:master-id mid
+                                                      :merged-ids [merge-id]
+                                                      :field-selections {:name "master"}}})]
+      (is (= 400 (:status r)))))
   (testing "master not found"
     (let [mid (str (ObjectId.))
           merge-id (str (ObjectId.))
           r (with-redefs [players-db/find-by-id (constantly nil)]
               (merge-handlers/merge-players {:json-body {:master-id mid
                                                         :merged-ids [merge-id]
+                                                        :reason "Duplicado no import"
                                                         :field-selections {:name "master"}}}))]
       (is (= 404 (:status r))))))

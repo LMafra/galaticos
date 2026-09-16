@@ -10,9 +10,8 @@
    [galaticos.components.common :as common]
    [galaticos.ui-copy :as ui-copy]
    [galaticos.components.charts :as charts]
-  ["lucide-react" :refer [Users Target CalendarDays CalendarRange Building2 AlertTriangle
+  ["lucide-react" :refer [Users Target CalendarDays CalendarRange AlertTriangle
                           ClipboardList]]))
-
 (defn- avg-goals
   [total matches]
   (if (pos? matches)
@@ -34,8 +33,14 @@
   [championship]
   (str (:championship-id championship)))
 
+(defn- normalize-id [v]
+  (cond
+    (string? v) v
+    (map? v) (or (get v "$oid") (get v :$oid))
+    :else nil))
+
 (defn- top5-card
-  [title headers rows]
+  [title headers rows players]
   (let [numeric-cols (into #{} (range 1 (count headers)))]
     [common/card
      [:h3 {:class "app-section-title"} title]
@@ -43,22 +48,12 @@
        [common/table headers rows
         :dense? true
         :show-search? false
-        :numeric-columns numeric-cols]
+        :numeric-columns numeric-cols
+        :row-data players
+        :on-row-click (fn [player]
+                        (when-let [id (normalize-id (or (:_id player) (:id player)))]
+                          (rfe/push-state :player-detail {:id id})))]
        [:p {:class "app-muted"} "Nenhum jogador encontrado"])]))
-
-(defn- normalize-id [v]
-  (cond
-    (string? v) v
-    (map? v) (or (get v "$oid") (get v :$oid))
-    :else nil))
-
-(defn- player-name-link
-  [player]
-  (let [id (normalize-id (or (:_id player) (:id player)))]
-    [:span
-     {:class "cursor-pointer text-brand-maroon hover:underline"
-      :on-click #(when id (rfe/push-state :player-detail {:id id}))}
-     (:name player)]))
 
 (defn- derived-metric-value
   [player k]
@@ -78,108 +73,124 @@
   [{:keys [filtered-championships chart-goals chart-performance
            top-goals top-assists top-matches top-titles
            top-goal-contribution top-discipline-index]}]
-  [:div {:class "space-y-6"}
-   [:div {:class "grid gap-4 xl:grid-cols-3"}
-    [:div {:class "xl:col-span-2"}
-     [common/card
-      [:h3 {:class "app-section-title"} "Resumo de Campeonatos"]
-      (if (seq filtered-championships)
-        [common/table
-         ["Campeonato" "Formato" "Partidas" "Jogadores" "Gols" "Gols/Partida"]
-         (map (fn [ch]
-                [(:championship-name ch)
-                 (:championship-format ch)
-                 (:matches-count ch)
-                 (:players-count ch)
-                 (:total-goals ch)
-                 (avg-goals (:total-goals ch) (:matches-count ch))])
-              filtered-championships)
-         :sortable? true
-         :dense? true
-         :show-search? false
-         :numeric-columns #{2 3 4 5}]
-        [:p {:class "app-muted"} "Nenhum campeonato encontrado"])]]
-    [:div {:class "space-y-4"}
-     [common/card
-      [:h3 {:class "app-section-title"} "Top Artilheiros"]
-      (if (seq chart-goals)
-        [charts/bar-chart
-         {:data chart-goals
-          :x-key "name"
-          :y-key "value"
-          :fill "#820000"
-          :label "Gols"}]
-        [:p {:class "app-muted"} "Sem dados para exibir"])]
-     [common/card
-      [:h3 {:class "app-section-title"} "Performance por Campeonato"]
-      (if (seq chart-performance)
-        [charts/line-chart
-         {:data chart-performance
-          :x-key "name"
-          :y-key "value"
-          :stroke "#3B82F6"
-          :label "Gols/partida"}]
-        [:p {:class "app-muted"} "Sem dados para exibir"])]]]
+  (let [goals5 (vec (take 5 top-goals))
+        assists5 (vec (take 5 top-assists))
+        matches5 (vec (take 5 top-matches))
+        titles5 (vec (take 5 top-titles))
+        contrib5 (vec (take 5 (or top-goal-contribution [])))
+        discipline5 (vec (take 5 (or top-discipline-index [])))]
+    [:div {:class "space-y-6"}
+     [:div {:class "grid gap-4 xl:grid-cols-3"}
+      [:div {:class "xl:col-span-2"}
+       [common/card
+        [:h3 {:class "app-section-title"} "Resumo de Campeonatos"]
+        (if (seq filtered-championships)
+          [common/table
+           ["Campeonato" "Formato" "Partidas" "Jogadores" "Gols" "Gols/Partida"]
+           (map (fn [ch]
+                  [(:championship-name ch)
+                   (:championship-format ch)
+                   (:matches-count ch)
+                   (:players-count ch)
+                   (:total-goals ch)
+                   (avg-goals (:total-goals ch) (:matches-count ch))])
+                filtered-championships)
+           :sortable? true
+           :dense? true
+           :show-search? false
+           :numeric-columns #{2 3 4 5}
+           :row-data filtered-championships
+           :on-row-click (fn [ch]
+                           (when-let [id (normalize-id (:championship-id ch))]
+                             (rfe/push-state :championship-detail {:id id})))]
+          [:p {:class "app-muted"} "Nenhum campeonato encontrado"])]]
+      [:div {:class "space-y-4"}
+       [common/card
+        [:h3 {:class "app-section-title"} "Top Artilheiros"]
+        (if (seq chart-goals)
+          [charts/bar-chart
+           {:data chart-goals
+            :x-key "name"
+            :y-key "value"
+            :fill "#820000"
+            :label "Gols"}]
+          [:p {:class "app-muted"} "Sem dados para exibir"])]
+       [common/card
+        [:h3 {:class "app-section-title"} "Performance por Campeonato"]
+        (if (seq chart-performance)
+          [charts/line-chart
+           {:data chart-performance
+            :x-key "name"
+            :y-key "value"
+            :stroke "#3B82F6"
+            :label "Gols/partida"}]
+          [:p {:class "app-muted"} "Sem dados para exibir"])]]]
 
-   [:div {:class "grid gap-4 md:grid-cols-2"}
-    [top5-card
-     "Top 5 - Gols"
-     ["Nome" "Gols" "Partidas" "Gols/Partida"]
-     (map (fn [player]
-            [(player-name-link player)
-             (get-in player [:aggregated-stats :total :goals] 0)
-             (get-in player [:aggregated-stats :total :games] 0)
-             (avg-goals (get-in player [:aggregated-stats :total :goals] 0)
-                        (get-in player [:aggregated-stats :total :games] 0))])
-          (take 5 top-goals))]
-    [top5-card
-     "Top 5 - Assistências"
-     ["Nome" "Assistências" "Partidas"]
-     (map (fn [player]
-            [(player-name-link player)
-             (get-in player [:aggregated-stats :total :assists] 0)
-             (get-in player [:aggregated-stats :total :games] 0)])
-          (take 5 top-assists))]
-    [top5-card
-     "Top 5 - Partidas"
-     ["Nome" "Partidas" "Gols" "Gols/Partida"]
-     (map (fn [player]
-            [(player-name-link player)
-             (get-in player [:aggregated-stats :total :games] 0)
-             (get-in player [:aggregated-stats :total :goals] 0)
-             (avg-goals (get-in player [:aggregated-stats :total :goals] 0)
-                        (get-in player [:aggregated-stats :total :games] 0))])
-          (take 5 top-matches))]
-    [top5-card
-     "Top 5 - Títulos"
-     ["Nome" "Títulos" "Partidas"]
-     (map (fn [player]
-            [(player-name-link player)
-             (get-in player [:aggregated-stats :total :titles] 0)
-             (get-in player [:aggregated-stats :total :games] 0)])
-          (take 5 top-titles))]]
+     [:div {:class "grid gap-4 md:grid-cols-2"}
+      [top5-card
+       "Top 5 - Gols"
+       ["Nome" "Gols" "Partidas" "Gols/Partida"]
+       (mapv (fn [player]
+               [(:name player)
+                (get-in player [:aggregated-stats :total :goals] 0)
+                (get-in player [:aggregated-stats :total :games] 0)
+                (avg-goals (get-in player [:aggregated-stats :total :goals] 0)
+                           (get-in player [:aggregated-stats :total :games] 0))])
+             goals5)
+       goals5]
+      [top5-card
+       "Top 5 - Assistências"
+       ["Nome" "Assistências" "Partidas"]
+       (mapv (fn [player]
+               [(:name player)
+                (get-in player [:aggregated-stats :total :assists] 0)
+                (get-in player [:aggregated-stats :total :games] 0)])
+             assists5)
+       assists5]
+      [top5-card
+       "Top 5 - Partidas"
+       ["Nome" "Partidas" "Gols" "Gols/Partida"]
+       (mapv (fn [player]
+               [(:name player)
+                (get-in player [:aggregated-stats :total :games] 0)
+                (get-in player [:aggregated-stats :total :goals] 0)
+                (avg-goals (get-in player [:aggregated-stats :total :goals] 0)
+                           (get-in player [:aggregated-stats :total :games] 0))])
+             matches5)
+       matches5]
+      [top5-card
+       "Top 5 - Títulos"
+       ["Nome" "Títulos" "Partidas"]
+       (mapv (fn [player]
+               [(:name player)
+                (get-in player [:aggregated-stats :total :titles] 0)
+                (get-in player [:aggregated-stats :total :games] 0)])
+             titles5)
+       titles5]]
 
-   [:div {:class "space-y-2"}
-    [:h3 {:class "app-section-title"} "Métricas derivadas"]
-    [:p {:class "text-xs text-slate-600 dark:text-slate-400"}
-     "Contribuição ofensiva e disciplina calculadas a partir dos totais agregados (ver catálogo de métricas)."]]
-   [:div {:class "grid gap-4 md:grid-cols-2"}
-    [top5-card
-     "Top 5 - Contribuição de gol"
-     ["Nome" "Contrib. gol" "Partidas"]
-     (map (fn [player]
-            [(player-name-link player)
-             (format-derived :goal-contribution (derived-metric-value player :goal-contribution))
-             (get-in player [:aggregated-stats :total :games] 0)])
-          (take 5 (or top-goal-contribution [])))]
-    [top5-card
-     "Top 5 - Índice de disciplina"
-     ["Nome" "Disciplina" "Partidas"]
-     (map (fn [player]
-            [(player-name-link player)
-             (format-derived :discipline-index (derived-metric-value player :discipline-index))
-             (get-in player [:aggregated-stats :total :games] 0)])
-          (take 5 (or top-discipline-index [])))]]])
+     [:div {:class "space-y-2"}
+      [:h3 {:class "app-section-title"} "Métricas derivadas"]
+      [:p {:class "text-xs text-slate-600 dark:text-slate-400"}
+       "Contribuição ofensiva e disciplina calculadas a partir dos totais agregados (ver catálogo de métricas)."]]
+     [:div {:class "grid gap-4 md:grid-cols-2"}
+      [top5-card
+       "Top 5 - Contribuição de gol"
+       ["Nome" "Contrib. gol" "Partidas"]
+       (mapv (fn [player]
+               [(:name player)
+                (format-derived :goal-contribution (derived-metric-value player :goal-contribution))
+                (get-in player [:aggregated-stats :total :games] 0)])
+             contrib5)
+       contrib5]
+      [top5-card
+       "Top 5 - Índice de disciplina"
+       ["Nome" "Disciplina" "Partidas"]
+       (mapv (fn [player]
+               [(:name player)
+                (format-derived :discipline-index (derived-metric-value player :discipline-index))
+                (get-in player [:aggregated-stats :total :games] 0)])
+             discipline5)
+       discipline5]]]))
 
 (defn- next-upcoming-match [matches]
   (first
@@ -197,11 +208,19 @@
                       2.0))
                  (or top-discipline-index []))))
 
-(defn- dashboard-alerts-panel
+(defn- dashboard-alerts-visible?
+  "True when the Alertas panel has at least one row (avoids empty xl grid column)."
   [{:keys [matches seasons-count top-discipline-index authenticated?]}]
-  (let [upcoming (next-upcoming-match matches)
-        discipline-n (discipline-alert-count top-discipline-index)]
-    (when (or upcoming (pos? discipline-n) (and authenticated? (pos? seasons-count)))
+  (boolean
+   (or (next-upcoming-match matches)
+       (pos? (discipline-alert-count top-discipline-index))
+       (and authenticated? (pos? (or seasons-count 0))))))
+
+(defn- dashboard-alerts-panel
+  [{:keys [matches seasons-count top-discipline-index authenticated?] :as props}]
+  (when (dashboard-alerts-visible? props)
+    (let [upcoming (next-upcoming-match matches)
+          discipline-n (discipline-alert-count top-discipline-index)]
       [common/card
        [:h3 {:class "app-section-title"} "Alertas"]
        [:ul {:class "mt-3 space-y-2 text-sm"}
@@ -233,7 +252,7 @@
                        (when (> seasons-count 1) "s")
                        " — confira inscrições nos campeonatos.")]])]])))
 
-(defn- dashboard-shortcuts [authenticated? upcoming]
+(defn- dashboard-shortcuts [authenticated? upcoming teams-count]
   (when authenticated?
     [:div {:class "flex flex-wrap gap-2"}
      (if upcoming
@@ -249,6 +268,12 @@
      [common/button "Plantel" #(rfe/push-state :players) :variant :outline :class "text-sm"]
      [common/button "Desgaste (min/gol)"
       #(rfe/push-state :stats)
+      :variant :outline
+      :class "text-sm"]
+     [common/button
+      (str "Times"
+           (when (some? teams-count) (str " (" teams-count ")")))
+      #(rfe/push-state :teams)
       :variant :outline
       :class "text-sm"]]))
 
@@ -333,63 +358,57 @@
                                (or championships []))
                upcoming-match (next-upcoming-match matches)
                goals-delta (goals-trend-delta championships)
+               alert-props {:matches matches
+                            :seasons-count seasons-count
+                            :top-discipline-index top-discipline-index
+                            :authenticated? authenticated}
                dashboard-body (cond
                                 dashboard-stats
                                 [:div {:class "space-y-6"}
-                                 [dashboard-shortcuts authenticated upcoming-match]
-                                 [:div {:class "grid gap-4 md:grid-cols-2 xl:grid-cols-5"}
+                                 [dashboard-shortcuts authenticated upcoming-match teams-count]
+                                 [:div {:class "grid w-full gap-4 md:grid-cols-2 xl:grid-cols-4"}
                                   ^{:key "players-card"}
                                   [:button {:type "button"
-                                            :class "text-left"
+                                            :class "w-full text-left"
                                             :on-click #(rfe/push-state :players)}
                                    [common/stat-card "Jogadores" players-total :icon [:> Users {:size 18}]]]
                                   ^{:key "matches-card"}
                                   [:button {:type "button"
-                                            :class "text-left"
+                                            :class "w-full text-left"
                                             :on-click #(rfe/push-state :matches)}
                                    [common/stat-card "Partidas" total-matches :icon [:> CalendarDays {:size 18}]]]
                                   ^{:key "goals-card"}
                                   [:button {:type "button"
-                                            :class "text-left"
+                                            :class "w-full text-left"
                                             :on-click #(rfe/push-state :players)}
                                    [common/stat-card "Gols" player-goals-total
                                     :icon [:> Target {:size 18}]
                                     :delta goals-delta]]
                                   ^{:key "seasons-card"}
                                   [:button {:type "button"
-                                            :class "text-left"
+                                            :class "w-full text-left"
                                             :on-click #(rfe/push-state :championships)}
                                    [common/stat-card "Temporadas"
                                     seasons-count
-                                    :icon [:> CalendarRange {:size 18}]]]
-                                  (when authenticated
-                                    ^{:key "teams-card"}
-                                    [:button {:type "button"
-                                              :class "text-left"
-                                              :on-click #(rfe/push-state :teams)}
-                                     [common/stat-card "Times" (or teams-count 0) :icon [:> Building2 {:size 18}]]])]
+                                    :icon [:> CalendarRange {:size 18}]]]]
 
-                                 [:div {:class "grid gap-4 xl:grid-cols-3"}
-                                  [:div {:class "xl:col-span-2 space-y-4"}
-                                   (if @show-deferred?
-                                     [dashboard-deferred-block
-                                      {:filtered-championships filtered-championships
-                                       :chart-goals chart-goals
-                                       :chart-performance chart-performance
-                                       :top-goals top-goals
-                                       :top-assists top-assists
-                                       :top-matches top-matches
-                                       :top-titles top-titles
-                                       :top-goal-contribution top-goal-contribution
-                                       :top-discipline-index top-discipline-index}]
-                                     [:div {:class "min-h-[20rem] rounded-xl border border-dashed border-slate-200 bg-slate-50/50 dark:border-slate-700 dark:bg-slate-800/30 flex items-center justify-center"}
-                                      [common/loading-spinner]])]
-                                  [:div {:class "space-y-4"}
-                                   [dashboard-alerts-panel
-                                    {:matches matches
-                                     :seasons-count seasons-count
-                                     :top-discipline-index top-discipline-index
-                                     :authenticated? authenticated}]]]]
+                                 [:div {:class "w-full space-y-4"}
+                                  (if @show-deferred?
+                                    [dashboard-deferred-block
+                                     {:filtered-championships filtered-championships
+                                      :chart-goals chart-goals
+                                      :chart-performance chart-performance
+                                      :top-goals top-goals
+                                      :top-assists top-assists
+                                      :top-matches top-matches
+                                      :top-titles top-titles
+                                      :top-goal-contribution top-goal-contribution
+                                      :top-discipline-index top-discipline-index}]
+                                    [:div {:class "flex min-h-[20rem] w-full items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/50 dark:border-slate-700 dark:bg-slate-800/30"}
+                                     [common/loading-spinner]])]
+
+                                 ;; Alertas abaixo do conteúdo principal (full-width), fora da grelha lateral
+                                 [dashboard-alerts-panel alert-props]]
                                 :else
                                 (dashboard-empty-state authenticated))]
            [:div {:class "space-y-6"}
@@ -412,10 +431,11 @@
               [:p {:class "text-sm text-slate-500"} "Visão geral"]
               [:h2 {:class "text-2xl font-semibold text-slate-900 dark:text-slate-100"} "Dashboard"]]
              (when authenticated
-               [:div {:class "flex flex-col gap-2 sm:flex-row sm:items-center sm:flex-wrap"}
+               [:div {:class "flex flex-col gap-2 sm:flex-row sm:items-end sm:flex-wrap"}
                 [:input {:type "text"
                          :value @player-search-q
                          :placeholder "Buscar jogador..."
+                         :aria-label "Buscar jogador"
                          :on-change #(reset! player-search-q (-> % .-target .-value))
                          :on-key-down (fn [e]
                                         (when (= "Enter" (.-key e))

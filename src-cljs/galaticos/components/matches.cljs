@@ -19,6 +19,8 @@
             [galaticos.api :as api]
             [galaticos.state :as state]
             [galaticos.match-draft :as match-draft]
+            [galaticos.match-stat-bounds :as stat-bounds]
+            [galaticos.breadcrumbs :as breadcrumbs]
             [galaticos.components.common :as common]
             [galaticos.effects :as effects]
             [galaticos.delete-undo :as delete-undo]
@@ -36,28 +38,27 @@
 
 (defn- match-breadcrumb-items
   [champ-id champ-name current-label]
-  (cond-> [{:label "Campeonatos" :route :championships}
-           {:label "Partidas" :route :matches}]
-    (not (str/blank? (str champ-id)))
-    (conj {:label (or champ-name "Campeonato")
-           :route :matches-by-championship
-           :route-params {:championship-id (str champ-id)}})
-    true
-    (conj {:label current-label})))
+  (breadcrumbs/build-breadcrumbs
+   :match-detail
+   (cond-> {}
+     (not (str/blank? (str champ-id))) (assoc :championship-id (str champ-id)))
+   :championship-label champ-name
+   :entity-label current-label))
 
 (defn- match-row
   [match delete-match! authenticated?]
   (let [match-id (:_id match)
         go-detail! #(rfe/push-state :match-detail {:id match-id})
         row-body
-        [:div {:class "flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900/90 dark:hover:bg-slate-800 lg:flex-row lg:items-center lg:justify-between"}
-         [:div {:class "flex min-w-0 flex-1 cursor-pointer items-center gap-3"
-                :role "link"
-                :tab-index 0
-                :on-click go-detail!
-                :on-key-down (fn [e]
-                               (when (= "Enter" (.-key e))
-                                 (go-detail!)))}
+        [:div {:class "flex cursor-pointer flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900/90 dark:hover:bg-slate-800 lg:flex-row lg:items-center lg:justify-between"
+               :role "link"
+               :tab-index 0
+               :on-click go-detail!
+               :on-key-down (fn [e]
+                              (when (#{"Enter" " "} (.-key e))
+                                (.preventDefault e)
+                                (go-detail!)))}
+         [:div {:class "flex min-w-0 flex-1 items-center gap-3"}
           [:div {:class "rounded-xl bg-brand-maroon/10 p-2 text-brand-maroon"}
            [:> CalendarPlus {:size 18 :aria-hidden true}]]
           [:div {:class "min-w-0"}
@@ -191,7 +192,11 @@
                        stats)
                   :dense? true
                   :show-search? false
-                  :numeric-columns #{2 3 4}]
+                  :numeric-columns #{2 3 4}
+                  :row-data stats
+                  :on-row-click (fn [row]
+                                  (when-let [pid (some-> (:player-id row) str not-empty)]
+                                    (rfe/push-state :player-detail {:id pid})))]
                  [:p {:class "app-muted"} "Sem estatísticas registradas."])]] 
              :else
              [:p {:class "app-muted"} "Partida não encontrada."])]))})))
@@ -215,16 +220,18 @@
            [:h2 {:class "text-2xl font-semibold text-slate-900 dark:text-slate-100"} "Partidas"]]]
 
          [common/card
-          [:div {:class "flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"}
-           [:input {:type "text"
-                    :value @search
-                    :placeholder "Buscar campeonato..."
-                    :on-change #(reset! search (-> % .-target .-value))
-                    :class "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-brand-maroon focus:outline-none focus:ring-2 focus:ring-brand-maroon/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 sm:w-64"}]
-           [:div {:class "text-xs text-slate-500 dark:text-slate-400"} (str (count filtered-champs) " campeonato(s)")]]
+          [common/list-toolbar
+           {:search @search
+            :search-id "matches-champ-search"
+            :search-placeholder "Buscar campeonato..."
+            :on-search-change #(reset! search %)
+            :result-count (when-not championships-loading? (count filtered-champs))
+            :on-clear #(reset! search "")
+            :clear-disabled? (str/blank? @search)}]
 
           (cond
-            championships-loading? [common/loading-spinner]
+            championships-loading?
+            [common/skeleton-table ["Campeonato" "Partidas"] :rows 4 :class "mt-3"]
             (empty? filtered-champs)
             [:p {:class "app-muted mt-4"} "Nenhum campeonato encontrado."]
             :else
@@ -302,14 +309,27 @@
 
 (defn- update-stat! [form-data dirty-cells pid field value]
   (mark-stat-dirty! dirty-cells pid field)
-  (swap! form-data assoc-in [:player-statistics pid field] value)
-  (when (= field :played?)
-    (when value
-      (let [mins (get-in @form-data [:player-statistics pid :minutes-played] 0)]
-        (when (or (nil? mins) (zero? mins))
-          (swap! form-data assoc-in [:player-statistics pid :minutes-played] 90))))
-    (when-not value
-      (swap! form-data assoc-in [:player-statistics pid :minutes-played] 0))))
+  (let [v (if (= field :played?)
+            (boolean value)
+            (stat-bounds/clamp-stat-value field value))]
+    (swap! form-data assoc-in [:player-statistics pid field] v)
+    (when (= field :played?)
+      (when v
+        (let [mins (get-in @form-data [:player-statistics pid :minutes-played] 0)]
+          (when (or (nil? mins) (zero? mins))
+            (swap! form-data assoc-in [:player-statistics pid :minutes-played] 90))))
+      (when-not v
+        (swap! form-data assoc-in [:player-statistics pid :minutes-played] 0)))))
+
+(defn- stepper-for
+  "number-stepper wired to field bounds (poka-yoke)."
+  [field value on-change touch?]
+  (let [{:keys [min-val max-val]} (or (stat-bounds/bounds-for field)
+                                      {:min-val 0})]
+    [common/number-stepper value on-change
+     :min-val min-val
+     :max-val max-val
+     :touch? touch?]))
 
 (defn- stat-grid-cell
   [form-data dirty-cells pid stat row-idx col-idx field touch? row-count]
@@ -332,13 +352,13 @@
        [:div {:class "inline-flex flex-col items-center gap-0.5"}
         (when (pos? value)
           [:> Circle {:size 12 :class "text-amber-500 fill-amber-400"}])
-        [common/number-stepper value on-change :min-val 0 :touch? touch?]]
+        [stepper-for field value on-change touch?]]
        :red-cards
        [:div {:class "inline-flex flex-col items-center gap-0.5"}
         (when (pos? value)
           [:> AlertOctagon {:size 12 :class "text-rose-600 fill-rose-500"}])
-        [common/number-stepper value on-change :min-val 0 :max-val 1 :touch? touch?]]
-       [common/number-stepper value on-change :min-val 0 :touch? touch?])]))
+        [stepper-for field value on-change touch?]]
+       [stepper-for field value on-change touch?])]))
 
 (defn- player-stat-row
   [form-data player stats-map dirty-cells row-idx touch? row-count]
@@ -373,19 +393,16 @@
             [:div {:class "grid grid-cols-2 gap-3"}
              [:div
               [:p {:class "mb-1 text-xs font-medium text-slate-500"} "Gols"]
-              [common/number-stepper (:goals stat)
-               #(update-stat! form-data dirty-cells pid :goals %)
-               :min-val 0 :touch? true]]
+              [stepper-for :goals (:goals stat)
+               #(update-stat! form-data dirty-cells pid :goals %) true]]
              [:div
               [:p {:class "mb-1 text-xs font-medium text-slate-500"} "Assistências"]
-              [common/number-stepper (:assists stat)
-               #(update-stat! form-data dirty-cells pid :assists %)
-               :min-val 0 :touch? true]]
+              [stepper-for :assists (:assists stat)
+               #(update-stat! form-data dirty-cells pid :assists %) true]]
              [:div
               [:p {:class "mb-1 text-xs font-medium text-slate-500"} "Minutos"]
-              [common/number-stepper (:minutes-played stat)
-               #(update-stat! form-data dirty-cells pid :minutes-played %)
-               :min-val 0 :max-val 120 :touch? true]]
+              [stepper-for :minutes-played (:minutes-played stat)
+               #(update-stat! form-data dirty-cells pid :minutes-played %) true]]
              [:div
               [:p {:class "mb-1 text-xs font-medium text-slate-500"} "Participação"]
               [common/checkbox-field (:played? stat)
@@ -395,15 +412,13 @@
              [:div {:class (common/merge-classes "flex-1 rounded-lg px-2 py-2"
                                                 (card-highlight-class stat :yellow-cards))}
               [:p {:class "mb-1 text-xs font-medium text-amber-700 dark:text-amber-300"} "Amarelo"]
-              [common/number-stepper (:yellow-cards stat)
-               #(update-stat! form-data dirty-cells pid :yellow-cards %)
-               :min-val 0 :touch? true]]
+              [stepper-for :yellow-cards (:yellow-cards stat)
+               #(update-stat! form-data dirty-cells pid :yellow-cards %) true]]
              [:div {:class (common/merge-classes "flex-1 rounded-lg px-2 py-2"
                                                 (card-highlight-class stat :red-cards))}
               [:p {:class "mb-1 text-xs font-medium text-rose-700 dark:text-rose-300"} "Vermelho"]
-              [common/number-stepper (:red-cards stat)
-               #(update-stat! form-data dirty-cells pid :red-cards %)
-               :min-val 0 :max-val 1 :touch? true]]]])]))))
+              [stepper-for :red-cards (:red-cards stat)
+               #(update-stat! form-data dirty-cells pid :red-cards %) true]]]])]))))
 
 (defn- enrollment-banner [championship-id]
   (when-not (str/blank? (str championship-id))
@@ -418,27 +433,30 @@
      :variant :warning]))
 
 (defn- match-form-sticky-header
-  [{:keys [form-title hub-champ-name opponent home-score away-score
+  [{:keys [form-title hub-champ-name opponent date home-score away-score
            dirty? submitting? draft-restored?]}]
-  [:div {:class "sticky top-0 z-10 -mx-4 mb-4 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95 sm:-mx-0 sm:rounded-xl sm:border sm:px-4"}
-   [:div {:class "flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"}
-    [:div {:class "min-w-0"}
-     (when hub-champ-name
-       [common/badge hub-champ-name :variant :info :class "mb-1"])
-     [:h2 {:class "truncate text-lg font-semibold text-slate-900 dark:text-slate-100"}
-      (or (not-empty (str/trim opponent)) form-title)]
-     (when (and hub-champ-name (not (str/blank? opponent)))
-       [:p {:class "text-xs text-slate-500 dark:text-slate-400"} hub-champ-name])]
-    [:div {:class "flex flex-wrap items-center gap-3"}
-     [:p {:class "text-xl font-bold tabular-nums text-slate-900 dark:text-slate-100"}
-      (str home-score " x " away-score)]
-     [:div {:class "flex flex-col items-end gap-0.5 text-xs text-slate-500 dark:text-slate-400"}
-      (when dirty?
-        [:span {:class "text-amber-600 dark:text-amber-400"} "Partida em curso"])
-      (when submitting?
-        [:span "A sincronizar…"])
-      (when draft-restored?
-        [:span {:class "text-sky-600 dark:text-sky-400"} "Rascunho restaurado"])]]]])
+  (let [date-label (when-not (str/blank? (str date))
+                     (or (common/format-match-calendar-date date) (str date)))]
+    [:div {:class "sticky top-0 z-10 -mx-4 mb-4 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95 sm:-mx-0 sm:rounded-xl sm:border sm:px-4"}
+     [:div {:class "flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"}
+      [:div {:class "min-w-0"}
+       (when hub-champ-name
+         [common/badge hub-champ-name :variant :info :class "mb-1"])
+       [:h2 {:class "truncate text-lg font-semibold text-slate-900 dark:text-slate-100"}
+        (or (not-empty (str/trim opponent)) form-title)]
+       (let [context-line (str/join " · " (remove str/blank? [(str hub-champ-name) date-label]))]
+         (when-not (str/blank? context-line)
+           [:p {:class "text-xs text-slate-500 dark:text-slate-400"} context-line]))]
+      [:div {:class "flex flex-wrap items-center gap-3"}
+       [:p {:class "text-xl font-bold tabular-nums text-slate-900 dark:text-slate-100"}
+        (str home-score " x " away-score)]
+       [:div {:class "flex flex-col items-end gap-0.5 text-xs text-slate-500 dark:text-slate-400"}
+        (when dirty?
+          [:span {:class "text-amber-600 dark:text-amber-400"} "Partida em curso"])
+        (when submitting?
+          [:span "A sincronizar…"])
+        (when draft-restored?
+          [:span {:class "text-sky-600 dark:text-sky-400"} "Rascunho restaurado"])]]]]))
 
 (defn match-form [params]
   (let [id (:id params)
@@ -802,6 +820,7 @@
                {:form-title form-title
                 :hub-champ-name display-champ-name
                 :opponent opponent
+                :date (:date @form-data)
                 :home-score home-score
                 :away-score away-score
                 :dirty? form-dirty?
@@ -828,7 +847,12 @@
                 [:div {:class "text-center space-y-2"}
                  [:label {:class "text-sm font-medium text-slate-700 dark:text-slate-200"} "Gols do Adversário"]
                  [:div {:class "flex justify-center"}
-                  [common/number-stepper away-score #(swap! form-data assoc :away-score %) :min-val 0]]]
+                  (let [{:keys [min-val max-val]} (stat-bounds/bounds-for :away-score)]
+                    [common/number-stepper away-score
+                     #(swap! form-data assoc :away-score
+                             (stat-bounds/clamp-stat-value :away-score %))
+                     :min-val min-val
+                     :max-val max-val])]]
                 [:div {:class "text-center space-y-2"}
                  [:label {:class "text-sm font-medium text-slate-700 dark:text-slate-200"} "Resultado Final"]
                  [:p {:class "text-2xl font-bold tabular-nums text-slate-900 dark:text-slate-100"}
@@ -1004,9 +1028,9 @@
               matches-without-season (filter #(nil? (:season-id %)) @matches)]
           [:div {:class "space-y-6"}
            [common/breadcrumb
-            [{:label "Campeonatos" :route :championships}
-             {:label "Partidas" :route :matches}
-             {:label (or (:name @championship) "Campeonato")}]]
+            (breadcrumbs/build-breadcrumbs :matches-by-championship
+                                           {:championship-id (str (:_id @championship))}
+                                           :entity-label (or (:name @championship) "Campeonato"))]
            [:div {:class "flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"}
             [:div
              (when (:name @championship)

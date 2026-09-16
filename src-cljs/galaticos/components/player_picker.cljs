@@ -119,13 +119,14 @@
   "Painel: busca, lista A–Z, ação por linha, criação rápida quando não há resultados.
    Props: :players, :exclude-ids (set de ids string), :action-label,
    :on-pick-player (fn [player]), :on-quick-create (fn [name ok err]) opcional,
-   :compact?, :disabled?, :search-placeholder, :selected-id (string opcional),
+   :compact?, :disabled?, :search-placeholder, :disabled-hint (texto quando disabled?),
+   :selected-id (string opcional),
    :players-loading? (boolean; true enquanto o catálogo de :players ainda não foi obtido — ex. GET /api/players pendente)."
   [_props]
   (let [search (r/atom "")
         creating? (r/atom false)]
     (fn [{:keys [players exclude-ids action-label on-pick-player on-quick-create
-                 compact? disabled? search-placeholder selected-id label
+                 compact? disabled? search-placeholder disabled-hint selected-id label
                  players-loading?]}]
       (let [q-raw @search
             q (str (or q-raw ""))
@@ -165,14 +166,17 @@
             label])
          [:div {:class picker-panel-class}
           [:input {:type "text"
-                   :value q
+                   :value (if disabled? "" q)
                    :disabled disabled?
                    :placeholder (or search-placeholder "Buscar por nome ou apelido...")
+                   :aria-disabled (when disabled? "true")
                    :on-change (fn [e]
-                                (reset! search (str (or (some-> e .-target .-value) ""))))
+                                (when-not disabled?
+                                  (reset! search (str (or (some-> e .-target .-value) "")))))
                    :class picker-input-class}]
           (if disabled?
-            [:p {:class "px-3 py-3 text-xs text-slate-500"} "Indisponível."]
+            [:p {:class "px-3 py-3 text-xs text-slate-500"}
+             (or disabled-hint "Indisponível.")]
             [:div {:class list-class}
              (if (seq rows)
                (doall
@@ -208,7 +212,7 @@
                     (empty? eligible-vec) "Todos os jogadores já estão inscritos neste campeonato."
                     :else "Nenhum jogador disponível para adicionar.")
                   :else "Nenhum resultado para esta busca.")])])]
-         (when (and selected-id (not (str/blank? selected-id)))
+         (when (and selected-id (not (str/blank? selected-id)) (not disabled?))
            (when-let [p (some #(when (= (player-id %) selected-id) %) (as-player-vec players))]
              [:p {:class (if compact? "text-xs text-slate-600" "text-sm text-slate-600")}
               [:span {:class "font-medium text-slate-800"} "Selecionado: "] (player-name-str p)]))

@@ -9,20 +9,21 @@
 
 (defn create!
   "Insert merge audit document. Returns inserted doc with generated _id."
-  [{:keys [master-id merged-ids field-selections admin-id admin-username before-state after-state]}]
+  [{:keys [master-id merged-ids field-selections admin-id admin-username before-state after-state reason]}]
   (let [now (java.util.Date.)
         id (ObjectId.)
-        doc {:_id id
-             :type "player-merge"
-             :master-id (->object-id master-id)
-             :merged-ids (mapv ->object-id merged-ids)
-             :field-selections field-selections
-             :admin-id (some-> admin-id ->object-id)
-             :admin-username admin-username
-             :merged-at now
-             :before-state before-state
-             :after-state after-state
-             :created-at now}]
+        doc (cond-> {:_id id
+                     :type "player-merge"
+                     :master-id (->object-id master-id)
+                     :merged-ids (mapv ->object-id merged-ids)
+                     :field-selections field-selections
+                     :admin-id (some-> admin-id ->object-id)
+                     :admin-username admin-username
+                     :merged-at now
+                     :before-state before-state
+                     :after-state after-state
+                     :created-at now}
+              (some? reason) (assoc :reason reason))]
     (mc/insert (db) collection-name doc)
     doc))
 

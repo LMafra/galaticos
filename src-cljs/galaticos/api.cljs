@@ -2,6 +2,7 @@
   "API client for making HTTP requests to the backend"
   (:require [cljs-http.client :as http]
             [cljs.core.async :refer [<! go]]
+            [clojure.string :as str]
             [goog.object :as gobj]
             [galaticos.i18n :as i18n]))
 
@@ -263,10 +264,11 @@
 (defn unenroll-player-from-championship [championship-id player-id on-success on-error]
   (delete-request (str "/api/championships/" championship-id "/unenroll/" player-id) on-success on-error))
 
-(defn finalize-championship [championship-id winner-player-ids titles-award-count on-success on-error]
+(defn finalize-championship [championship-id winner-player-ids titles-award-count on-success on-error & {:keys [reason]}]
   (post-request (str "/api/championships/" championship-id "/finalize")
-                {:winner-player-ids winner-player-ids
-                 :titles-award-count (if (number? titles-award-count) titles-award-count (js/parseInt (str titles-award-count) 10))}
+                (cond-> {:winner-player-ids winner-player-ids
+                         :titles-award-count (if (number? titles-award-count) titles-award-count (js/parseInt (str titles-award-count) 10))}
+                  (and reason (not (str/blank? (str reason)))) (assoc :reason reason))
                 on-success
                 on-error))
 

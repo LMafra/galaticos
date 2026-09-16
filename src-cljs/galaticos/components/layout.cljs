@@ -111,7 +111,9 @@
   [:aside {:class "hidden md:flex md:w-16 lg:w-64 shrink-0 flex-col border-r border-slate-200 bg-white px-2 py-6 dark:border-slate-700 dark:bg-slate-900 lg:px-4"}
    [:div {:class "flex items-center justify-center gap-2 px-1 lg:justify-start lg:px-2"}
     [:div {:class "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-maroon text-white font-bold"
-           :title "Galáticos"}
+           :title "Galáticos"
+           :aria-label "Galáticos"
+           :role "img"}
      "G"]
     [:div {:class "hidden min-w-0 lg:block"}
      [:p {:class "text-sm font-semibold text-slate-900 dark:text-slate-100"} "Galáticos"]
@@ -203,8 +205,7 @@
         route-match (:route-match @state/app-state)
         page-override (get-in @state/app-state [:ui :page-context])
         page-ctx (derive-page-context current-route route-match championships page-override)
-        header-title (or (:title page-ctx) (route-title (nav-route current-route)))
-        theme (get-in @state/app-state [:ui :theme])]
+        header-title (or (:title page-ctx) (route-title (nav-route current-route)))]
     [:header {:class "sticky top-0 z-20 flex items-center justify-between border-b border-slate-200 bg-white/90 px-4 py-4 backdrop-blur dark:border-slate-700 dark:bg-slate-900/90 md:pl-6 lg:px-8"}
      [:div {:class "flex min-w-0 items-center gap-3"}
       [:h1 {:class "truncate text-base font-semibold text-slate-900 dark:text-slate-100"}
@@ -218,10 +219,11 @@
          [:> Loader2 {:size 14 :class "animate-spin" :aria-hidden true}]
          [:span {:class "hidden sm:inline"} "Sincronizando"]])
       [:button {:type "button"
-                :class "inline-flex rounded-lg p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
-                :on-click #(state/set-theme! (if (= theme "dark") "light" "dark"))
-                :aria-label "Alternar tema claro/escuro"}
-       (if (= theme "dark")
+                :class "inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                :on-click #(state/toggle-theme!)
+                :aria-label "Alternar tema claro/escuro"
+                :aria-pressed (if (state/dark-theme?) "true" "false")}
+       (if (state/dark-theme?)
          [:> Sun {:size 18 :aria-hidden true}]
          [:> Moon {:size 18 :aria-hidden true}])]
       (cond
@@ -245,9 +247,9 @@
     [:div {:class "min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100"}
      [top-progress-bar]
      [mobile-sidebar current-route authenticated?]
-     [:div {:class "flex min-h-screen"}
+     [:div {:class "flex min-h-screen w-full"}
       [sidebar current-route authenticated?]
-      [:div {:class "relative z-0 flex min-h-screen w-full flex-col"}
+      [:div {:class "relative z-0 flex min-h-screen min-w-0 flex-1 flex-col"}
        [header current-route]
        [:main#main-content {:class "relative z-0 flex-1 px-4 pb-32 pt-6 md:pb-10 lg:px-8"}
         (if (:loading @state/app-state)

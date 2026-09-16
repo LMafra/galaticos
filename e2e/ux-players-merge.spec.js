@@ -5,6 +5,10 @@ const {
   setupTwoPlayersForMerge,
   toastRegion,
   clickUndo,
+  getAdminToken,
+  apiJson,
+  getGalaticosTeamId,
+  mainContent,
 } = require('./_helpers');
 
 test.describe('UX players and merge', { tag: ['@ux', '@ux-slow'] }, () => {
@@ -15,6 +19,49 @@ test.describe('UX players and merge', { tag: ['@ux', '@ux-slow'] }, () => {
       await page.getByPlaceholder('Buscar jogador...').fill('a');
       await page.waitForTimeout(400);
       await expect(page.getByText('Erro ao carregar players')).toHaveCount(0);
+    } finally {
+      await saveCoverage(page, testInfo);
+    }
+  });
+
+  test('search by unique name leaves only matching rows', async ({ page, request }, testInfo) => {
+    try {
+      const token = await getAdminToken(request, page);
+      const teamId = await getGalaticosTeamId(request, token);
+      const unique = Date.now();
+      const name = `E2E Unique Search ${unique}`;
+      const { response, body } = await apiJson(request, token, 'POST', '/api/players', {
+        name,
+        position: 'Atacante',
+        'team-id': teamId,
+      });
+      expect(response.ok(), JSON.stringify(body)).toBeTruthy();
+
+      await page.goto('/#/players');
+      await expect(pageHeading(page, 'Jogadores')).toBeVisible();
+      await page.getByPlaceholder('Buscar jogador...').fill(name);
+      await expect(mainContent(page).getByText(name)).toBeVisible({ timeout: 15_000 });
+      const rows = mainContent(page).locator('table tbody tr');
+      await expect(rows).toHaveCount(1, { timeout: 10_000 });
+      await expect(rows.first()).toContainText(name);
+    } finally {
+      await saveCoverage(page, testInfo);
+    }
+  });
+
+  test('duplicate warning opens merge with reference set', async ({ page, request }, testInfo) => {
+    try {
+      const { names } = await setupTwoPlayersForMerge(request, page);
+      await page.goto('/#/players');
+      await expect(pageHeading(page, 'Jogadores')).toBeVisible();
+      await page.getByPlaceholder('Buscar jogador...').fill(names[0].slice(0, 16));
+
+      const dupBtn = page.getByRole('button', { name: 'Possível duplicado — mesclar' }).first();
+      await expect(dupBtn).toBeVisible({ timeout: 20_000 });
+      await dupBtn.click();
+      const dialog = page.getByRole('dialog');
+      await expect(dialog).toBeVisible();
+      await expect(dialog.getByText(/Referência:/)).toBeVisible({ timeout: 15_000 });
     } finally {
       await saveCoverage(page, testInfo);
     }

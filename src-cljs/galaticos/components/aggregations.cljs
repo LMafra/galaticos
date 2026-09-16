@@ -3,10 +3,17 @@
   (:require
    [clojure.string :as str]
    [reagent.core :as r]
+   [reitit.frontend.easy :as rfe]
    [galaticos.api :as api]
    [galaticos.state :as state]
    [galaticos.effects :as effects]
    [galaticos.components.common :as common]))
+
+(defn- normalize-id [v]
+  (cond
+    (string? v) v
+    (map? v) (or (get v "$oid") (get v :$oid))
+    :else (when v (str v))))
 
 (def ^:private stats-filters-storage-key "galaticos.stats.global-filters")
 
@@ -137,11 +144,12 @@
             position-options (into [["" "Todas as posições"]]
                                    (map (fn [pos] [pos pos])
                                         (sort (into #{} (keep :position @data)))))
-            filtered-data  (cond->> (or @data [])
+            filtered-data  (vec
+                            (cond->> (or @data [])
                               (not (str/blank? @position-filter))
                               (filter #(= @position-filter (:position %)))
                               (not (str/blank? global-team-id))
-                              (filter #(= global-team-id (str (:team-id %)))))
+                              (filter #(= global-team-id (str (:team-id %))))))
             rows           (when (seq filtered-data)
                              (mapv (fn [p]
                                      (let [mv (player-metric-value p @metric)]
@@ -194,7 +202,11 @@
               rows
               :sortable? true
               :dense? true
-              :numeric-columns #{1 3 4}]]
+              :numeric-columns #{1 3 4}
+              :row-data filtered-data
+              :on-row-click (fn [p]
+                              (when-let [id (normalize-id (or (:_id p) (:id p)))]
+                                (rfe/push-state :player-detail {:id id})))]]
 
             @data
             (if filters-active?
@@ -224,9 +236,9 @@
              (report-error! error (str "Erro: " err))
              (reset! loading? false))))
 
-        (let [filtered (if (str/blank? global-championship-id)
-                       @data
-                       (filter #(= global-championship-id (str (:championship-id %))) @data))
+        (let [filtered (vec (if (str/blank? global-championship-id)
+                              @data
+                              (filter #(= global-championship-id (str (:championship-id %))) @data)))
             filters-active? (global-filters-active? global-championship-id "")]
         [:div {:class "space-y-4"}
          [common/delayed-loading-panel @loading?
@@ -250,7 +262,11 @@
                      filtered)
                :sortable? true
                :dense? true
-               :numeric-columns #{2 3 4 5}]]]
+               :numeric-columns #{2 3 4 5}
+               :row-data filtered
+               :on-row-click (fn [ch]
+                               (when-let [id (normalize-id (:championship-id ch))]
+                                 (rfe/push-state :championship-detail {:id id})))]]]
 
             @data
             (if filters-active?
@@ -295,7 +311,11 @@
             champ-options (into [["" "Usar filtro global ou escolher"]]
                                 (map (fn [ch] [(str (:_id ch)) (:name ch)]))
                                 (or championships []))
-            player-rows   (when (seq @player-stats)
+            filtered-players (vec
+                              (cond->> (or @player-stats [])
+                                (not (str/blank? @position-filter))
+                                (filter #(= @position-filter (:position %)))))
+            player-rows   (when (seq filtered-players)
                             (mapv (fn [row]
                                     [(or (:player-name row) "-")
                                      (or (:position row) "-")
@@ -305,9 +325,7 @@
                                      (if (number? (:goals-per-game row))
                                        (.toFixed (:goals-per-game row) 2)
                                        "-")])
-                                  (cond->> @player-stats
-                                    (not (str/blank? @position-filter))
-                                    (filter #(= @position-filter (:position %))))))
+                                  filtered-players))
             position-rows (when (seq @position-stats)
                             (mapv (fn [row]
                                     [(or (:position row) "-")
@@ -353,7 +371,11 @@
                  player-rows
                  :sortable? true
                  :dense? true
-                 :numeric-columns #{2 3 4 5}]])
+                 :numeric-columns #{2 3 4 5}
+                 :row-data filtered-players
+                 :on-row-click (fn [row]
+                                 (when-let [id (normalize-id (or (:_id row) (:player-id row)))]
+                                   (rfe/push-state :player-detail {:id id})))]])
              (when (seq position-rows)
                [common/card
                 [:h3 {:class "app-section-title"} "Média de gols por posição"]
