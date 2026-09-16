@@ -2,9 +2,10 @@
   (:require [clojure.data.json :as json]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
+            [galaticos.db.team-store :as team-store]
             [galaticos.handlers.teams :as handlers]
             [galaticos.middleware.errors :as errors]
-            [galaticos.db.teams :as teams-db])
+            [galaticos.support.team-store-fixtures :as fixtures])
   (:import [org.bson.types ObjectId]))
 
 (defn- parse-body [response]
@@ -14,10 +15,15 @@
 (defn- invoke [handler request]
   ((errors/wrap-errors handler) request))
 
+(defn- with-store [store f]
+  (binding [team-store/*store* store]
+    (f)))
+
 (deftest list-teams
   (let [request {}
-        result (with-redefs [teams-db/find-all (fn [] [{:name "T1"}])]
-                (invoke handlers/list-teams request))
+        store (fixtures/team-store
+                {:find-all-teams (fn [_] [{:name "T1"}])})
+        result (with-store store #(invoke handlers/list-teams request))
         body (parse-body result)]
     (is (= 200 (:status result)))
     (is (vector? (:data body)))))
@@ -27,23 +33,25 @@
     (let [id (str (ObjectId.))
           request {:params {:id id}}
           team {:_id (ObjectId. id) :name "Team"}
-          result (with-redefs [teams-db/find-by-id (fn [x] (when (= x id) team))]
-                  (invoke handlers/get-team request))
+          store (fixtures/team-store
+                  {:find-team-by-id (fn [_ x] (when (= x id) team))})
+          result (with-store store #(invoke handlers/get-team request))
           body (parse-body result)]
       (is (= 200 (:status result)))
       (is (= "Team" (get-in body [:data :name])))))
   (testing "not found"
     (let [request {:params {:id (str (ObjectId.))}}
-          result (with-redefs [teams-db/find-by-id (fn [_] nil)]
-                  (invoke handlers/get-team request))]
+          store (fixtures/team-store {})
+          result (with-store store #(invoke handlers/get-team request))]
       (is (= 404 (:status result))))))
 
 (deftest create-team
   (testing "success"
     (let [request {:json-body {:name "New Team"}}
           created {:_id (ObjectId.) :name "New Team"}
-          result (with-redefs [teams-db/create (fn [_] created)]
-                  (invoke handlers/create-team request))
+          store (fixtures/team-store
+                  {:create-team (fn [_ _] created)})
+          result (with-store store #(invoke handlers/create-team request))
           body (parse-body result)]
       (is (= 201 (:status result)))
       (is (= "New Team" (get-in body [:data :name])))))
@@ -59,39 +67,42 @@
     (let [id (str (ObjectId.))
           request {:params {:id id} :json-body {:name "Updated"}}
           updated {:_id (ObjectId. id) :name "Updated"}
-          result (with-redefs [teams-db/exists? (fn [x] (= x id))
-                               teams-db/update-by-id (fn [_ _] nil)
-                               teams-db/find-by-id (fn [_] updated)]
-                  (invoke handlers/update-team request))]
+          store (fixtures/team-store
+                  {:team-exists? (fn [_ x] (= x id))
+                   :update-team-by-id (fn [_ _ _] nil)
+                   :find-team-by-id (fn [_ _] updated)})
+          result (with-store store #(invoke handlers/update-team request))]
       (is (= 200 (:status result)))))
   (testing "not found"
     (let [request {:params {:id (str (ObjectId.))} :json-body {:name "X"}}
-          result (with-redefs [teams-db/exists? (fn [_] false)]
-                  (invoke handlers/update-team request))]
+          store (fixtures/team-store {})
+          result (with-store store #(invoke handlers/update-team request))]
       (is (= 404 (:status result))))))
 
 (deftest delete-team
   (testing "success when no players"
     (let [id (str (ObjectId.))
           request {:params {:id id}}
-          result (with-redefs [teams-db/exists? (fn [x] (= x id))
-                               teams-db/has-players? (fn [_] false)
-                               teams-db/delete-by-id (fn [_] nil)]
-                  (invoke handlers/delete-team request))
+          store (fixtures/team-store
+                  {:team-exists? (fn [_ x] (= x id))
+                   :team-has-players? (fn [_ _] false)
+                   :delete-team-by-id (fn [_ _] nil)})
+          result (with-store store #(invoke handlers/delete-team request))
           body (parse-body result)]
       (is (= 200 (:status result)))
       (is (= "Team deleted" (get-in body [:data :message])))))
   (testing "conflict when has players"
     (let [id (str (ObjectId.))
           request {:params {:id id}}
-          result (with-redefs [teams-db/exists? (fn [x] (= x id))
-                               teams-db/has-players? (fn [_] true)]
-                  (invoke handlers/delete-team request))]
+          store (fixtures/team-store
+                  {:team-exists? (fn [_ x] (= x id))
+                   :team-has-players? (fn [_ _] true)})
+          result (with-store store #(invoke handlers/delete-team request))]
       (is (= 409 (:status result)))))
   (testing "not found"
     (let [request {:params {:id (str (ObjectId.))}}
-          result (with-redefs [teams-db/exists? (fn [_] false)]
-                  (invoke handlers/delete-team request))]
+          store (fixtures/team-store {})
+          result (with-store store #(invoke handlers/delete-team request))]
       (is (= 404 (:status result))))))
 
 (deftest add-player-to-team
@@ -100,9 +111,10 @@
           player-id (str (ObjectId.))
           request {:params {:id team-id :player-id player-id}}
           team {:_id (ObjectId. team-id) :name "T"}
-          result (with-redefs [teams-db/add-player (fn [_ _] nil)
-                               teams-db/find-by-id (fn [_] team)]
-                  (invoke handlers/add-player-to-team request))]
+          store (fixtures/team-store
+                  {:add-player-to-team (fn [_ _ _] nil)
+                   :find-team-by-id (fn [_ _] team)})
+          result (with-store store #(invoke handlers/add-player-to-team request))]
       (is (= 200 (:status result)))))
   (testing "missing params"
     (let [request {:params {}}
@@ -117,7 +129,8 @@
           player-id (str (ObjectId.))
           request {:params {:id team-id :player-id player-id}}
           team {:_id (ObjectId. team-id)}
-          result (with-redefs [teams-db/remove-player (fn [_ _] nil)
-                               teams-db/find-by-id (fn [_] team)]
-                  (invoke handlers/remove-player-from-team request))]
+          store (fixtures/team-store
+                  {:remove-player-from-team (fn [_ _ _] nil)
+                   :find-team-by-id (fn [_ _] team)})
+          result (with-store store #(invoke handlers/remove-player-from-team request))]
       (is (= 200 (:status result))))))

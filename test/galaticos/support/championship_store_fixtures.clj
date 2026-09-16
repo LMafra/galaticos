@@ -38,8 +38,14 @@
       (call-or (:create-season overrides)
                (fn [_ d] (merge {:_id (ObjectId.) :status "inactive"} d))
                this doc))
+    (find-season-by-id [this id]
+      (call-or (:find-season-by-id overrides) (constantly nil) this id))
+    (season-exists? [this id]
+      (call-or (:season-exists? overrides) (constantly false) this id))
     (update-season-by-id [this id updates]
       (call-or (:update-season-by-id overrides) (constantly nil) this id updates))
+    (delete-season-by-id [this id]
+      (call-or (:delete-season-by-id overrides) (constantly nil) this id))
     (delete-seasons-by-championship [this championship-id]
       (call-or (:delete-seasons-by-championship overrides) (constantly nil) this championship-id))
     (activate-season! [this season-id]

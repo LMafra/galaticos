@@ -14,7 +14,7 @@ Galáticos **functional programming** migration is **closed** (Phases 0–E, glo
 
 ## Completed (Phases 0, A, B, C, D, E — global closure)
 
-HTTP contract tests, `wrap-errors`, `validation/entity`, FP architecture doc, players/teams/seasons/championships/matches `domain/*` + `logic/*`, `db.protocol/*` store protocols, zero `service/*` / `repository/*` globally, `domain/analytics` + `logic/analytics`, derived API/insights/CSV, CLJS `dispatch!` / `app-reducer` / dashboard reactions, domain+logic tests with `reify`, handler tests via bound `*store*` (no `with-redefs` on `db/*` globals). OO pilots deleted; `./bin/galaticos test` green.
+HTTP contract tests, `wrap-errors`, `validation/entity`, FP architecture doc, players/teams/seasons/championships/matches `domain/*` + `logic/*`, `db.protocol/*` store protocols (`championship-store`, `match-store`, `player-store`, `team-store`), zero `service/*` / `repository/*` globally, `domain/analytics` + `logic/analytics`, derived API/insights/CSV, CLJS `dispatch!` / `app-reducer` / dashboard reactions, domain+logic tests with `reify`, handler tests via bound `*store*` (no `with-redefs` on `db/*` globals for championships, matches, players, teams, seasons). OO pilots deleted; `./bin/galaticos test` green.
 
 Verified 2026-06-11:
 
@@ -32,4 +32,3 @@ rg 'galaticos\.(service|repository)' src/ test/
 - [ ] Separate merge/pipeline IO vs pure calculation in aggregations
 - [ ] Jobs: intent maps (future evolution)
 - [ ] Property `recompute == cache` in tests (additional coverage)
-- [ ] Refactor remaining handler tests (players, teams) from `with-redefs` on `db/*` to bound store pattern

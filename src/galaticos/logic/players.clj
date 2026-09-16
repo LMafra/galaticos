@@ -1,8 +1,8 @@
 (ns galaticos.logic.players
-  "Player orchestration."
+  "Player orchestration over PlayerStore."
   (:require [galaticos.db.aggregations :as agg]
-            [galaticos.db.players :as players-db]
-            [galaticos.db.teams :as teams-db]
+            [galaticos.db.player-store :as store]
+            [galaticos.db.protocol.player-store :as protocol]
             [galaticos.domain.errors :as errors]
             [galaticos.domain.players :as domain]
             [galaticos.util.response :as resp]))
@@ -17,63 +17,70 @@
     (:ok result)))
 
 (defn list-all
-  [request]
-  (let [filters (if-let [team-id (get-in request [:params :team-id])]
-                  {:team-id (resp/->object-id team-id)}
-                  {})
-        active-only (get-in request [:params :active])]
-    (if (= active-only "true")
-      (players-db/find-active)
-      (players-db/find-all filters))))
+  ([request] (list-all store/*store* request))
+  ([store request]
+   (let [filters (if-let [team-id (get-in request [:params :team-id])]
+                   {:team-id (resp/->object-id team-id)}
+                   {})
+         active-only (get-in request [:params :active])]
+     (if (= active-only "true")
+       (protocol/find-active-players store)
+       (protocol/find-all-players store filters)))))
 
 (defn get-by-id
-  [id]
-  (if-let [player (players-db/find-by-id id)]
-    player
-    (errors/not-found! "Player not found")))
+  ([id] (get-by-id store/*store* id))
+  ([store id]
+   (if-let [player (protocol/find-player-by-id store id)]
+     player
+     (errors/not-found! "Player not found"))))
 
 (defn- resolve-team-name
-  [player]
+  [store player]
   (try
-    (some-> (:team-id player) teams-db/find-by-id :name)
+    (when-let [tid (:team-id player)]
+      (:name (protocol/find-team-by-id store tid)))
     (catch Exception _ nil)))
 
 (defn detail-bundle
-  [id]
-  (if-let [player (players-db/find-by-id id)]
-    (let [team-name (resolve-team-name player)
-          player* (domain/attach-team-name player team-name)]
-      {:player player*
-       :evolution (agg/player-performance-evolution id)})
-    (errors/not-found! "Player not found")))
+  ([id] (detail-bundle store/*store* id))
+  ([store id]
+   (if-let [player (protocol/find-player-by-id store id)]
+     (let [team-name (resolve-team-name store player)
+           player* (domain/attach-team-name player team-name)]
+       {:player player*
+        :evolution (agg/player-performance-evolution id)})
+     (errors/not-found! "Player not found"))))
 
-(defn- assert-team-exists! [data]
+(defn- assert-team-exists! [store data]
   (when-let [tid (:team-id data)]
-    (require-ok (domain/team-assignment-decision tid (teams-db/exists? tid)))))
+    (require-ok (domain/team-assignment-decision tid (protocol/team-exists? store tid)))))
 
 (defn create!
-  [data]
-  (assert-team-exists! data)
-  (let [created (players-db/create data)]
-    (when-let [tid (:team-id created)]
-      (teams-db/add-player tid (:_id created)))
-    created))
+  ([data] (create! store/*store* data))
+  ([store data]
+   (assert-team-exists! store data)
+   (let [created (protocol/create-player store data)]
+     (when-let [tid (:team-id created)]
+       (protocol/add-player-to-team store tid (:_id created)))
+     created)))
 
 (defn update!
-  [id data]
-  (if (players-db/exists? id)
-    (do
-      (players-db/update-by-id id data)
-      (if-let [updated (players-db/find-by-id id)]
-        updated
-        (throw (ex-info "Failed to retrieve updated player"
-                        {:status 500 :message "Failed to retrieve updated player"}))))
-    (errors/not-found! "Player not found")))
+  ([id data] (update! store/*store* id data))
+  ([store id data]
+   (if (protocol/player-exists? store id)
+     (do
+       (protocol/update-player-by-id store id data)
+       (if-let [updated (protocol/find-player-by-id store id)]
+         updated
+         (throw (ex-info "Failed to retrieve updated player"
+                         {:status 500 :message "Failed to retrieve updated player"}))))
+     (errors/not-found! "Player not found"))))
 
 (defn delete!
-  [id]
-  (if (players-db/exists? id)
-    (do
-      (players-db/delete-by-id id)
-      {:message "Player deleted"})
-    (errors/not-found! "Player not found")))
+  ([id] (delete! store/*store* id))
+  ([store id]
+   (if (protocol/player-exists? store id)
+     (do
+       (protocol/delete-player-by-id store id)
+       {:message "Player deleted"})
+     (errors/not-found! "Player not found"))))

@@ -46,7 +46,9 @@ flowchart TB
 |-----------|------------------|---------|
 | `domain/championships` | `can-delete?`, `finalization-decision`, pure enrich | `{:ok _}` / `{:error {:type :status :message}}` |
 | `logic/championships` | `create!`, `delete!`, `finalize!` — receives store | `(defn delete! [store id] ...)` |
-| `db.protocol/championship-store` | `defprotocol ChampionshipStore` | `find-by-id`, `delete!` |
+| `db.protocol/championship-store` | `defprotocol ChampionshipStore` | `find-championship-by-id`, `delete-championship-by-id`, season ops |
+| `db.protocol/player-store` | `defprotocol PlayerStore` | `find-player-by-id`, `create-player` |
+| `db.protocol/team-store` | `defprotocol TeamStore` | `find-team-by-id`, `team-has-players?` |
 | `db/championships` | Monger + `reify` or record implementing protocol | `(find-by-id db id)` |
 | `handlers/championships` | params/body → `logic` → `resp/success` | No repeated `try/catch` |
 
