@@ -88,9 +88,9 @@ test.describe('UX championships', { tag: '@ux' }, () => {
       await page.goto(`/#/championships/${championshipId}`);
       await expect(page.getByText('Inscrições')).toBeVisible({ timeout: 15_000 });
       await pickPlayerInSearchAddPanel(page, playerName, 'Inscrever');
-      await expect(
-        mainContent(page).locator('div').filter({ hasText: playerName }).filter({ has: page.getByRole('button', { name: 'Remover' }) }).first()
-      ).toBeVisible({ timeout: 15_000 });
+      const rosterRow = mainContent(page).locator('table tbody tr').filter({ hasText: playerName });
+      await expect(rosterRow).toBeVisible({ timeout: 15_000 });
+      await expect(rosterRow.getByRole('button', { name: 'Remover' })).toBeVisible();
     } finally {
       await saveCoverage(page, testInfo);
     }
@@ -132,6 +132,20 @@ test.describe('UX championships', { tag: '@ux' }, () => {
   }, testInfo) => {
     try {
       const champId = await setupActiveChampionshipWithEnrolledGalaticosPlayer(request, page);
+      const token = await getAdminToken(request, page);
+      const { body: teamsBody } = await apiJson(request, token, 'GET', '/api/teams');
+      const team = (teamsBody?.data || []).find((x) => x?.name === 'Galáticos' || x?.name === 'Galaticos');
+      const { body: pBody } = await apiJson(request, token, 'GET', `/api/championships/${champId}/players`);
+      const playerId = String(pBody?.data?.[0]?._id);
+      const { response: mRes, body: mBody } = await apiJson(request, token, 'POST', '/api/matches', {
+        'championship-id': champId,
+        'home-team-id': String(team._id),
+        date: '2026-05-01',
+        opponent: `E2E Finalize Match ${Date.now()}`,
+        'player-statistics': [{ 'player-id': playerId, 'team-id': String(team._id), goals: 1 }],
+      });
+      expect(mRes.ok(), JSON.stringify(mBody)).toBeTruthy();
+
       await page.goto(`/#/championships/${champId}`);
       await expect(page.getByText('Inscrições')).toBeVisible({ timeout: 15_000 });
 
@@ -146,6 +160,10 @@ test.describe('UX championships', { tag: '@ux' }, () => {
       await expect(winnerLabel).toBeVisible();
       await winnerLabel.click();
       await expect(winnerLabel.locator('input[type="checkbox"]')).toBeChecked();
+
+      const reason = page.getByPlaceholder(/Época encerrada/i);
+      await expect(reason).toBeVisible();
+      await reason.fill('Fim da época E2E');
 
       const finalizeBtn = page.getByRole('button', { name: /Finalizar campeonato/i });
       await expect(finalizeBtn).toBeEnabled();

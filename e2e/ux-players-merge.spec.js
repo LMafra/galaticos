@@ -40,8 +40,8 @@ test.describe('UX players and merge', { tag: ['@ux', '@ux-slow'] }, () => {
       await page.goto('/#/players');
       await expect(pageHeading(page, 'Jogadores')).toBeVisible();
       await page.getByPlaceholder('Buscar jogador...').fill(name);
-      await expect(mainContent(page).getByText(name)).toBeVisible({ timeout: 15_000 });
       const rows = mainContent(page).locator('table tbody tr');
+      await expect(rows.filter({ hasText: name })).toBeVisible({ timeout: 15_000 });
       await expect(rows).toHaveCount(1, { timeout: 10_000 });
       await expect(rows.first()).toContainText(name);
     } finally {
@@ -92,6 +92,7 @@ test.describe('UX players and merge', { tag: ['@ux', '@ux-slow'] }, () => {
   });
 
   test('merge three-step flow with undo toast', async ({ page, request }, testInfo) => {
+    test.setTimeout(60_000);
     try {
       const { names } = await setupTwoPlayersForMerge(request, page);
       await page.goto('/#/players');
@@ -107,8 +108,11 @@ test.describe('UX players and merge', { tag: ['@ux', '@ux-slow'] }, () => {
         return;
       }
       await nextBtn.click();
-      await expect(dialog.getByText(/Carregando comparação|Registro mestre/i)).toBeVisible({ timeout: 15_000 });
-      await dialog.getByRole('button', { name: 'Confirmar mesclagem' }).click();
+      await expect(dialog.getByText(/Registro mestre/i)).toBeVisible({ timeout: 15_000 });
+      await dialog.getByPlaceholder(/Duplicado criado/i).fill('Duplicado E2E merge');
+      const confirmBtn = dialog.getByRole('button', { name: 'Confirmar mesclagem' });
+      await expect(confirmBtn).toBeEnabled();
+      await confirmBtn.click();
       await expect(toastRegion(page).getByText(/Unificação em 10 s/i)).toBeVisible({ timeout: 10_000 });
       await clickUndo(page);
       await expect(toastRegion(page).getByText(/Unificação cancelada/i)).toBeVisible({ timeout: 10_000 });

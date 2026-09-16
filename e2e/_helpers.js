@@ -458,12 +458,13 @@ async function withGuestPage(browser, fn) {
  */
 async function pickPlayerInSearchAddPanel(page, name, actionLabel = 'Adicionar') {
   const panel = mainContent(page);
-  const search = panel.getByPlaceholder(/Buscar por nome ou apelido/i);
+  const search = panel.getByPlaceholder(/Buscar (jogador por nome|por nome ou apelido)/i);
   await expect(search).toBeVisible({ timeout: 15_000 });
+  await expect(search).toBeEnabled();
   await search.fill(name);
-  const row = panel.locator('div').filter({ hasText: name }).filter({ has: page.getByRole('button', { name: actionLabel }) }).first();
-  await expect(row.getByRole('button', { name: actionLabel })).toBeVisible({ timeout: 10_000 });
-  await row.getByRole('button', { name: actionLabel }).click();
+  const actionBtn = panel.getByRole('button', { name: actionLabel, exact: true });
+  await expect(actionBtn).toBeVisible({ timeout: 10_000 });
+  await actionBtn.click();
 }
 
 module.exports = {
