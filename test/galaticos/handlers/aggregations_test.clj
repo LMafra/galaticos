@@ -201,5 +201,19 @@
           body (parse-body result)]
       (is (= 400 (:status result))))))
 
+(deftest matches-missing-player-stats-for-warning
+  (testing "excel-seed and python-seed result-only matches are ignored"
+    (let [seed-excel {:_id "m1" :data-source "excel-seed" :player-statistics []}
+          seed-py {:_id "m2" :data-source "python-seed" :player-statistics nil}
+          app-empty {:_id "m3" :data-source "ui" :player-statistics []}
+          app-ok {:_id "m4" :player-statistics [{:player-id "p1"}]}
+          flagged (#'handlers/matches-missing-player-stats-for-warning
+                   [seed-excel seed-py app-empty app-ok])]
+      (is (= ["m3"] (map :_id flagged)))))
+  (testing "app matches with missing player-statistics still flagged"
+    (let [flagged (#'handlers/matches-missing-player-stats-for-warning
+                   [{:_id "m5"}])]
+      (is (= ["m5"] (map :_id flagged))))))
+
 ;; dashboard-stats omitted: requires real DB or complex stubs (mc/count/mc/find-maps
 ;; interact with Mongo Java driver and stub fns cause ClassCastException)

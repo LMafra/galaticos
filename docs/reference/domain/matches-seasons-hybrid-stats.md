@@ -1,6 +1,6 @@
 # Matches, seasons, and hybrid statistics
 
-**Last updated:** June 2026
+**Last updated:** September 2026
 
 **Summary:** Implementation guide for match CRUD, active seasons, and the hybrid aggregated-stats model (`pre-match-stats`, `baseline-match-rollup`, fan-out). Read this when you touch match writes or stat rollups. Use with [concepts.md](../../concepts.md), [business-rules.md](business-rules.md) (`RN-MATCH-*`, `RN-STATS-*`), and the tests listed below.
 
@@ -45,31 +45,31 @@ After save: persist → `add-match` on season → incremental job ([architecture
 | Command | Purpose |
 |---------|---------|
 | `./bin/galaticos db:setup` | MongoDB indexes |
-| `./bin/galaticos db:seed` | Spreadsheet + BASE_DADOS (idempotent) |
-| `./bin/galaticos db:seed --full` | + legacy sheets, `data/*.csv`, tournament matches, ASBAC |
-| `./bin/galaticos db:seed-full --reset` | **Recommended:** wipe + all sources + Clojure reconcile (hybrid stats aligned with app) |
+| `./bin/galaticos db:seed` | Spreadsheet **Base de dados** only (players + table stats; idempotent) |
+| `./bin/galaticos db:seed --full` | + tournament/`data/*.csv` **match scores** (no scorers/assists) + ASBAC. Does not import athlete tables from other Excel tabs |
+| `./bin/galaticos db:seed-full --reset` | **Recommended:** wipe + match results + ASBAC + Clojure reconcile (hybrid stats aligned with app) |
 | `./bin/galaticos db:check-stats` | Quick counts (players, matches, hybrid metadata) |
 
 Requirements: `data/raw/galaticos.xlsm` (or `EXCEL_FILE`), MongoDB reachable (`MONGO_URI` / `config/docker/.env`). Do not mix with `db:seed-smoke` on the same `DB_NAME` without `--reset`.
 
 Python seed imports matches **before** `rebuild_aggregated_stats_from_matches`; the final `db:seed-full` step runs `galaticos.tasks.reconcile-player-stats` with the same logic as production `domain/analytics.clj`.
 
-**Goal:** count the player’s **full career** in the system — spreadsheet, imported matches (seed), and UI-created matches, across **all** seasons with documents in `matches`.
+**Goal:** count the player’s **full career** in the system — spreadsheet table stats (Base de dados), UI-created matches, and any older matches that still have `player-statistics`. Seed-imported matches (`excel-seed` / `python-seed`) store **score only** (`player-statistics: []`), so they do **not** add goals/assists/games to the hybrid rollup.
 
-**Problem to avoid:** adding the full rollup on top of the spreadsheet when imported matches are already reflected in the table.
+**Problem to avoid:** adding a match rollup on top of the spreadsheet when those matches are already reflected in the table. Result-only seed matches keep rollup at 0, so displayed totals stay the Base de dados baseline until the UI records a new match.
 
 ### Three origins per row (`championship-id` + `season`)
 
 | Origin | Matches in Mongo | `:pre-match-stats` | `:baseline-match-rollup` | Displayed |
 |--------|------------------|--------------------|---------------------------|-----------|
 | Spreadsheet only | none | table totals | — (or 0) | = spreadsheet |
-| Spreadsheet + import | seed imports | table totals | rollup already in table | spreadsheet + (rollup − frozen) |
+| Spreadsheet + import | seed imports (score only) | table totals | 0 (empty `player-statistics`) | = spreadsheet |
 | Matches only | old and/or UI | `{games:0, goals:0, …}` | 0 until inference | = season rollup |
 
 Examples (Jow):
 
 - **MINAS 2025** — spreadsheet only (11 goals); no matches in that season in rollup.
-- **OAB 2025** — spreadsheet 13 goals; `baseline-match-rollup` 13 → imported matches already in table.
+- **OAB 2025** — spreadsheet 13 goals; imported matches have no per-player stats → displayed 13 (table only).
 - **MINAS 2022** — matches only (11 goals); no spreadsheet row for 2022.
 - **BORA 2026** — new UI match (+1 goal); row `pm=0`, displayed = season rollup.
 
@@ -113,10 +113,10 @@ flowchart TD
 
 Python seed (`scripts/python/seed_mongodb.py`) must write on each `by-championship` line:
 
-- `:pre-match-stats` — spreadsheet totals (table).
-- `:baseline-match-rollup` — rollup of imported matches already in the table.
+- `:pre-match-stats` — spreadsheet totals from **Base de dados** (table).
+- `:baseline-match-rollup` — freeze of match rollup already in the table (0 when seed matches have empty `player-statistics`).
 
-Without these fields, players with high display (e.g. 87 goals) may inflate when creating a match (`87 + rollup` instead of `87 + delta`). Merge tries to repair overlap via `display-likely-includes-match-rollups?` in `domain/analytics.clj`, but explicit metadata in seed is the safe path.
+Without these fields, players with high display (e.g. 87 goals) may inflate when creating a **UI** match (`87 + rollup` instead of `87 + delta`). Merge tries to repair overlap via `display-likely-includes-match-rollups?` in `domain/analytics.clj`, but explicit metadata in seed is the safe path. Seed-imported matches do not contribute goals; new UI matches still add a delta on top of the table.
 
 ### Troubleshooting: goals jump on match create
 

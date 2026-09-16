@@ -7,7 +7,7 @@
 ### Completeness
 
 - Matches must include `championship-id`.
-- `player-statistics` must exist and be non-empty.
+- `player-statistics` must exist and be non-empty for app-created matches. Seed imports (`excel-seed` / `python-seed`) may have an empty array (result only).
 
 ### Consistency
 

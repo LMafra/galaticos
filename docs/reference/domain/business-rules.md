@@ -473,6 +473,7 @@ Cross-check: [business-rules-audit.md](business-rules-audit.md).
   - Matches referencing non-existent championships
   - Matches without `player-statistics`
   - Matches with empty `player-statistics`
+  - Seed imports (`data-source` `excel-seed` / `python-seed`) are excluded: they store result only
 - **Behavior**:
   - Logs warnings for issues found
   - Does not abort operation (continues despite problems)

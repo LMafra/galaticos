@@ -1,6 +1,7 @@
 #!/bin/bash
-# Full database seed: Excel + BASE_DADOS + legacy imports + tournament matches + ASBAC,
-# then Clojure reconcile (hybrid aggregated-stats aligned with the app).
+# Full database seed: Excel Base de dados (athletes + table stats) + tournament/CSV
+# match scores (no per-match scorers/assists) + ASBAC, then Clojure reconcile
+# (hybrid aggregated-stats aligned with the app).
 #
 # Usage:
 #   ./seed-full.sh                    # Idempotent full import (may skip duplicates)
@@ -44,7 +45,7 @@ export DB_NAME
 
 log_header "Full database seed (all data sources)"
 
-log_info "1/2 Python seed (--full): planilha, CSV, partidas de torneio, ASBAC"
+log_info "1/2 Python seed (--full): Base de dados, placares (CSV/torneio), ASBAC"
 log_info "2/2 Clojure reconcile: aggregated-stats híbridos a partir de matches"
 echo ""
 
