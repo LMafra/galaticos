@@ -5,6 +5,7 @@
             [galaticos.api :as api]
             [galaticos.components.common :as common]
             [galaticos.delete-undo :as delete-undo]
+            [galaticos.finalization :as finalization]
             [galaticos.state :as state]
             [galaticos.ui-copy :as ui-copy]))
 
@@ -94,9 +95,11 @@
     (let [m-id (normalize-id (or (:_id master-doc) (:id master-doc)))
           merged-ids (mapv #(normalize-id (or (:_id %) (:id %))) merged-docs-vec)
           sels (:selections @st)
+          reason (finalization/normalize-reason (:reason @st))
           payload {:master-id m-id
                    :merged-ids merged-ids
-                   :field-selections (into {} (map (fn [[k v]] [(name k) v]) sels))}
+                   :field-selections (into {} (map (fn [[k v]] [(name k) v]) sels))
+                   :reason reason}
           commit-merge!
           (fn [commit-ok commit-err]
             (swap! st assoc :submitting? true :error nil)
@@ -110,11 +113,15 @@
                                  (swap! st assoc :submitting? false)
                                  (commit-err err)
                                  (state/toast-error! (str err)))))]
-      (when on-close (on-close))
-      (delete-undo/schedule!
-       {:message ui-copy/merge-undo-toast
-        :on-rollback #(state/toast-info! ui-copy/merge-cancelled)
-        :on-commit commit-merge!}))))
+      (if-not (finalization/reason-valid? reason)
+        (do (swap! st assoc :error ui-copy/sensitive-reason-invalid)
+            (state/toast-error! ui-copy/sensitive-reason-invalid))
+        (do
+          (when on-close (on-close))
+          (delete-undo/schedule!
+           {:message ui-copy/merge-undo-toast
+            :on-rollback #(state/toast-info! ui-copy/merge-cancelled)
+            :on-commit commit-merge!}))))))
 
 (defn merge-workflow-modal
   [{:keys [championship-id roster-players initial-reference-id]}]
@@ -131,6 +138,7 @@
                     :master-id nil
                     :ordered-ids []
                     :selections (initial-selections)
+                    :reason ""
                     :error nil
                     :submitting? false})
         fetch-candidates!
@@ -463,7 +471,15 @@
                                 (fmt-val (get (preview-fn) (:kw row)))]]))]])]
                  (when (and master-doc merged-docs)
                    [:div {:class "shrink-0 border-t border-slate-200 bg-slate-50/95 px-4 py-4 dark:border-slate-700 dark:bg-slate-900/95 sm:px-6"}
-                    [:div {:class "flex flex-wrap justify-end gap-3"}
+                    [:label {:class "block text-sm font-medium text-slate-700 dark:text-slate-200"}
+                     ui-copy/sensitive-reason-label]
+                    [:p {:class "mt-1 text-xs text-slate-500"} ui-copy/sensitive-reason-hint]
+                    [:textarea {:class "app-input mt-2 w-full min-h-[72px]"
+                                :placeholder ui-copy/merge-reason-placeholder
+                                :value (or (:reason @st) "")
+                                :disabled submitting?
+                                :on-change #(swap! st assoc :reason (.. % -target -value))}]
+                    [:div {:class "mt-3 flex flex-wrap justify-end gap-3"}
                      [common/button "← Voltar"
                       #(swap! st assoc :step :pick-candidates :docs-by-id nil :master-id nil)
                       :variant :outline]
@@ -472,7 +488,9 @@
                       (if submitting? "Mesclando…" "Confirmar mesclagem")
                       #(run-merge! st master-doc merged-docs {:on-success on-success :on-close on-close})
                       :variant :primary
-                      :disabled (or submitting? (zero? n-merged))]]])]
+                      :disabled (or submitting?
+                                    (zero? n-merged)
+                                    (not (finalization/reason-valid? (:reason @st))))]]])]
 
                 ))]]]))})))
 

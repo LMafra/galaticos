@@ -38,4 +38,18 @@ test.describe('Resource not found', { tag: '@validation' }, () => {
       await saveCoverage(page, testInfo);
     }
   });
+
+  test('unknown hash shows Página não encontrada with Dashboard CTA', async ({ page }, testInfo) => {
+    try {
+      await page.goto('/#/this-is-not-a-route');
+      await expect(page.getByRole('heading', { name: 'Página não encontrada' })).toBeVisible({
+        timeout: 15_000,
+      });
+      await expect(page.getByRole('button', { name: 'Dashboard' })).toBeVisible();
+      await page.getByRole('button', { name: 'Dashboard' }).click();
+      await expect(page).toHaveURL(/\/#\/dashboard/);
+    } finally {
+      await saveCoverage(page, testInfo);
+    }
+  });
 });

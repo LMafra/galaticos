@@ -168,6 +168,7 @@
   ([store championship-id body]
    (let [winner-player-ids (mapv resp/->object-id (get body :winner-player-ids []))
          titles-award-count (domain/parse-titles-award-count (get body :titles-award-count))
+         reason (some-> (get body :reason) str str/trim not-empty)
          active-season (protocol/find-active-season-by-championship store championship-id)
          championship (when-not active-season
                         (protocol/find-championship-by-id store championship-id))
@@ -178,15 +179,18 @@
        :season
        (do
          (protocol/finalize-season! store (:_id season) winner-player-ids titles-award-count)
+         (when reason
+           (protocol/update-season-by-id store (:_id season) {:finalize-reason reason}))
          {:message "Season finalized"})
 
        :championship
        (do
          (protocol/update-championship-by-id store championship-id
-                                             {:status "completed"
-                                              :finished-at (Date.)
-                                              :winner-player-ids winner-player-ids
-                                              :titles-award-count titles-award-count})
+                                             (cond-> {:status "completed"
+                                                      :finished-at (Date.)
+                                                      :winner-player-ids winner-player-ids
+                                                      :titles-award-count titles-award-count}
+                                               reason (assoc :finalize-reason reason)))
          (when (pos? titles-award-count)
            (protocol/increment-player-titles store winner-player-ids titles-award-count))
          {:message "Championship finalized"})))))

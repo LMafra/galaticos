@@ -9,6 +9,7 @@
             [galaticos.components.charts :as charts]
             [galaticos.effects :as effects]
             [galaticos.delete-undo :as delete-undo]
+            [galaticos.breadcrumbs :as breadcrumbs]
             [galaticos.ui-copy :as ui-copy]
             [clojure.string :as str]
             ["lucide-react" :refer [Grid2X2 ListFilter ChartColumn AlertTriangle]]))
@@ -60,6 +61,56 @@
        sort
        (map (fn [pos] [pos pos]))
        (cons ["" "Todas as posições"])))
+
+(defn- player-card
+  "Single player card (≥44px targets). Used for mobile stack and desktop cards view."
+  [{:keys [player authenticated dup open-merge!]}]
+  (let [id (normalize-id (or (:_id player) (:id player)))
+        dup-entry (when id (get dup id))
+        dup-btn? (and authenticated dup-entry (seq (:candidates dup-entry)))]
+    [:div {:class "rounded-lg border border-slate-200 bg-white p-3 transition hover:shadow-md dark:border-slate-700 dark:bg-slate-900/80 sm:app-card sm:p-4"
+           :role "button"
+           :tab-index 0
+           :on-click #(when id
+                        (effects/save-list-scroll! :players)
+                        (rfe/push-state :player-detail {:id id}))
+           :on-key-down (fn [e]
+                          (when (and id (#{"Enter" " "} (.-key e)))
+                            (.preventDefault e)
+                            (effects/save-list-scroll! :players)
+                            (rfe/push-state :player-detail {:id id})))}
+     [:div {:class "flex items-start gap-3"}
+      [:div {:class "h-12 w-12 overflow-hidden rounded-xl bg-slate-100"}
+       (when-let [photo (:photo-url player)]
+         [:img {:src photo :alt (:name player) :class "h-full w-full object-cover"}])]
+      [:div {:class "min-w-0 flex-1"}
+       [:div {:class "flex items-start gap-2"}
+        (when dup-btn?
+          [:button {:type "button"
+                    :class "flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center text-amber-500 hover:text-amber-600"
+                    :aria-label "Possível duplicado — mesclar"
+                    :on-click (fn [e]
+                                (.stopPropagation e)
+                                (open-merge! {:initial-ref id
+                                              :championship-id nil
+                                              :roster nil}))}
+           [:> AlertTriangle {:size 20}]])
+        [:p {:class "truncate text-base font-semibold text-slate-900 dark:text-slate-100"} (:name player)]]
+       [:p {:class "text-xs text-slate-500"} (or (:nickname player) "-")]
+       [common/badge (:position player) :variant :info :class "mt-2"]]]
+     [:div {:class "mt-3 grid grid-cols-3 gap-2 text-center text-xs text-slate-600"}
+      [:div
+       [:p {:class "text-sm font-semibold tabular-nums text-slate-900 dark:text-slate-100"}
+        (get-in player [:aggregated-stats :total :games] 0)]
+       [:p "Partidas"]]
+      [:div
+       [:p {:class "text-sm font-semibold tabular-nums text-slate-900 dark:text-slate-100"}
+        (get-in player [:aggregated-stats :total :goals] 0)]
+       [:p "Gols"]]
+      [:div
+       [:p {:class "text-sm font-semibold tabular-nums text-slate-900 dark:text-slate-100"}
+        (get-in player [:aggregated-stats :total :assists] 0)]
+       [:p "Assistências"]]]]))
 
 (defn player-list []
   (let [view-mode (r/atom :table)
@@ -141,109 +192,105 @@
                [common/button "Novo Jogador" #(rfe/push-state :player-new) :variant :primary]])]
 
            [common/card
-            [:div {:class "flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"}
-             [:div {:class "flex flex-col gap-3 sm:flex-row sm:items-center"}
-              [:input {:type "text"
-                       :value @search
-                       :placeholder "Buscar jogador..."
-                       :on-change (fn [e]
-                                    (reset! page 1)
-                                    (reset! search (-> e .-target .-value))
-                                    (search-backend!))
-                       :class "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-brand-maroon focus:outline-none focus:ring-2 focus:ring-brand-maroon/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 sm:w-64"}]
-              [common/select-field "Posição" @position positions (fn [v]
-                                                                   (reset! page 1)
-                                                                   (reset! position v)
-                                                                   (search-backend!))
-               :container-class "min-w-[200px]"]]
-             [:div {:class "flex items-center gap-2"}
-              [:button {:class (common/merge-classes "rounded-lg border px-3 py-2 text-sm"
-                                                    (if (= @view-mode :table)
-                                                      "bg-brand-maroon text-white border-brand-maroon"
-                                                      "border-slate-200 text-slate-600 hover:bg-slate-100"))
-                        :on-click #(reset! view-mode :table)}
-               [:> ListFilter {:size 16}]]
-              [:button {:class (common/merge-classes "rounded-lg border px-3 py-2 text-sm"
-                                                    (if (= @view-mode :cards)
-                                                      "bg-brand-maroon text-white border-brand-maroon"
-                                                      "border-slate-200 text-slate-600 hover:bg-slate-100"))
-                        :on-click #(reset! view-mode :cards)}
-               [:> Grid2X2 {:size 16}]]]]
+            [common/list-toolbar
+             {:search @search
+              :search-id "players-search"
+              :search-placeholder "Buscar jogador..."
+              :on-search-change (fn [v]
+                                  (reset! page 1)
+                                  (reset! search v)
+                                  (search-backend!))
+              :filter-controls
+              [[common/select-field "Posição" @position positions
+                (fn [v]
+                  (reset! page 1)
+                  (reset! position v)
+                  (search-backend!))
+                :container-class "min-w-[200px]"]]
+              :result-count (when-not players-loading? (count players))
+              :on-clear (fn []
+                          (reset! page 1)
+                          (reset! search "")
+                          (reset! position "")
+                          (search-backend!))
+              :clear-disabled? (and (str/blank? @search) (str/blank? @position))
+              :extra-actions
+              [:div {:class "hidden items-center gap-2 lg:flex"
+                     :key "players-view-toggle"}
+               [:button {:type "button"
+                         :aria-label "Vista em tabela"
+                         :class (common/merge-classes "rounded-lg border px-3 py-2 text-sm min-h-[44px]"
+                                                     (if (= @view-mode :table)
+                                                       "bg-brand-maroon text-white border-brand-maroon"
+                                                       "border-slate-200 text-slate-600 hover:bg-slate-100"))
+                         :on-click #(reset! view-mode :table)}
+                [:> ListFilter {:size 16}]]
+               [:button {:type "button"
+                         :aria-label "Vista em cartões"
+                         :class (common/merge-classes "rounded-lg border px-3 py-2 text-sm min-h-[44px]"
+                                                     (if (= @view-mode :cards)
+                                                       "bg-brand-maroon text-white border-brand-maroon"
+                                                       "border-slate-200 text-slate-600 hover:bg-slate-100"))
+                         :on-click #(reset! view-mode :cards)}
+                [:> Grid2X2 {:size 16}]]]}]
 
             (cond
-              players-loading? [common/loading-spinner]
+              players-loading?
+              [common/skeleton-table ["Nome" "Posição" "Time" "Estado"] :rows 6 :class "mt-3"]
               (seq players)
-              [:div {:class "space-y-4"}
-               (if (= @view-mode :cards)
-                 [:div {:class "mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"}
-                  (for [player players]
-                    (let [id (normalize-id (or (:_id player) (:id player)))
-                          dup-entry (when id (get dup id))
-                          dup-btn? (and authenticated dup-entry (seq (:candidates dup-entry)))]
-                      ^{:key id}
-                      [:div {:class "app-card p-4 transition hover:shadow-md"
-                             :on-click #(when id (rfe/push-state :player-detail {:id id}))}
-                       [:div {:class "flex items-start gap-3"}
-                        [:div {:class "h-12 w-12 overflow-hidden rounded-xl bg-slate-100"}
-                         (when-let [photo (:photo-url player)]
-                           [:img {:src photo :alt (:name player) :class "h-full w-full object-cover"}])]
-                        [:div {:class "flex-1 min-w-0"}
-                         [:div {:class "flex items-start gap-2"}
-                           (when dup-btn?
-                             [:button {:type "button"
-                                       :class "mt-0.5 shrink-0 text-amber-500 hover:text-amber-600"
-                                       :aria-label "Possível duplicado — mesclar"
-                                       :on-click (fn [e]
-                                                   (.stopPropagation e)
-                                                   (open-merge! {:initial-ref id
-                                                                 :championship-id nil
-                                                                 :roster nil}))}
-                             [:> AlertTriangle {:size 18}]])
-                          [:p {:class "text-base font-semibold text-slate-900 dark:text-slate-100 truncate"} (:name player)]]
-                         [:p {:class "text-xs text-slate-500"} (or (:nickname player) "-")]
-                         [common/badge (:position player) :variant :info :class "mt-2"]]]
-                       [:div {:class "mt-4 grid grid-cols-3 gap-2 text-center text-xs text-slate-600"}
-                        [:div
-                         [:p {:class "text-sm font-semibold text-slate-900 dark:text-slate-100"} (get-in player [:aggregated-stats :total :games] 0)]
-                         [:p "Partidas"]]
-                        [:div
-                         [:p {:class "text-sm font-semibold text-slate-900 dark:text-slate-100"} (get-in player [:aggregated-stats :total :goals] 0)]
-                         [:p "Gols"]]
-                        [:div
-                         [:p {:class "text-sm font-semibold text-slate-900 dark:text-slate-100"} (get-in player [:aggregated-stats :total :assists] 0)]
-                         [:p "Assistências"]]]]))]
-                 [common/table
-                  ["" "Nome" "Apelido" "Posição" "Partidas" "Gols" "Assistências"]
-                  (map (fn [player]
-                         (let [id (normalize-id (or (:_id player) (:id player)))
-                               dup-entry (when id (get dup id))
-                               dup-btn? (and authenticated dup-entry (seq (:candidates dup-entry)))]
-                           [[:span {:class "inline-flex w-8 justify-center"}
-                             (when dup-btn?
-                               [:button {:type "button"
-                                         :class "text-amber-500 hover:text-amber-600"
-                                         :aria-label "Possível duplicado — mesclar"
-                                         :on-click (fn [e]
-                                                     (.stopPropagation e)
-                                                     (open-merge! {:initial-ref id
-                                                                   :championship-id nil
-                                                                   :roster nil}))}
-                                [:> AlertTriangle {:size 18}]])]
-                            (:name player)
-                            (:nickname player)
-                            [common/badge (:position player) :variant :info]
-                            (get-in player [:aggregated-stats :total :games] 0)
-                            (get-in player [:aggregated-stats :total :goals] 0)
-                            (get-in player [:aggregated-stats :total :assists] 0)]))
-                       players)
-                  :on-row-click (fn [player]
-                                  (effects/save-list-scroll! :players)
-                                  (if-let [id (normalize-id (or (:_id player) (:id player)))]
-                                    (rfe/push-state :player-detail {:id id})
-                                    (state/set-error! "ID do jogador ausente; não foi possível abrir detalhes.")))
-                  :row-data players
-                  :sortable? true
-                  :show-search? false])
+              [:div {:class "mt-3 space-y-4"}
+               ;; Mobile: always card stack (Wave 3)
+               [:div {:class "space-y-2 lg:hidden"}
+                (doall
+                 (for [player players]
+                   ^{:key (normalize-id (or (:_id player) (:id player)))}
+                   [player-card {:player player
+                                 :authenticated authenticated
+                                 :dup dup
+                                 :open-merge! open-merge!}]))]
+               ;; Desktop: table or cards toggle
+               [:div {:class "hidden lg:block"}
+                (if (= @view-mode :cards)
+                  [:div {:class "grid gap-4 lg:grid-cols-3"}
+                   (doall
+                    (for [player players]
+                      ^{:key (normalize-id (or (:_id player) (:id player)))}
+                      [player-card {:player player
+                                    :authenticated authenticated
+                                    :dup dup
+                                    :open-merge! open-merge!}]))]
+                  [common/table
+                   ["" "Nome" "Apelido" "Posição" "Partidas" "Gols" "Assistências"]
+                   (map (fn [player]
+                          (let [id (normalize-id (or (:_id player) (:id player)))
+                                dup-entry (when id (get dup id))
+                                dup-btn? (and authenticated dup-entry (seq (:candidates dup-entry)))]
+                            [[:span {:class "inline-flex w-8 justify-center"}
+                              (when dup-btn?
+                                [:button {:type "button"
+                                          :class "text-amber-500 hover:text-amber-600"
+                                          :aria-label "Possível duplicado — mesclar"
+                                          :on-click (fn [e]
+                                                      (.stopPropagation e)
+                                                      (open-merge! {:initial-ref id
+                                                                    :championship-id nil
+                                                                    :roster nil}))}
+                                 [:> AlertTriangle {:size 18}]])]
+                             (:name player)
+                             (:nickname player)
+                             [common/badge (:position player) :variant :info]
+                             (get-in player [:aggregated-stats :total :games] 0)
+                             (get-in player [:aggregated-stats :total :goals] 0)
+                             (get-in player [:aggregated-stats :total :assists] 0)]))
+                        players)
+                   :on-row-click (fn [player]
+                                   (effects/save-list-scroll! :players)
+                                   (if-let [id (normalize-id (or (:_id player) (:id player)))]
+                                     (rfe/push-state :player-detail {:id id})
+                                     (state/set-error! "ID do jogador ausente; não foi possível abrir detalhes.")))
+                   :row-data players
+                   :sortable? true
+                   :show-search? false])]
                (when-not players-loading?
                  (let [full-page? (= (count players) page-size)]
                    [:div {:class "flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-4"}
@@ -344,7 +391,9 @@
                    [common/not-found-resource @error #(rfe/push-state :players)]
                    [:div {:class "space-y-4"}
                     [common/button "Tentar novamente" load-player! :variant :outline]])
-          @loading? [common/loading-spinner]
+          @loading? [:div {:class "space-y-4"}
+                     [common/skeleton-line :class "h-8 w-48"]
+                     [common/skeleton-table ["Métrica" "Valor"] :rows 4]]
           @player (let [{:keys [authenticated teams]} @state/app-state
                         player-stats (get-in @player [:aggregated-stats :total] {})
                         team-id (normalize-id (:team-id @player))
@@ -356,6 +405,12 @@
                                             :name))
                         by-champ (get-in @player [:aggregated-stats :by-championship])]
                     [:div {:class "space-y-6"}
+                     [common/breadcrumb
+                      (breadcrumbs/build-breadcrumbs :player-detail
+                                                     (cond-> {:id id}
+                                                       team-id (assoc :team-id team-id))
+                                                     :entity-label (:name @player)
+                                                     :team-label (when team-id team-name))]
                      [:div {:class "flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"}
                       [:div {:class "flex items-center gap-4"}
                        [:div {:class "h-16 w-16 overflow-hidden rounded-2xl bg-slate-100"}
@@ -415,7 +470,11 @@
                                     (:assists ch-stats)])
                                  by-champ)
                             :sortable? true
-                            :dense? true]
+                            :dense? true
+                            :row-data by-champ
+                            :on-row-click (fn [ch-stats]
+                                            (when-let [cid (normalize-id (:championship-id ch-stats))]
+                                              (rfe/push-state :championship-detail {:id cid})))]
                            [:p {:class "app-muted"} "Nenhuma estatística por campeonato"])
                          [common/card
                           [:h3 {:class "app-section-title"} "Evolução por período"]
@@ -547,11 +606,16 @@
       :reagent-render
       (fn []
         [:div {:class "space-y-6"}
+         [common/breadcrumb
+          (breadcrumbs/build-breadcrumbs (if is-edit? :player-edit :player-new)
+                                         (when is-edit? {:id id})
+                                         :entity-label (or (:name @form-data)
+                                                           (if is-edit? "Jogador" "Novo")))]
          [:div
           [:p {:class "text-sm text-slate-500"} "Cadastro"]
           [:h2 {:class "text-2xl font-semibold text-slate-900 dark:text-slate-100"} (if is-edit? "Editar Jogador" "Novo Jogador")]]
          (if (or @player-loading? @teams-loading?)
-           [common/loading-spinner]
+           [common/skeleton-table ["Campo" "Valor"] :rows 6]
            [:form {:class "space-y-6"
                    :on-submit (fn [e]
                                 (.preventDefault e)

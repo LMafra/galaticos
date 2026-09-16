@@ -194,7 +194,8 @@
     (let [body (walk/keywordize-keys (or (:json-body request) {}))
           master-id (some-> (:master-id body) str str/trim not-empty)
           merged-ids (vec (distinct (map str (:merged-ids body))))
-          field-selections (:field-selections body)]
+          field-selections (:field-selections body)
+          reason (some-> (:reason body) str str/trim not-empty)]
       (when-not master-id
         (throw (ex-info "master-id is required" {:status 400})))
       (when (empty? merged-ids)
@@ -203,6 +204,10 @@
         (throw (ex-info "master-id must not appear in merged-ids" {:status 400})))
       (when-not (map? field-selections)
         (throw (ex-info "field-selections map is required" {:status 400})))
+      (when-not reason
+        (throw (ex-info "reason is required (min 3 characters)" {:status 400})))
+      (when (< (count reason) 3)
+        (throw (ex-info "reason is required (min 3 characters)" {:status 400})))
       (let [master (or (players-db/find-by-id master-id)
                        (throw (ex-info "Master player not found" {:status 404})))
             merged-players (merged-docs-in-order merged-ids)
@@ -235,7 +240,8 @@
                       :admin-id (:_id admin)
                       :admin-username username
                       :before-state before-state
-                      :after-state after-state})]
+                      :after-state after-state
+                      :reason reason})]
           (resp/success {:merged-player merged-player
                          :audit-id (str (:_id audit))}))))
     (catch clojure.lang.ExceptionInfo e

@@ -5,8 +5,9 @@
             [galaticos.api :as api]
             [galaticos.state :as state]
             [galaticos.components.common :as common]
+            [galaticos.ui-copy :as ui-copy]
             [reitit.frontend.easy :as rfe]
-            ["lucide-react" :refer [Sun Moon]]))
+            ["lucide-react" :refer [Sun Moon ArrowLeft]]))
 
 (defn- validate-username [username]
   (let [u (str/trim (or username ""))]
@@ -14,6 +15,9 @@
       (str/blank? u) "Informe o usuário."
       (< (count u) 2) "Usuário deve ter pelo menos 2 caracteres."
       :else nil)))
+
+(defn- go-dashboard-guest! []
+  (rfe/push-state :dashboard))
 
 (defn login-page []
   (let [username (r/atom "")
@@ -23,8 +27,7 @@
         username-error (r/atom nil)
         touched-username? (r/atom false)]
     (fn []
-      (let [{:keys [authenticated]} @state/app-state
-            theme (get-in @state/app-state [:ui :theme])]
+      (let [{:keys [authenticated]} @state/app-state]
         (when authenticated
           (js/requestAnimationFrame #(rfe/push-state :dashboard)))
         [:main#main-content
@@ -34,14 +37,22 @@
                   :role "progressbar"
                   :aria-label "A carregar"}
             [:div {:class "h-full w-1/3 animate-pulse bg-brand-maroon"}]])
+         [:div {:class "absolute left-4 top-4 z-10"}
+          [:button {:type "button"
+                    :class "inline-flex min-h-[44px] items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                    :on-click go-dashboard-guest!
+                    :aria-label ui-copy/login-back-aria}
+           [:> ArrowLeft {:size 18 :aria-hidden true}]
+           ui-copy/login-back]]
          [:div {:class "absolute right-4 top-4 z-10"}
           [:button {:type "button"
-                    :class "inline-flex rounded-lg p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
-                    :on-click #(state/set-theme! (if (= theme "dark") "light" "dark"))
-                    :aria-label "Alternar tema claro/escuro"}
-           (if (= theme "dark")
-             [:> Sun {:size 18}]
-             [:> Moon {:size 18}])]]
+                    :class "inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                    :on-click #(state/toggle-theme!)
+                    :aria-label "Alternar tema claro/escuro"
+                    :aria-pressed (if (state/dark-theme?) "true" "false")}
+           (if (state/dark-theme?)
+             [:> Sun {:size 18 :aria-hidden true}]
+             [:> Moon {:size 18 :aria-hidden true}])]]
          [common/card
           [:div {:class "w-full max-w-md space-y-6"}
            [:div {:class "text-center"}
@@ -93,4 +104,9 @@
              :type "submit"
              :saving? @loading
              :saving-label "Autenticando…"
-             :class "w-full min-h-11"]]]]]))))
+             :class "w-full min-h-11"]
+            [:div {:class "text-center"}
+             [:button {:type "button"
+                       :class "text-sm font-medium text-brand-maroon underline-offset-2 hover:underline"
+                       :on-click go-dashboard-guest!}
+              ui-copy/login-continue-as-guest]]]]]]))))

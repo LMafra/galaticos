@@ -40,6 +40,7 @@ Do not redefine metrics in other docs; link to the catalog.
 |-----|----------------|
 | [reference/ui/ui-decisions.md](reference/ui/ui-decisions.md) | UX rules, Portuguese vocabulary, responsive shell |
 | [reference/performance/page-inventory.md](reference/performance/page-inventory.md) | Routes, components, planned PT hash paths |
+| [backlog/uiux/wave-0-audit.md](backlog/uiux/wave-0-audit.md) | Wave 0 baseline: shipped vs gaps, recalibrated slices |
 | [concepts.md](concepts.md) | Domain terms shown in the UI |
 
 ### Writing docs
@@ -83,6 +84,7 @@ Local Lighthouse JSON: `docs/perf-output/` (gitignored).
 
 Executable pending work — not stable reference:
 
+- [backlog/uiux/wave-0-audit.md](backlog/uiux/wave-0-audit.md)
 - [backlog/analytics/advanced-analytics-backlog.md](backlog/analytics/advanced-analytics-backlog.md)
 - [backlog/performance/action-backlog.md](backlog/performance/action-backlog.md)
 - [backlog/fp-design-improvements.md](backlog/fp-design-improvements.md)

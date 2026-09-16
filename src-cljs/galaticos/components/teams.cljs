@@ -528,21 +528,22 @@
                           ["Nome" "Posição" "Partidas" "Ações"]
                           (map (fn [player]
                                  (let [pid (normalize-id (or (:_id player) (:id player)))]
-                                   [[:button {:type "button"
-                                              :class "text-left font-medium text-brand-maroon hover:underline"
-                                              :on-click #(player-detail-route player id team-name)}
-                                     (:name player)]
+                                   [(:name player)
                                     (:position player)
                                     [:span {:class "tabular-nums"}
                                      (get-in player [:aggregated-stats :total :games] 0)]
                                     (when authenticated
-                                      [:button {:class "rounded-lg border border-rose-200 px-2 py-1 text-xs text-rose-600 hover:bg-rose-50 dark:border-rose-800 dark:hover:bg-rose-950/40"
+                                      [:button {:type "button"
+                                                :class "rounded-lg border border-rose-200 px-2 py-1 text-xs text-rose-600 hover:bg-rose-50 dark:border-rose-800 dark:hover:bg-rose-950/40"
                                                 :on-click #(remove-player! pid)}
                                        "Remover"])]))
                                @players)
                           :sortable? true
                           :dense? true
-                          :numeric-columns #{2}]
+                          :numeric-columns #{2}
+                          :row-data @players
+                          :on-row-click (fn [player]
+                                          (player-detail-route player id team-name))]
                          [:p {:class "app-muted"} "Nenhum jogador no time. Adicione atletas abaixo."])]
 
                       (when authenticated

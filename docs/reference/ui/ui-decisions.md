@@ -36,7 +36,7 @@ Do not pursue these without explicit approval:
 | Tablet | 768px – 1023px (`md:`) | Collapsed sidebar (icons only, `w-16`) |
 | Desktop | ≥ 1024px (`lg:`) | Full sidebar (`w-64`) |
 
-Implementation in `layout.cljs`: sidebar `hidden md:flex md:w-16 lg:w-64`; bottom tab `md:hidden`; drawer `md:hidden`; main `pb-20` on mobile for tab bar; match form mobile CTA fixed at `bottom-16`.
+Implementation in `layout.cljs`: sidebar `hidden md:flex md:w-16 lg:w-64`; bottom tab `md:hidden` (4 primary slots + “Mais”); drawer `md:hidden`; main `pb-32` on mobile for tab bar (`md:pb-10` from tablet up); match form mobile CTA fixed at `bottom-16`. Content offset uses flex siblings (no `ml-64`).
 
 ## UI vocabulary (Portuguese)
 

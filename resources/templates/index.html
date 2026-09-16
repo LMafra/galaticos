@@ -38,7 +38,10 @@
           if (t === "dark") { d.classList.add("dark"); }
           else if (t === "light") { d.classList.remove("dark"); }
           else if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+            /* missing, "system", or unknown → follow OS (Wave 4) */
             d.classList.add("dark");
+          } else {
+            d.classList.remove("dark");
           }
         } catch (e) {}
       })();

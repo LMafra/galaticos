@@ -380,6 +380,93 @@ async function waitForMatchDraftOpponent(page, champId, opponent, timeout = 15_0
     .toBe(true);
 }
 
+/**
+ * Attach console / pageerror / requestfailed listeners. Ignore benign noise.
+ * @param {import('@playwright/test').Page} page
+ * @returns {{ faults: string[], dispose: () => void }}
+ */
+function collectPageFaults(page) {
+  const faults = [];
+  const ignoreUrl = (url) =>
+    /favicon\.ico|sourcemap|\.map(\?|$)|chrome-extension:|about:blank/i.test(url || '');
+
+  const onConsole = (msg) => {
+    if (msg.type() !== 'error') return;
+    const text = msg.text() || '';
+    // React logs some warnings via console.error; ignore known benign noise.
+    if (
+      /Download the React DevTools|favicon|ResizeObserver loop|unique "key" prop|Warning: Each child in a list/i.test(
+        text
+      )
+    ) {
+      return;
+    }
+    faults.push(`console.error: ${text}`);
+  };
+  const onPageError = (err) => {
+    faults.push(`pageerror: ${err?.message || String(err)}`);
+  };
+  const onRequestFailed = (request) => {
+    const url = request.url();
+    if (ignoreUrl(url)) return;
+    const failure = request.failure();
+    const errorText = failure?.errorText || '';
+    if (/ERR_ABORTED|net::ERR_ABORTED|NS_BINDING_ABORTED/i.test(errorText)) return;
+    // Hash SPA navigations cancel in-flight XHRs; ignore aborted API fetches.
+    if (/\/api\//.test(url) && /abort/i.test(errorText)) return;
+    faults.push(`requestfailed: ${request.method()} ${url} (${errorText || 'unknown'})`);
+  };
+
+  page.on('console', onConsole);
+  page.on('pageerror', onPageError);
+  page.on('requestfailed', onRequestFailed);
+
+  return {
+    faults,
+    dispose() {
+      page.off('console', onConsole);
+      page.off('pageerror', onPageError);
+      page.off('requestfailed', onRequestFailed);
+    },
+  };
+}
+
+/**
+ * Fresh browser context with no auth storage (guest / read-only).
+ * @param {import('@playwright/test').Browser} browser
+ * @param {(page: import('@playwright/test').Page) => Promise<void>} fn
+ */
+async function withGuestPage(browser, fn) {
+  const context = await browser.newContext({
+    baseURL: process.env.E2E_BASE_URL || 'http://localhost:3000',
+    // Explicit empty state — project storageState must not leak into guest contexts.
+    storageState: { cookies: [], origins: [] },
+  });
+  const page = await context.newPage();
+  try {
+    await fn(page);
+  } finally {
+    await context.close();
+  }
+}
+
+/**
+ * Player search-add panel: type query, click action (Inscrever / Adicionar).
+ * @param {import('@playwright/test').Page} page
+ * @param {string} name
+ * @param {string} [actionLabel]
+ */
+async function pickPlayerInSearchAddPanel(page, name, actionLabel = 'Adicionar') {
+  const panel = mainContent(page);
+  const search = panel.getByPlaceholder(/Buscar (jogador por nome|por nome ou apelido)/i);
+  await expect(search).toBeVisible({ timeout: 15_000 });
+  await expect(search).toBeEnabled();
+  await search.fill(name);
+  const actionBtn = panel.getByRole('button', { name: actionLabel, exact: true });
+  await expect(actionBtn).toBeVisible({ timeout: 10_000 });
+  await actionBtn.click();
+}
+
 module.exports = {
   loginAsAdmin,
   mainContent,
@@ -404,4 +491,7 @@ module.exports = {
   setupTwoPlayersForMerge,
   fillMatchMinimal,
   waitForMatchDraftOpponent,
+  collectPageFaults,
+  withGuestPage,
+  pickPlayerInSearchAddPanel,
 };

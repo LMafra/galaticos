@@ -1,6 +1,7 @@
 (ns galaticos.logic.seasons
   "Season orchestration."
-  (:require [galaticos.db.championships :as championships-db]
+  (:require [clojure.string :as str]
+            [galaticos.db.championships :as championships-db]
             [galaticos.db.players :as players-db]
             [galaticos.db.seasons :as seasons-db]
             [galaticos.domain.errors :as errors]
@@ -80,9 +81,12 @@
   [season-id body]
   (if (seasons-db/exists? season-id)
     (let [{:keys [winner-player-ids titles-award-count]}
-          (domain/finalize-payload body resp/->object-id)]
+          (domain/finalize-payload body resp/->object-id)
+          reason (some-> (get body :reason) str str/trim not-empty)]
       (when (= titles-award-count ::invalid)
         (errors/validation! "titles-award-count must be a non-negative number"))
       (seasons-db/finalize! season-id winner-player-ids titles-award-count)
+      (when reason
+        (seasons-db/update-by-id season-id {:finalize-reason reason}))
       {:message "Season finalized"})
     (errors/not-found! "Season not found")))

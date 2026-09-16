@@ -1,7 +1,8 @@
 (ns galaticos.state
   "Application state management"
   (:require [reagent.core :as r]
-            [galaticos.i18n :as i18n]))
+            [galaticos.i18n :as i18n]
+            [galaticos.theme :as theme]))
 
 (defn- system-prefers-dark? []
   (try
@@ -10,24 +11,20 @@
                  -matches))
     (catch :default _ false)))
 
-(defn- initial-theme []
-  (let [stored-theme (some-> js/window .-localStorage (.getItem "galaticos.theme"))]
-    (cond
-      (#{"light" "dark"} stored-theme) stored-theme
-      (system-prefers-dark?) "dark"
-      :else "light")))
-
-;; add/remove, not toggle("dark", force): some envs ignore 2nd arg and flip wrong.
-(defn- apply-theme! [theme]
-  (when-let [cl (.. js/document -documentElement -classList)]
-    (if (= theme "dark")
-      (.add cl "dark")
-      (.remove cl "dark"))))
-
-(defn- persist-theme! [theme]
+(defn- read-stored-preference []
   (try
-    (some-> js/window .-localStorage (.setItem "galaticos.theme" theme))
+    (theme/normalize-preference
+     (some-> js/window .-localStorage (.getItem theme/storage-key)))
+    (catch :default _ "system")))
+
+(defn- persist-preference! [preference]
+  (try
+    (some-> js/window .-localStorage
+            (.setItem theme/storage-key (theme/normalize-preference preference)))
     (catch :default _ nil)))
+
+(defn- initial-theme-preference []
+  (read-stored-preference))
 
 (defonce app-state
   (r/atom {:user nil
@@ -37,7 +34,8 @@
            :auth-checked? false
            :route-match nil
            :ui {:sidebar-open? false
-                :theme (initial-theme)
+                :theme (initial-theme-preference)
+                :theme-effective nil
                 :page-context nil
                 :last-route nil}
            :players []
@@ -64,6 +62,32 @@
            :loading false
            :error nil
            :toasts []}))
+
+(defn sync-theme-dom!
+  "Recompute effective theme from preference + OS and apply via theme/apply-theme!."
+  ([]
+   (sync-theme-dom! (get-in @app-state [:ui :theme])))
+  ([preference]
+   (let [pref (theme/normalize-preference preference)
+         effective (theme/resolve-theme pref (system-prefers-dark?))]
+     (theme/apply-theme! effective)
+     (swap! app-state assoc-in [:ui :theme-effective] effective)
+     effective)))
+
+(defn theme-preference
+  "Stored preference: light|dark|system."
+  []
+  (theme/normalize-preference (get-in @app-state [:ui :theme])))
+
+(defn effective-theme
+  "Resolved light|dark for styling / aria-pressed."
+  []
+  (or (get-in @app-state [:ui :theme-effective])
+      (theme/resolve-theme (theme-preference) (system-prefers-dark?))))
+
+(defn dark-theme?
+  []
+  (= "dark" (effective-theme)))
 
 (def ^:private default-ttl
   {:error   7000
@@ -129,11 +153,37 @@
 (defn close-sidebar! []
   (swap! app-state assoc-in [:ui :sidebar-open?] false))
 
-(defn set-theme! [theme]
+(defn set-theme-preference!
+  "Persist preference (light|dark|system), apply effective class via theme/apply-theme!."
+  [preference]
+  (let [pref (theme/normalize-preference preference)]
+    (persist-preference! pref)
+    (swap! app-state assoc-in [:ui :theme] pref)
+    (sync-theme-dom! pref)))
+
+(defn set-theme!
+  "Set explicit light|dark preference (compat + E2E)."
+  [theme]
   (when (#{"light" "dark"} theme)
-    (apply-theme! theme)
-    (persist-theme! theme)
-    (swap! app-state assoc-in [:ui :theme] theme)))
+    (set-theme-preference! theme)))
+
+(defn toggle-theme!
+  "Flip between explicit light and dark based on current effective appearance."
+  []
+  (set-theme-preference!
+   (theme/opposite-preference (theme-preference) (system-prefers-dark?))))
+
+(defn- bind-system-theme-listener!
+  []
+  (try
+    (let [mq (.matchMedia js/window "(prefers-color-scheme: dark)")
+          handler (fn [_]
+                    (when (= "system" (theme-preference))
+                      (sync-theme-dom! "system")))]
+      (if (.-addEventListener mq)
+        (.addEventListener mq "change" handler)
+        (.addListener mq handler)))
+    (catch :default _ nil)))
 
 (defn set-page-context!
   "Override header context badge/title for deep pages (match edit, player detail)."
@@ -144,7 +194,8 @@
 (defn clear-page-context! []
   (swap! app-state assoc-in [:ui :page-context] nil))
 
-(apply-theme! (get-in @app-state [:ui :theme]))
+(sync-theme-dom!)
+(bind-system-theme-listener!)
 
 (defn set-user! [user token]
   (swap! app-state assoc :user user :token token :authenticated (some? user) :auth-loading? false :auth-checked? true))

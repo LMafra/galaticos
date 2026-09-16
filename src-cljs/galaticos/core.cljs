@@ -97,12 +97,11 @@
   []
   (let [route-name (when @current-match (get-in @current-match [:data :name]))]
     (if (#{:login :ui-lab} route-name)
-      (when @current-match
-        ;; Login / UI lab render outside `layout`; still mount toasts for API errors.
-        [:<> [current-page @current-match] [toast/toast-container]])
+      ;; Login / UI lab render outside `layout`; still mount toasts for API errors.
+      [:<> [current-page @current-match] [toast/toast-container]]
       [layout/layout route-name
-       (when @current-match
-         [current-page @current-match])])))
+       ;; Always render: nil match → not-found-page (unknown hash routes).
+       [current-page @current-match]])))
 
 (defn mount-root []
   (when-let [root-element (.getElementById js/document "app")]
