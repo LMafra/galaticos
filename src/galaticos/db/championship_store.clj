@@ -25,7 +25,10 @@
     (find-active-season-by-championship [_ championship-id]
       (seasons-db/find-active-by-championship championship-id))
     (create-season [_ doc] (seasons-db/create doc))
+    (find-season-by-id [_ id] (seasons-db/find-by-id id))
+    (season-exists? [_ id] (seasons-db/exists? id))
     (update-season-by-id [_ id updates] (seasons-db/update-by-id id updates))
+    (delete-season-by-id [_ id] (seasons-db/delete-by-id id))
     (delete-seasons-by-championship [_ championship-id]
       (seasons-db/delete-by-championship championship-id))
     (activate-season! [_ season-id] (seasons-db/activate! season-id))

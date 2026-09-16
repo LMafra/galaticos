@@ -1,5 +1,7 @@
 # Advanced Analytics Backlog
 
+Summarized in [development-roadmap.md](../development-roadmap.md).
+
 ## Summary
 
 Remaining analytics evolution after Phase 3 delivery (derived metrics, insights API, dashboard/UI, CSV). Read this when you prioritize new KPIs or predictive experiments. Metric definitions: [metrics-catalog.md](../../reference/analytics/metrics-catalog.md).

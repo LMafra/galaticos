@@ -23,5 +23,6 @@
 - [Functional architecture](docs/reference/architecture/functional-architecture.md): FP migration (domain/logic/db).
 - [Testing and coverage](docs/reference/domain/testing-coverage.md): Cloverage thresholds and strategy.
 - [Analytics architecture](docs/reference/analytics/architecture.md): Jobs and data flow.
+- [Development roadmap](docs/backlog/development-roadmap.md): Master index of all pending development work (start here).
 - [FP improvement checklist](docs/backlog/fp-improvement-checklist.md): Remaining FP migration tasks.
 - [Backlog](docs/backlog/): Pending improvements (not stable reference).

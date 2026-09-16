@@ -52,6 +52,16 @@
 (defn- team-player-count [team]
   (count (or (:active-player-ids team) [])))
 
+(defn- players-on-roster
+  "Players whose ids appear in `player-ids` (team `:active-player-ids`)."
+  [catalog player-ids]
+  (if-not (seq player-ids)
+    []
+    (let [id-set (into #{} (map str player-ids))]
+      (filterv (fn [p]
+                 (contains? id-set (normalize-id (or (:_id p) (:id p)))))
+               catalog))))
+
 (defn- match-date-ms [match]
   (when-let [d (:date match)]
     (.getTime (js/Date. d))))
@@ -401,25 +411,17 @@
                                 (state/set-page-context! {:badge (:name result) :title "Time"})
                                 (reset! loading? false)
                                 (let [player-ids (or (:active-player-ids result) [])]
-                                  (if (seq player-ids)
-                                    (api/get-players {}
-                                                     (fn [all]
-                                                       (let [catalog (api/coerce-player-list all)]
-                                                         (reset! all-players catalog)
-                                                         (reset! players (filter (fn [p]
-                                                                                   (some #(= (player-picker/normalize-id (or (:_id p) (:id p))) (str %)) player-ids))
-                                                                                 catalog))))
-                                                     (fn [err _resp]
-                                                       (let [msg (str "Erro ao carregar jogadores: " err)]
-                                                         (reset! error msg)
-                                                         (state/toast-error! msg))))
-                                    (api/get-players {}
-                                                     (fn [all]
-                                                       (reset! all-players (api/coerce-player-list all)))
-                                                     (fn [err _resp]
-                                                       (let [msg (str "Erro ao carregar jogadores: " err)]
-                                                         (reset! error msg)
-                                                         (state/toast-error! msg)))))))
+                                  (when-not (seq player-ids)
+                                    (reset! players []))
+                                  (api/get-players {}
+                                                   (fn [all]
+                                                     (let [catalog (api/coerce-player-list all)]
+                                                       (reset! all-players catalog)
+                                                       (reset! players (players-on-roster catalog player-ids))))
+                                                   (fn [err _resp]
+                                                     (let [msg (str "Erro ao carregar jogadores: " err)]
+                                                       (reset! error msg)
+                                                       (state/toast-error! msg))))))
                               (fn [err resp]
                                 (reset! loading? false)
                                 (if (and resp (= 404 (:status resp)))
@@ -454,7 +456,11 @@
                                                   (state/toast-error! msg)))))
         remove-player! (fn [player-id]
                          (api/remove-player-from-team id player-id
-                                                      (fn [_result]
+                                                      (fn [result]
+                                                        (when (map? result)
+                                                          (reset! team result)
+                                                          (reset! players (players-on-roster @all-players
+                                                                                             (or (:active-player-ids result) []))))
                                                         (load!))
                                                       (fn [err]
                                                         (let [msg (str "Erro ao remover jogador: " err)]
