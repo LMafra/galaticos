@@ -16,6 +16,28 @@
               (get-in request [:params "async"]))]
     (= "true" (str/lower-case (str/trim (str s))))))
 
+(def ^:private seed-imported-data-sources
+  #{"excel-seed" "python-seed"})
+
+(defn- seed-imported-match?
+  "Historical seed matches store result only (empty player-statistics)."
+  [match]
+  (contains? seed-imported-data-sources (:data-source match)))
+
+(defn- missing-or-empty-player-statistics?
+  [match]
+  (let [player-stats (:player-statistics match)]
+    (or (nil? player-stats)
+        (not (sequential? player-stats))
+        (empty? player-stats))))
+
+(defn- matches-missing-player-stats-for-warning
+  "App-created matches that lack player-statistics. Seed imports are result-only."
+  [matches]
+  (->> matches
+       (remove seed-imported-match?)
+       (filter missing-or-empty-player-statistics?)))
+
 (defn- validate-data-integrity
   "Check data integrity and log warnings for common issues"
   []
@@ -26,16 +48,11 @@
                                                  (let [champ-id (:championship-id match)]
                                                    (and champ-id (not (contains? all-championship-ids champ-id)))))
                                                all-matches)
-          matches-without-player-stats (filter (fn [match]
-                                                 (let [player-stats (:player-statistics match)]
-                                                   (or (nil? player-stats)
-                                                       (not (sequential? player-stats))
-                                                       (empty? player-stats))))
-                                               all-matches)
+          matches-without-player-stats (matches-missing-player-stats-for-warning all-matches)
           matches-with-empty-player-stats (filter (fn [match]
                                                     (let [player-stats (:player-statistics match)]
                                                       (and (sequential? player-stats) (empty? player-stats))))
-                                                  all-matches)]
+                                                  matches-without-player-stats)]
       (when (seq matches-without-championship)
         (log/warn (str "Found " (count matches-without-championship)
                       " match(es) referencing non-existent championships. "

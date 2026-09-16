@@ -76,9 +76,11 @@ This checks MongoDB connectivity, creates collection indexes, and verifies they 
 Requires `data/raw/galaticos.xlsm`. The seed script:
 
 - Creates the "Galáticos" team
-- Imports players from the "Base de dados" sheet
-- Creates championships from other sheets
-- Updates per-championship aggregated player stats
+- Imports players and table stats (games/goals/assists/titles) from the **Base de dados** sheet only
+- Creates championships/seasons from that sheet (long-format `Time` / campeonato column)
+- Does **not** import athlete tables from other Excel tabs
+
+`./bin/galaticos db:seed --full` (or `db:seed-full`) also imports match **scores** from the other championship sheets (and optional `data/*.csv`) plus ASBAC standings/records. Imported matches store the result only — no per-match scorers or assists. Player career totals stay those of Base de dados.
 
 Ensure MongoDB is running before seeding. For minimal deterministic data (E2E/smoke): `./bin/galaticos db:seed-smoke`.
 

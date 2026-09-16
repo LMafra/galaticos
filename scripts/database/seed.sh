@@ -5,7 +5,7 @@
 #   ./seed.sh              # Normal seed (idempotent - won't create duplicates)
 #   ./seed.sh --reset      # Clear all data and reseed
 #   ./seed.sh --reset --keep-admins  # Clear data but keep admin users
-#   ./seed.sh --full       # All imports (Excel tabs, CSV, tournament matches, ASBAC)
+#   ./seed.sh --full       # Base de dados + match scores (CSV/torneio) + ASBAC
 #   ./seed-full.sh         # --full + Clojure stats reconcile (recommended for dev DB)
 #
 # After db:seed-smoke: do not run this without --reset on the same DB — the Python seed
@@ -71,7 +71,7 @@ if [[ ${#SEED_ARGS[@]} -eq 0 ]]; then
     log_info "      Use --reset to clear existing data before seeding"
     log_info "      Use --full or ./seed-full.sh for all Excel/CSV/match data + stats reconcile"
 elif printf '%s\n' "${SEED_ARGS[@]}" | grep -qx -- '--full'; then
-    log_info "Full import: legacy Excel sheets, data/*.csv, tournament matches, ASBAC"
+    log_info "Full import: Base de dados athletes, CSV/tournament match scores, ASBAC"
     log_info "After seed, run: clojure -M:dev -m galaticos.tasks.reconcile-player-stats"
     log_info "Or use: ./bin/galaticos db:seed-full (reconcile included)"
 fi
