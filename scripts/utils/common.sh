@@ -167,6 +167,10 @@ run_python_in_docker() {
         -e MONGO_URI="${MONGO_URI:-mongodb://localhost:27017}" \
         -e DB_NAME="${DB_NAME:-galaticos}" \
         -e EXCEL_FILE="${EXCEL_FILE:-}" \
+        -e GALATICOS_ENV="${GALATICOS_ENV:-}" \
+        -e ALLOW_DESTRUCTIVE_SEED="${ALLOW_DESTRUCTIVE_SEED:-}" \
+        -e SEED_ADMIN_USERNAME="${SEED_ADMIN_USERNAME:-}" \
+        -e SEED_ADMIN_PASSWORD="${SEED_ADMIN_PASSWORD:-}" \
         -v "$project_root:/app" \
         -w /app \
         python:3.11-slim \

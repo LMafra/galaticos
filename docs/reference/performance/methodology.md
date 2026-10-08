@@ -74,7 +74,7 @@ docker compose -f config/docker/docker-compose.dev.yml exec -T frontend-watch np
 
 ### Option B: reproducible automation (logged-in Lighthouse)
 
-A script starts Chrome via `chrome-launcher`, logs in on the UI (`admin` / `admin`, same as e2e), and runs Lighthouse on the given URLs with `disableStorageReset`:
+A script starts Chrome via `chrome-launcher`, logs in on the UI (`PERF_LOGIN_USER` / `PERF_LOGIN_PASSWORD`), and runs Lighthouse on the given URLs with `disableStorageReset`:
 
 - File: `scripts/performance/lighthouse-authenticated.cjs`
 - Example: `CHROME_PATH=... node scripts/performance/lighthouse-authenticated.cjs "/#/dashboard" "/#/stats"`

@@ -10,6 +10,7 @@
 #
 # Requires: data/raw/galaticos.xlsm (or EXCEL_FILE), MongoDB running.
 # Do not run on the same DB as db:seed-smoke without --reset.
+# Official seed does not create a hardcoded login; see seed.sh / SEED_ADMIN_*.
 
 set -euo pipefail
 

@@ -130,6 +130,7 @@ Without `--drop`, `mongorestore` **merges** with existing data. With `--drop`, i
 | `GALATICOS_ENV=production` | Recommended when running tools against production; with this value, `--reset` in the seed requires `ALLOW_DESTRUCTIVE_SEED=1`. |
 | `ALLOW_DESTRUCTIVE_SEED=1` | Allows `seed_mongodb.py --reset` when `GALATICOS_ENV` is production. |
 | `MONGO_URI` / `DB_NAME` | MongoDB connection (aligned with the string used by the app, including `authSource=admin` if applicable). |
+| `SEED_ADMIN_USERNAME` / `SEED_ADMIN_PASSWORD` | Create an operator **only** when `admins` is empty. Official seed has no hardcoded login and never prints credentials. Do not commit these values. Existing admins are never overwritten. |
 
 ## When things go wrong
 
