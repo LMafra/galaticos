@@ -6,7 +6,8 @@
  * 1. PERF_AUTH_TOKEN — inject directly (no credentials; best for CI secrets).
  * 2. PERF_USE_API_LOGIN=1 — POST /api/auth/login with PERF_LOGIN_USER / PERF_LOGIN_PASSWORD
  *    (in GitHub Actions use repository secrets; no defaults in CI).
- * 3. Otherwise — UI login on /#/login (local dev; admin/admin for seeded DB).
+ * 3. Otherwise — UI login on /#/login (set PERF_LOGIN_USER / PERF_LOGIN_PASSWORD;
+ *    for E2E/smoke DBs use the smoke-seed operator, not production credentials).
  *
  * Usage (from repo root):
  *   CHROME_PATH=... PERF_BASE_URL=http://localhost:3000 \
@@ -137,8 +138,13 @@ async function ensureLoggedIn(browser) {
     );
   }
   await page.goto(`${BASE}/#/login`, { waitUntil: 'networkidle2', timeout: 60_000 });
-  const user = process.env.PERF_LOGIN_USER || 'admin';
-  const pass = process.env.PERF_LOGIN_PASSWORD || 'admin';
+  const user = process.env.PERF_LOGIN_USER;
+  const pass = process.env.PERF_LOGIN_PASSWORD;
+  if (!user || !pass) {
+    throw new Error(
+      'UI login requires PERF_LOGIN_USER and PERF_LOGIN_PASSWORD (for a smoke database, pass the db:seed-smoke operator explicitly).'
+    );
+  }
   await page.waitForSelector('input[placeholder="Digite seu usuário"]', { timeout: 30_000 });
   await page.click('input[placeholder="Digite seu usuário"]', { clickCount: 3 });
   await page.keyboard.press('Backspace');

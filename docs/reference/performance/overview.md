@@ -23,7 +23,7 @@ With `CHROME_PATH` pointing to Linux Chrome (see [methodology.md](methodology.md
 **Release** CLJS build in Docker:  
 `docker compose -f config/docker/docker-compose.dev.yml exec -T frontend-watch npx shadow-cljs release app`
 
-**Authentication for `perf:lighthouse:auth`:** `PERF_AUTH_TOKEN` (JWT) injects the token without UI login; or `PERF_USE_API_LOGIN=1` with `PERF_LOGIN_USER` / `PERF_LOGIN_PASSWORD` (recommended in CI with secrets). Otherwise the script uses UI login (useful with `db:seed-smoke` and `admin`/`admin` in dev).
+**Authentication for `perf:lighthouse:auth`:** `PERF_AUTH_TOKEN` (JWT) injects the token without UI login; or `PERF_USE_API_LOGIN=1` with `PERF_LOGIN_USER` / `PERF_LOGIN_PASSWORD` (recommended in CI with secrets). Otherwise the script uses UI login with those same env vars (typical against `db:seed-smoke`, never production credentials).
 
 **Compression in a real environment:** after deploy, validate gzip on JS with GET:  
 `curl -sD - -o /dev/null -H 'Accept-Encoding: gzip' http://localhost:3000/js/compiled/app.js` (expect `Content-Encoding: gzip`).

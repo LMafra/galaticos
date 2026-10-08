@@ -13,6 +13,8 @@
 #
 # Production: prefer export GALATICOS_ENV=production when targeting prod; --reset is then
 # blocked unless ALLOW_DESTRUCTIVE_SEED=1 (see scripts/python/seed_mongodb.py).
+# Official seed never creates a hardcoded login. Empty `admins` requires
+# SEED_ADMIN_USERNAME and SEED_ADMIN_PASSWORD (do not commit those values).
 
 set -euo pipefail
 
@@ -24,9 +26,6 @@ source "$SCRIPT_DIR/../utils/common.sh"
 # Configuration (EXCEL_FILE may be set in the environment, same as seed_mongodb.py)
 EXCEL_FILE="${EXCEL_FILE:-data/raw/galaticos.xlsm}"
 readonly SEED_SCRIPT="scripts/python/seed_mongodb.py"
-# Default admin credentials (must match seed_mongodb.py create_admin defaults)
-readonly ADMIN_USER="admin"
-readonly ADMIN_PASS="admin"
 # Allow DB_NAME and MONGO_URI to be overridden via environment variable (not readonly so they can be exported)
 readonly _DEFAULT_MONGO_URI="mongodb://localhost:27017"
 DB_NAME="${DB_NAME:-galaticos}"
@@ -49,14 +48,6 @@ fi
 
 redact_mongo_uri_for_log() {
     echo "$1" | sed -E 's|(mongodb://[^:]+:)[^@]+@|\1***@|'
-}
-
-print_admin_credentials() {
-    echo ""
-    log_info "Admin credentials (login no sistema):"
-    echo "   Username: $ADMIN_USER"
-    echo "   Password: $ADMIN_PASS"
-    echo ""
 }
 
 log_info "Seeding MongoDB database..."
@@ -142,7 +133,7 @@ except Exception as e:
             log_warning "Seed completed but verification had issues (data may still be present)"
         fi
         echo ""
-        print_admin_credentials
+        log_info "Official seed does not print login credentials."
     else
         log_error "Seed script failed"
         exit 1
@@ -166,7 +157,7 @@ elif command_exists docker; then
         log_warning "Seed completed but verification had issues (data may still be present)"
     fi
     echo ""
-    print_admin_credentials
+    log_info "Official seed does not print login credentials."
 else
     log_error "Python (with venv and dependencies) or Docker is required to run the seed."
     log_info "  - Install Python 3 and run: python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt"

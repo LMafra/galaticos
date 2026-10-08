@@ -31,6 +31,10 @@ Env EXCEL_FILE (or CLI --excel) overrides the default Excel path (default data/r
 Env GALATICOS_ENV=production (or prod): when set, --reset is refused unless
 ALLOW_DESTRUCTIVE_SEED is 1/true/yes (reduces accidental wipe against production).
 
+Official seed never creates a hardcoded login. If `admins` is empty, set both
+SEED_ADMIN_USERNAME and SEED_ADMIN_PASSWORD in the environment (do not commit them).
+If any admin already exists, those variables are ignored.
+
 If the database contains the smoke/E2E dataset (galaticos.tasks.seed-smoke), official seed
 without --reset is refused so test data is not mixed with Excel data. Use --reset to replace
 everything, or --ignore-smoke-dataset to force (not recommended).
@@ -39,6 +43,7 @@ everything, or --ignore-smoke-dataset to force (not recommended).
 import argparse
 import re
 import sys
+import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -204,6 +209,283 @@ def normalize_player_name(name: str) -> str:
     return name
 
 
+# Folded name (no accent, no GK token) -> display name. Short and full forms of the
+# same person. Queiroz is not Romario Queiroz. Patrick GK is handled separately.
+_PLAYER_ALIAS_DISPLAY = {
+    "avelar": "Gui Avelar",
+    "gui avelar": "Gui Avelar",
+    "caio": "Caio Nacfur",
+    "caio nacfur": "Caio Nacfur",
+    "cirne": "Filipe Cirne",
+    "filipe cirne": "Filipe Cirne",
+    "dieguinho": "Dieguinho Silva",
+    "dieguinho silva": "Dieguinho Silva",
+    "enzo": "Enzo Marques",
+    "enzo marques": "Enzo Marques",
+    "fernandinho": "Fernandinho Sampaio",
+    "fernandinho sampaio": "Fernandinho Sampaio",
+    "igor": "Igor Paro",
+    "igor paro": "Igor Paro",
+    "italo": "Ítalo Lucena",
+    "italo lucena": "Ítalo Lucena",
+    "italozin": "Ítalo Lucena",
+    "luizinho": "Luizinho Salah",
+    "luizinho salah": "Luizinho Salah",
+    "mafra": "Lucas Mafra",
+    "lucas mafra": "Lucas Mafra",
+    "matheus": "Matheus Neves",
+    "matheus neves": "Matheus Neves",
+    "tales": "Tales Pauletti",
+    "tales pauletti": "Tales Pauletti",
+    "rodrigo": "Rodrigo Bomfim",
+    "rodrigo bomfim": "Rodrigo Bomfim",
+    "rodrigao": "Rodrigo Bomfim",
+    "rodrigao bonfim": "Rodrigo Bomfim",
+}
+
+
+def _fold_player_key(name: str) -> str:
+    """Lowercase, strip accents and collapse spaces. Does not drop GK."""
+    folded = unicodedata.normalize("NFKD", name)
+    folded = "".join(ch for ch in folded if not unicodedata.combining(ch))
+    folded = folded.replace("\u00a0", " ")
+    folded = re.sub(r"\s+", " ", folded).strip().lower()
+    return folded
+
+
+def _strip_gk_token(folded: str) -> str:
+    """Remove a GK marker so Cantarelle GK matches Cantarelle. Patrick GK is excluded by the caller."""
+    base = re.sub(r"[\(\)]", " ", folded)
+    base = re.sub(r"\bgk\b", " ", base)
+    return re.sub(r"\s+", " ", base).strip()
+
+
+def _display_without_gk(name: str) -> str:
+    cleaned = re.sub(r"\s*\(\s*gk\s*\)\s*$", "", name, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s+gk\s*$", "", cleaned, flags=re.IGNORECASE)
+    return re.sub(r"\s+", " ", cleaned).strip()
+
+
+def player_identity_key(name: str) -> str:
+    """
+    Identity key for one athlete.
+
+    Accent and spacing differences collapse. A GK suffix collapses too, except
+    Patrick GK, who is a different person from Patrick. Romario Queiroz is not Queiroz.
+    """
+    raw = normalize_player_name(name)
+    if not raw:
+        return ""
+    folded = _fold_player_key(raw)
+    without_parens = re.sub(r"[\(\)]", " ", folded)
+    without_parens = re.sub(r"\s+", " ", without_parens).strip()
+    if without_parens == "patrick gk":
+        return "patrick gk"
+    base = _strip_gk_token(folded)
+    if not base:
+        return ""
+    alias = _PLAYER_ALIAS_DISPLAY.get(base)
+    if alias:
+        return "alias:" + alias
+    return base
+
+
+def _preferred_display_name(key: str, raw_names: List[str]) -> str:
+    if key == "patrick gk":
+        return "Patrick GK"
+    if key.startswith("alias:"):
+        return key[len("alias:"):]
+    best = ""
+    best_score = None
+    for raw in raw_names:
+        candidate = _display_without_gk(normalize_player_name(raw))
+        if not candidate:
+            continue
+        accents = sum(1 for ch in candidate if ord(ch) > 127)
+        score = (accents, candidate)
+        if best_score is None or score > best_score:
+            best_score = score
+            best = candidate
+    return best
+
+
+def _announce_identity_groups(raws_by_key: Dict[str, List[str]], display_for: Dict[str, str]) -> None:
+    """Print spellings that collapse to one athlete, before any database write."""
+    print("\nIdentidades unidas (mesma pessoa):")
+    shown = 0
+    for key in sorted(raws_by_key, key=lambda item: display_for.get(item, item).casefold()):
+        unique_raws: List[str] = []
+        seen = set()
+        for raw in raws_by_key[key]:
+            cleaned = normalize_player_name(raw)
+            if not cleaned or cleaned in seen:
+                continue
+            seen.add(cleaned)
+            unique_raws.append(cleaned)
+        display = display_for.get(key, "")
+        if len(unique_raws) < 2 and (not unique_raws or unique_raws[0] == display):
+            continue
+        shown += 1
+        print(f"  {display} <= {', '.join(unique_raws)}")
+    if shown == 0:
+        print("  (nenhum grupo)")
+    else:
+        print(f"  {shown} grupo(s)")
+
+
+def canonicalize_base_dados_frame(df: pd.DataFrame, announce: bool = False) -> pd.DataFrame:
+    """
+    Rewrite Base de dados athlete names to one display name per person.
+
+    Games, goals, and assists of that person in the same championship are summed.
+    Titles keep the maximum so two spellings of a champion do not become two titles.
+    Championship labels are stored with canonical_championship_name, so a trailing
+    qualifier such as 'ASTCU (campo)' collapses with 'ASTCU' before the sum.
+    """
+    if df is None or df.empty or "atleta" not in df.columns:
+        return df
+    work = df.copy()
+    raw_names: List[str] = []
+    keys: List[str] = []
+    for value in work["atleta"]:
+        raw = normalize_player_name(value)
+        raw_names.append(raw)
+        keys.append(player_identity_key(raw) if raw else "")
+    raws_by_key: Dict[str, List[str]] = {}
+    for raw, key in zip(raw_names, keys):
+        if not raw or not key:
+            continue
+        raws_by_key.setdefault(key, []).append(raw)
+    display_for = {
+        key: _preferred_display_name(key, raws) for key, raws in raws_by_key.items()
+    }
+    if announce:
+        _announce_identity_groups(raws_by_key, display_for)
+    work["atleta"] = [
+        display_for.get(key, raw) if key else raw
+        for raw, key in zip(raw_names, keys)
+    ]
+    work = work[work["atleta"].map(lambda value: bool(normalize_player_name(value)))]
+    sum_cols = [col for col in ("jogos", "gols", "assistencias") if col in work.columns]
+    max_cols = [col for col in ("titulos",) if col in work.columns]
+    for col in sum_cols + max_cols:
+        work[col] = work[col].map(lambda value: safe_int(value, 0))
+    if "campeonato" in work.columns:
+        work["campeonato"] = work["campeonato"].map(
+            lambda value: "" if pd.isna(value) else canonical_championship_name(str(value).strip())
+        )
+    group_cols = [col for col in ("atleta", "campeonato") if col in work.columns]
+    if not group_cols:
+        return work.reset_index(drop=True)
+    stat_cols = sum_cols + max_cols
+    other_cols = [col for col in work.columns if col not in group_cols + stat_cols]
+    aggregations = {col: "sum" for col in sum_cols}
+    aggregations.update({col: "max" for col in max_cols})
+    for col in other_cols:
+        aggregations[col] = "first"
+    if not aggregations:
+        return work.reset_index(drop=True)
+    collapsed = work.groupby(group_cols, as_index=False, dropna=False).agg(aggregations)
+    return collapsed
+
+
+def _explicit_position_for_player(df: pd.DataFrame, player_name: str) -> Optional[str]:
+    """First non-empty position cell for this display name on an already canonical frame."""
+    pos_col = None
+    for col in df.columns:
+        if str(col).strip().lower() in ("posição", "posicao", "position"):
+            pos_col = col
+            break
+    if pos_col is None:
+        return None
+    for _, row in df.iterrows():
+        if normalize_player_name(row.get("atleta", "")) != player_name:
+            continue
+        raw = row.get(pos_col)
+        if raw is None or pd.isna(raw):
+            continue
+        text = str(raw).strip()
+        if text:
+            return text
+    return None
+
+
+def _wide_frame_from_canonical(df_norm: pd.DataFrame) -> pd.DataFrame:
+    """
+    One row per athlete in the column layout create_players expects.
+
+    The frame is already name-canonical. Rows of the same person are collapsed:
+    games, goals, and assists sum; titles stay at the maximum.
+    """
+    if df_norm is None or df_norm.empty or "atleta" not in df_norm.columns:
+        return pd.DataFrame()
+    work = df_norm.copy()
+    sum_cols = [col for col in ("jogos", "gols", "assistencias") if col in work.columns]
+    max_cols = [col for col in ("titulos",) if col in work.columns]
+    for col in sum_cols + max_cols:
+        work[col] = work[col].map(lambda value: safe_int(value, 0))
+    pos_col = next(
+        (
+            col
+            for col in work.columns
+            if str(col).strip().lower() in ("posição", "posicao", "position")
+        ),
+        None,
+    )
+    aggregations = {col: "sum" for col in sum_cols}
+    aggregations.update({col: "max" for col in max_cols})
+    if pos_col is not None:
+        aggregations[pos_col] = "first"
+    if aggregations:
+        work = work.groupby("atleta", as_index=False, dropna=False).agg(aggregations)
+    rows = []
+    for _, row in work.iterrows():
+        name = normalize_player_name(row.get("atleta", ""))
+        if not name:
+            continue
+        pos = None
+        if pos_col is not None:
+            raw = row.get(pos_col)
+            if raw is not None and not pd.isna(raw) and str(raw).strip():
+                pos = str(raw).strip()
+        rows.append(
+            {
+                "Atleta": name,
+                "Jogos": safe_int(row.get("jogos", 0), 0),
+                "Gols": safe_int(row.get("gols", 0), 0),
+                "Assistências": safe_int(row.get("assistencias", 0), 0),
+                "Títulos": safe_int(row.get("titulos", 0), 0),
+                "Posição": pos,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def _existing_players_by_identity(players_collection) -> Dict[str, dict]:
+    """
+    Map identity key to one existing player document.
+
+    When several documents already share a key, keep the first and leave the
+    others in the database.
+    """
+    by_key: Dict[str, dict] = {}
+    for player in players_collection.find(
+        {}, {"name": 1, "position": 1, "team-id": 1, "aggregated-stats": 1}
+    ):
+        key = player_identity_key(player.get("name", ""))
+        if not key:
+            continue
+        kept = by_key.get(key)
+        if kept is None:
+            by_key[key] = player
+            continue
+        print(
+            "  ⚠ Vários atletas já no banco na mesma identidade: "
+            f"mantendo '{kept.get('name')}', sem apagar '{player.get('name')}'"
+        )
+    return by_key
+
+
 def infer_championship_format(name: str) -> str:
     """Infer championship format from name"""
     name_lower = name.lower()
@@ -262,8 +544,8 @@ def create_team(db, team_name: str = "Galáticos") -> ObjectId:
     return result.inserted_id
 
 
-def create_admin(db, username: str = "admin", password: str = "admin") -> ObjectId:
-    """Create or get admin user"""
+def create_admin(db, username: str, password: str) -> ObjectId:
+    """Create or get admin user. Callers must pass credentials; no default login."""
     admins_collection = db.admins
     
     # Check if admin exists
@@ -324,6 +606,33 @@ def create_admin(db, username: str = "admin", password: str = "admin") -> Object
         raise
 
 
+def ensure_admin(db) -> Optional[ObjectId]:
+    """
+    Create an admin only when the collection is empty and SEED_ADMIN_USERNAME
+    plus SEED_ADMIN_PASSWORD are set. Never inserts a hardcoded default login.
+    Existing admins are left unchanged.
+    """
+    existing = db.admins.count_documents({})
+    if existing > 0:
+        print(
+            f"✓ Admins collection already has {existing} user(s); "
+            "not creating a seed login"
+        )
+        return None
+
+    username = os.getenv("SEED_ADMIN_USERNAME", "").strip()
+    password = os.getenv("SEED_ADMIN_PASSWORD", "")
+    if not username or not password:
+        print(
+            "⚠ No admins in the database and SEED_ADMIN_USERNAME / "
+            "SEED_ADMIN_PASSWORD are not both set. Skipping admin creation "
+            "(official seed has no default login)."
+        )
+        return None
+
+    return create_admin(db, username=username, password=password)
+
+
 def create_players(db, players_df: pd.DataFrame, team_id: ObjectId) -> Dict[str, ObjectId]:
     """
     Create players from DataFrame
@@ -332,11 +641,7 @@ def create_players(db, players_df: pd.DataFrame, team_id: ObjectId) -> Dict[str,
     players_collection = db.players
     player_map = {}
     now = datetime.now(timezone.utc)
-    
-    # Get existing players (name -> full document) for conflict resolution
-    existing_players = {
-        p["name"]: p for p in players_collection.find({}, {"name": 1, "position": 1, "team-id": 1, "aggregated-stats": 1})
-    }
+    existing_by_identity = _existing_players_by_identity(players_collection)
     
     for _, row in players_df.iterrows():
         player_name = normalize_player_name(row.get("Atleta", ""))
@@ -360,7 +665,8 @@ def create_players(db, players_df: pd.DataFrame, team_id: ObjectId) -> Dict[str,
         )
         inferred_position = infer_position_from_name(player_name, explicit_position)
 
-        existing = existing_players.get(player_name)
+        identity = player_identity_key(player_name)
+        existing = existing_by_identity.get(identity) if identity else None
 
         if existing:
             # Policy: latest sheet wins for stats; preserve structural fields
@@ -385,16 +691,21 @@ def create_players(db, players_df: pd.DataFrame, team_id: ObjectId) -> Dict[str,
                 "by-championship": existing_stats.get("by-championship", []),
             }
 
+            set_fields = {
+                # Respect explicit position if present; otherwise keep existing / infer
+                "position": inferred_position or existing.get("position", "Atacante"),
+                "aggregated-stats": updated_stats,
+                "updated-at": now,
+            }
+            previous_name = existing.get("name")
+            if previous_name != player_name:
+                set_fields["name"] = player_name
+                print(f"  ✓ Renamed existing player '{previous_name}' -> '{player_name}'")
+                existing["name"] = player_name
+
             players_collection.update_one(
                 {"_id": existing["_id"]},
-                {
-                    "$set": {
-                        # Respect explicit position if present; otherwise keep existing / infer
-                        "position": inferred_position or existing.get("position", "Atacante"),
-                        "aggregated-stats": updated_stats,
-                        "updated-at": now,
-                    }
-                },
+                {"$set": set_fields},
             )
 
             player_map[player_name] = existing["_id"]
@@ -420,6 +731,8 @@ def create_players(db, players_df: pd.DataFrame, team_id: ObjectId) -> Dict[str,
         try:
             result = players_collection.insert_one(player_doc)
             player_map[player_name] = result.inserted_id
+            if identity:
+                existing_by_identity[identity] = {"_id": result.inserted_id, "name": player_name}
             print(f"  ✓ Created player: {player_name}")
         except Exception as e:
             print(f"  ✗ Error creating player {player_name}: {e}")
@@ -430,23 +743,18 @@ def create_players(db, players_df: pd.DataFrame, team_id: ObjectId) -> Dict[str,
 
 def create_players_from_long_base_dados_sheet(
     db,
-    players_df: pd.DataFrame,
     df_norm: pd.DataFrame,
     team_id: ObjectId,
 ) -> Dict[str, ObjectId]:
     """
     One row per (atleta, campeonato): create each distinct atleta once with zero totals.
     Does not overwrite stats for players that already exist (Step 3.7 fills aggregates).
+    An existing document with the same identity is renamed to the display name.
     """
     players_collection = db.players
     player_map: Dict[str, ObjectId] = {}
     now = datetime.now(timezone.utc)
-    existing_players = {
-        p["name"]: p
-        for p in players_collection.find(
-            {}, {"name": 1, "position": 1, "team-id": 1, "aggregated-stats": 1}
-        )
-    }
+    existing_by_identity = _existing_players_by_identity(players_collection)
 
     ordered_unique: List[str] = []
     seen = set()
@@ -462,22 +770,21 @@ def create_players_from_long_base_dados_sheet(
 
     created = 0
     for player_name in ordered_unique:
-        existing = existing_players.get(player_name)
+        identity = player_identity_key(player_name)
+        existing = existing_by_identity.get(identity) if identity else None
         if existing:
+            previous_name = existing.get("name")
+            if previous_name != player_name:
+                players_collection.update_one(
+                    {"_id": existing["_id"]},
+                    {"$set": {"name": player_name, "updated-at": now}},
+                )
+                print(f"  ✓ Renamed existing player '{previous_name}' -> '{player_name}'")
+                existing["name"] = player_name
             player_map[player_name] = existing["_id"]
             continue
 
-        pos_explicit = None
-        for idx, row in df_norm.iterrows():
-            if normalize_player_name(row.get("atleta", "")) != player_name:
-                continue
-            if idx in players_df.index and "Posição" in players_df.columns:
-                raw = players_df.loc[idx, "Posição"]
-                if raw is not None and not pd.isna(raw):
-                    s = str(raw).strip()
-                    pos_explicit = s if s else None
-            break
-
+        pos_explicit = _explicit_position_for_player(df_norm, player_name)
         inferred = infer_position_from_name(player_name, pos_explicit)
         player_doc = {
             "name": player_name,
@@ -494,7 +801,8 @@ def create_players_from_long_base_dados_sheet(
         }
         result = players_collection.insert_one(player_doc)
         player_map[player_name] = result.inserted_id
-        existing_players[player_name] = {"_id": result.inserted_id}
+        if identity:
+            existing_by_identity[identity] = {"_id": result.inserted_id, "name": player_name}
         created += 1
         print(f"  ✓ Created player (long-format sheet): {player_name}")
 
@@ -503,27 +811,16 @@ def create_players_from_long_base_dados_sheet(
 
 
 def find_player_by_name(player_map: Dict[str, ObjectId], name: str) -> Optional[ObjectId]:
-    """Find player ID by name (with fuzzy matching)"""
-    normalized_name = normalize_player_name(name)
-    
-    # Exact match
-    if normalized_name in player_map:
-        return player_map[normalized_name]
-    
-    # Try partial matches (e.g., "Leal" matches "Gabriel Leal")
+    """Resolve a name to a player already in player_map, by identity key only."""
+    query_key = player_identity_key(name)
+    if not query_key:
+        return None
+    by_identity: Dict[str, ObjectId] = {}
     for player_name, player_id in player_map.items():
-        if normalized_name.lower() in player_name.lower() or player_name.lower() in normalized_name.lower():
-            return player_id
-    
-    # Try last name match
-    name_parts = normalized_name.split()
-    if len(name_parts) > 0:
-        last_name = name_parts[-1]
-        for player_name, player_id in player_map.items():
-            if last_name.lower() in player_name.lower():
-                return player_id
-    
-    return None
+        key = player_identity_key(player_name)
+        if key and key not in by_identity:
+            by_identity[key] = player_id
+    return by_identity.get(query_key)
 
 
 def create_championship(
@@ -1011,10 +1308,10 @@ def load_canonical_base_dados(excel_path: Path, csv_path: Path) -> Tuple[Optiona
     """
     df_xl = read_base_dados_from_excel_sheet(excel_path)
     if df_xl is not None:
-        return df_xl, "Excel sheet 'Base de dados'"
+        return canonicalize_base_dados_frame(df_xl), "Excel sheet 'Base de dados'"
     df_csv = read_base_dados_dataframe(csv_path)
     if df_csv is not None and not df_csv.empty:
-        return df_csv, f"data/{BASE_DADOS_FILENAME}"
+        return canonicalize_base_dados_frame(df_csv), f"data/{BASE_DADOS_FILENAME}"
     return None, ""
 
 
@@ -1106,7 +1403,8 @@ def apply_base_dados_to_db(
     seasons_collection = db.seasons
     rows_applied = 0
     enroll_sets: Dict[ObjectId, set] = {}
-    # Per season (season document _id): player_id -> table stats from BASE_DADOS (max if duplicate rows)
+    # Per season (season document _id): player_id -> table stats from BASE_DADOS
+    # (sum games/goals/assists; titles stay at the maximum if rows still duplicate)
     per_season_player_stats: Dict[ObjectId, Dict[ObjectId, Dict[str, int]]] = {}
 
     def get_or_create_championship_root(root_name: str, format_type: str) -> ObjectId:
@@ -1202,7 +1500,7 @@ def apply_base_dados_to_db(
             format_type=format_type,
         )
 
-        player_id = find_player_by_name(player_map, player_name)
+        player_id = player_map.get(player_name)
         if not player_id:
             print(f"  ⚠ BASE_DADOS: player not in map '{player_name}' — skipping row")
             continue
@@ -1236,9 +1534,9 @@ def apply_base_dados_to_db(
             season_stats[player_id] = row_stats
         else:
             season_stats[player_id] = {
-                "games": max(prev["games"], row_stats["games"]),
-                "goals": max(prev["goals"], row_stats["goals"]),
-                "assists": max(prev["assists"], row_stats["assists"]),
+                "games": prev["games"] + row_stats["games"],
+                "goals": prev["goals"] + row_stats["goals"],
+                "assists": prev["assists"] + row_stats["assists"],
                 "titles": max(prev["titles"], row_stats["titles"]),
             }
         rows_applied += 1
@@ -2708,6 +3006,15 @@ Examples:
     
     print(f"\n✓ Using database: {DB_NAME}")
 
+    if excel_path.exists():
+        try:
+            preview_df = pd.read_excel(excel_path, sheet_name="Base de dados", engine="openpyxl")
+            preview_df = _normalize_base_dados_columns(preview_df)
+            if is_valid_base_dados_dataframe(preview_df):
+                canonicalize_base_dados_frame(preview_df, announce=True)
+        except ValueError:
+            print("\n⚠ Sheet 'Base de dados' not found; skipping identity preview")
+
     if (
         not args.reset
         and not args.ignore_smoke_dataset
@@ -2747,11 +3054,11 @@ Examples:
     print("=" * 60)
     team_id = create_team(db)
     
-    # Step 1.5: Create admin user
+    # Step 1.5: Admin (only if collection empty and SEED_ADMIN_* are set)
     print("\n" + "=" * 60)
-    print("Step 1.5: Creating admin user")
+    print("Step 1.5: Ensuring admin user")
     print("=" * 60)
-    create_admin(db, username="admin", password="admin")
+    ensure_admin(db)
     
     # Step 2: Read and create players from "Base de dados"
     print("\n" + "=" * 60)
@@ -2763,17 +3070,16 @@ Examples:
         sys.exit(1)
     
     players_df = pd.read_excel(excel_path, sheet_name="Base de dados", engine="openpyxl")
-    df_norm = _normalize_base_dados_columns(players_df.copy())
+    df_norm = canonicalize_base_dados_frame(_normalize_base_dados_columns(players_df.copy()))
     long_format = is_long_format_base_dados_sheet(df_norm)
     if long_format:
         print("  Detected long-format sheet (atleta + campeonato); stats applied in Step 3.7.")
-        player_map = create_players_from_long_base_dados_sheet(
-            db, players_df, df_norm, team_id
-        )
+        player_map = create_players_from_long_base_dados_sheet(db, df_norm, team_id)
         canonical_df = df_norm.copy()
         canonical_source = "Excel sheet 'Base de dados'"
     else:
-        player_map = create_players(db, players_df, team_id)
+        wide_df = _wide_frame_from_canonical(df_norm)
+        player_map = create_players(db, wide_df if not wide_df.empty else players_df, team_id)
         base_csv_path = Path("data") / BASE_DADOS_FILENAME
         canonical_df, canonical_source = load_canonical_base_dados(excel_path, base_csv_path)
 
@@ -2902,14 +3208,11 @@ Examples:
         }
     )
     print(f"✓ Updated team with {len(active_player_ids)} active players")
-    
-    # Summary
-    admin_user = "admin"
-    admin_pass = "admin"
+
     print("\n" + "=" * 60)
     print("Seed Summary")
     print("=" * 60)
-    print(f"✓ Admin user created/verified: 1")
+    print(f"✓ Admins in database: {db.admins.count_documents({})}")
     print(f"✓ Team created/updated: 1")
     print(f"✓ Players processed: {len(player_map)}")
     print(f"✓ Championships processed: {championships_created}")
@@ -2922,10 +3225,6 @@ Examples:
     if args.import_asbac_data:
         print(f"✓ Standings documents: {standings_count}")
         print(f"✓ Records documents: {records_count}")
-    print("\n--- Admin credentials (dev) ---")
-    print(f"  Username: {admin_user}")
-    print(f"  Password: {admin_pass}")
-    print("--------------------------------")
     print("\n✓ Seed completed successfully!")
     
     client.close()

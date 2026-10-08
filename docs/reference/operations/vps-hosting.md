@@ -228,6 +228,8 @@ export MONGO_URI='mongodb://galaticos:PASSWORD@127.0.0.1:27017/galaticos?authSou
 
 Without this you get “Command find requires authentication”.
 
+Official seed does **not** create a default login and does not print credentials. With `--reset --keep-admins`, existing operators stay in Mongo. A first-time empty `admins` collection needs `SEED_ADMIN_USERNAME` and `SEED_ADMIN_PASSWORD` in the environment (do not put them in git or in this doc).
+
 ### Clear and re-seed
 
 Only with full awareness of risk and project safety variables (see [production-runbook.md](production-runbook.md) for `GALATICOS_ENV` and `ALLOW_DESTRUCTIVE_SEED`):

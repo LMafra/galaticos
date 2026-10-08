@@ -259,8 +259,8 @@ Galáticos stores sports roster data in six MongoDB collections: `championships`
 ```json
 {
   "_id": ObjectId("507f1f77bcf86cd799439016"),
-  "username": "admin",
-  "password-hash": "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy",
+  "username": "example-operator",
+  "password-hash": "$2a$10$<bcrypt-hash>",
   "created-at": ISODate("2025-01-15T10:00:00Z"),
   "last-login": ISODate("2025-01-20T14:30:00Z")
 }

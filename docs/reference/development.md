@@ -80,9 +80,13 @@ Requires `data/raw/galaticos.xlsm`. The seed script:
 - Creates championships/seasons from that sheet (long-format `Time` / campeonato column)
 - Does **not** import athlete tables from other Excel tabs
 
+The seed collapses spellings of the same athlete to one display name: games, goals, and assists are summed, and titles keep the maximum.
+
 `./bin/galaticos db:seed --full` (or `db:seed-full`) also imports match **scores** from the other championship sheets (and optional `data/*.csv`) plus ASBAC standings/records. Imported matches store the result only — no per-match scorers or assists. Player career totals stay those of Base de dados.
 
-Ensure MongoDB is running before seeding. For minimal deterministic data (E2E/smoke): `./bin/galaticos db:seed-smoke`.
+The official seed **does not create a default login** and does not print credentials. If the `admins` collection is empty, set `SEED_ADMIN_USERNAME` and `SEED_ADMIN_PASSWORD` in the environment (never commit them). If any admin already exists, those variables are ignored and existing users stay as they are. Use `--keep-admins` with `--reset` to preserve operators.
+
+Ensure MongoDB is running before seeding. For minimal deterministic data (E2E/smoke): `./bin/galaticos db:seed-smoke` (test-only operator; separate from production login).
 
 ### 5. ClojureScript compilation
 
